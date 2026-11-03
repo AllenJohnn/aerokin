@@ -1,0 +1,95 @@
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+@import "@fontsource/geist-mono/600.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --aerokin-bg: #07070B;
+    --aerokin-surface: rgba(255, 255, 255, 0.05);
+    --aerokin-border: rgba(255, 255, 255, 0.08);
+    --aerokin-text: #F5F5F7;
+    --aerokin-muted: #8A8A96;
+    --aerokin-violet: #7C5CFF;
+    --aerokin-cyan: #22D3EE;
+    --aerokin-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html {
+    background-color: #07070B;
+    color: #F5F5F7;
+    font-family: "Geist Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    letter-spacing: -0.015em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: #07070B;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background-color: rgba(124, 92, 255, 0.4);
+    color: #F5F5F7;
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #07070B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 2px solid #07070B;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 92, 255, 0.4);
+}
+
+/* Glass & Glow utilities */
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(135deg, #7C5CFF 0%, #22D3EE 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .text-gradient-subtle {
+    background: linear-gradient(180deg, #FFFFFF 0%, #8A8A96 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .border-gradient {
+    border-image: linear-gradient(135deg, #7C5CFF, #22D3EE) 1;
+  }
+
+  .aerokin-radial-glow {
+    background: radial-gradient(circle at 50% 0%, rgba(124, 92, 255, 0.12) 0%, rgba(34, 211, 238, 0.04) 40%, transparent 70%);
+  }
+
+  .aerokin-grid-bg {
+    background-size: 32px 32px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  }
+}
