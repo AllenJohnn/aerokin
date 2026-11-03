@@ -1,0 +1,8 @@
+packages:
+  - 'design-system'
+  - 'pwa'
+  - 'server'
+allowBuilds:
+  esbuild: true
+  koffi: true
+  sharp: true
