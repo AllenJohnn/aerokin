@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { animate, createTimeline } from 'animejs';
 
 export interface AerokinLogoProps {
   /** Size variant or numerical pixel size */
@@ -9,8 +10,12 @@ export interface AerokinLogoProps {
   withTagline?: boolean;
   /** Additional CSS class names */
   className?: string;
-  /** Whether to animate the light trail glow */
+  /** Whether to animate the light trail glow or pulse */
   animated?: boolean;
+  /** Whether to trigger an anime.js v4 line-draw intro sequence */
+  intro?: boolean;
+  /** Monochrome white mode */
+  mono?: boolean;
 }
 
 const sizeMap = {
@@ -25,18 +30,110 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
   withTagline = false,
   className = '',
   animated = false,
+  intro = false,
+  mono = false,
 }) => {
   const pixelSize = typeof size === 'number' ? size : sizeMap[size];
   const uniqueId = React.useId().replace(/:/g, '');
 
-  const gradA = `a-grad-${uniqueId}`;
-  const gradTrail = `trail-grad-${uniqueId}`;
-  const radialDot = `dot-radial-${uniqueId}`;
-  const filterGlow = `filter-glow-${uniqueId}`;
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const leftWingRef = useRef<SVGPolygonElement | null>(null);
+  const rightWingRef = useRef<SVGPolygonElement | null>(null);
+  const trailDashRef = useRef<SVGPolygonElement | null>(null);
+  const crossbarDartRef = useRef<SVGPolygonElement | null>(null);
+  const beaconRef = useRef<SVGCircleElement | null>(null);
+
+  const gradMark = `ak-grad-${uniqueId}`;
+  const gradTip = `ak-tip-grad-${uniqueId}`;
+  const filterGlow = `ak-glow-${uniqueId}`;
+
+  // anime.js v4 Line-draw / Morph / Spring intro
+  useEffect(() => {
+    if (!intro || !svgRef.current) return;
+
+    const tl = createTimeline({
+      defaults: {
+        ease: 'outCubic',
+      },
+    });
+
+    // Animate the wings scaling in with momentum
+    if (leftWingRef.current && rightWingRef.current) {
+      tl.add(
+        [leftWingRef.current, rightWingRef.current],
+        {
+          opacity: [0, 1],
+          translateY: [15, 0],
+          scale: [0.85, 1],
+          duration: 700,
+        },
+        0
+      );
+    }
+
+    // Animate the crossbar cutting through like a supersonic dart
+    if (trailDashRef.current && crossbarDartRef.current) {
+      tl.add(
+        trailDashRef.current,
+        {
+          opacity: [0, mono ? 0.5 : 0.65],
+          translateX: [-20, 0],
+          duration: 500,
+        },
+        250
+      );
+
+      tl.add(
+        crossbarDartRef.current,
+        {
+          opacity: [0, 1],
+          translateX: [-35, 0],
+          duration: 650,
+          ease: 'outExpo',
+        },
+        300
+      );
+    }
+
+    // Beacon pulse arrival
+    if (beaconRef.current) {
+      tl.add(
+        beaconRef.current,
+        {
+          opacity: [0, 1],
+          scale: [0, 1.4, 1],
+          duration: 600,
+          ease: 'outBack',
+        },
+        550
+      );
+    }
+  }, [intro, mono]);
+
+  // Subtle continuous ambient pulse when animated=true
+  useEffect(() => {
+    if (!animated || !beaconRef.current) return;
+
+    const anim = animate(beaconRef.current, {
+      scale: [1, 1.35, 1],
+      opacity: [0.8, 1, 0.8],
+      duration: 2200,
+      loop: true,
+      ease: 'inOutSine',
+    });
+
+    return () => {
+      anim.revert();
+    };
+  }, [animated]);
+
+  const fillStyle = mono ? '#F5F5F7' : `url(#${gradMark})`;
+  const tipFill = mono ? '#F5F5F7' : `url(#${gradTip})`;
 
   return (
     <div className={`inline-flex items-center gap-3.5 select-none ${className}`}>
       <svg
+        ref={svgRef}
         viewBox="0 0 100 100"
         width={pixelSize}
         height={pixelSize}
@@ -46,80 +143,69 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
         aria-label="AEROKIN Logo"
       >
         <defs>
-          <filter id={filterGlow} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3.5" result="blur1" />
-            <feMerge>
-              <feMergeNode in="blur1" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-
-          <linearGradient id={gradA} x1="18" y1="84" x2="82" y2="16" gradientUnits="userSpaceOnUse">
+          <linearGradient id={gradMark} x1="10%" y1="10%" x2="90%" y2="90%">
             <stop offset="0%" stopColor="#7C5CFF" />
             <stop offset="100%" stopColor="#22D3EE" />
           </linearGradient>
 
-          <linearGradient id={gradTrail} x1="26" y1="60" x2="82" y2="52" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#7C5CFF" stopOpacity="0.1" />
-            <stop offset="35%" stopColor="#7C5CFF" stopOpacity="0.8" />
-            <stop offset="85%" stopColor="#22D3EE" stopOpacity="1" />
-            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="1" />
+          <linearGradient id={gradTip} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#22D3EE" />
+            <stop offset="100%" stopColor="#38BDF8" />
           </linearGradient>
 
-          <radialGradient id={radialDot} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="40%" stopColor="#22D3EE" />
-            <stop offset="85%" stopColor="#7C5CFF" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#7C5CFF" stopOpacity="0" />
-          </radialGradient>
+          <filter id={filterGlow} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
 
-        {/* Angular "A" Legs */}
-        <path
-          d="M 22 84 L 47 18 C 48.2 15 51.8 15 53 18 L 78 84"
-          stroke={`url(#${gradA})`}
-          strokeWidth="7.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        {/* Left Delta Wing */}
+        <polygon
+          ref={leftWingRef}
+          points="50,12 16,86 32,86 45,56 50,44"
+          fill={fillStyle}
         />
 
-        {/* Crossbar Light Trail */}
-        <path
-          d="M 26 60 Q 52 56 81 52"
-          stroke={`url(#${gradTrail})`}
-          strokeWidth="4.5"
-          strokeLinecap="round"
-          filter={`url(#${filterGlow})`}
-          className={animated ? 'animate-pulse-glow' : ''}
-          opacity="0.85"
-        />
-        <path
-          d="M 26 60 Q 52 56 81 52"
-          stroke={`url(#${gradTrail})`}
-          strokeWidth="3"
-          strokeLinecap="round"
+        {/* Right Delta Wing */}
+        <polygon
+          ref={rightWingRef}
+          points="50,12 55,44 60,56 84,86 68,86"
+          fill={fillStyle}
         />
 
-        {/* Glowing Cursor Dot at the crossbar tip */}
+        {/* Left Kinetic Slipstream Pulse */}
+        <polygon
+          ref={trailDashRef}
+          points="8,54 22,54 26,44 12,44"
+          fill={fillStyle}
+          opacity={mono ? 0.5 : 0.65}
+        />
+
+        {/* Supersonic Crossbar Dart Piercing Right into Cursor Point */}
+        <polygon
+          ref={crossbarDartRef}
+          points="28,54 78,54 92,44 75,44 78,48 34,48"
+          fill={fillStyle}
+        />
+
+        {/* Glowing Cursor Beacon Dot at Tip */}
         <circle
-          cx="81"
-          cy="52"
-          r="10"
-          fill={`url(#${radialDot})`}
-          className={animated ? 'animate-pulse-glow' : ''}
-          opacity="0.9"
+          ref={beaconRef}
+          cx="92"
+          cy="44"
+          r="3.5"
+          fill={tipFill}
+          filter={`url(#${filterGlow})`}
         />
-        <circle cx="81" cy="52" r="3.6" fill="#FFFFFF" />
-        <circle cx="81" cy="52" r="2" fill="#22D3EE" />
       </svg>
 
       {withWordmark && (
         <div className="flex flex-col">
-          <span className="font-sans font-bold tracking-tight text-white text-lg sm:text-xl leading-none">
+          <span className="font-sans font-extrabold tracking-[0.14em] text-white text-lg sm:text-xl leading-none">
             AEROKIN
           </span>
           {withTagline && (
-            <span className="font-mono text-[10px] tracking-mono text-aerokin-muted mt-1 uppercase">
+            <span className="font-mono text-[9.5px] tracking-mono text-aerokin-muted mt-1 uppercase">
               Move the air. Move your PC.
             </span>
           )}

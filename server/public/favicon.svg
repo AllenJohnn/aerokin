@@ -1,29 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32" fill="none">
-  <rect width="64" height="64" rx="14" fill="#07070B" />
-  <rect width="64" height="64" rx="14" stroke="rgba(255,255,255,0.1)" stroke-width="1.5" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <style>
+    :root {
+      --ak-color: #22D3EE;
+      --ak-beacon: #38BDF8;
+      --ak-trail: #7C5CFF;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --ak-color: #0F172A;
+        --ak-beacon: #2563EB;
+        --ak-trail: #4F46E5;
+      }
+    }
+  </style>
   <defs>
-    <linearGradient id="fav-a-grad" x1="12" y1="52" x2="52" y2="12" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#7C5CFF" />
-      <stop offset="100%" stop-color="#22D3EE" />
+    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--ak-trail)" />
+      <stop offset="100%" stop-color="var(--ak-color)" />
     </linearGradient>
-    <linearGradient id="fav-trail-grad" x1="18" y1="38" x2="52" y2="33" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#7C5CFF" stop-opacity="0.3" />
-      <stop offset="40%" stop-color="#7C5CFF" />
-      <stop offset="90%" stop-color="#22D3EE" />
-      <stop offset="100%" stop-color="#FFFFFF" />
-    </linearGradient>
-    <radialGradient id="fav-dot" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="50%" stop-color="#22D3EE" />
-      <stop offset="100%" stop-color="#7C5CFF" stop-opacity="0" />
-    </radialGradient>
   </defs>
-  <!-- Legs -->
-  <path d="M 16 51 L 30.5 14 C 31.2 12.2 32.8 12.2 33.5 14 L 48 51" stroke="url(#fav-a-grad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
-  <!-- Light Trail -->
-  <path d="M 20 37 Q 34 35 50 33" stroke="url(#fav-trail-grad)" stroke-width="3" stroke-linecap="round" />
-  <!-- Glowing Dot -->
-  <circle cx="50" cy="33" r="5.5" fill="url(#fav-dot)" opacity="0.9" />
-  <circle cx="50" cy="33" r="2.2" fill="#FFFFFF" />
-  <circle cx="50" cy="33" r="1.2" fill="#22D3EE" />
+
+  <!-- Heavyweight Delta A for extreme legibility at 16px -->
+  <polygon points="50,10 12,88 34,88 46,58 50,46" fill="url(#favGrad)" />
+  <polygon points="50,10 54,46 58,58 88,88 66,88" fill="url(#favGrad)" />
+
+  <!-- Kinetic crossbar and cursor tip -->
+  <polygon points="6,56 22,56 26,44 10,44" fill="url(#favGrad)" opacity="0.7" />
+  <polygon points="26,56 78,56 94,44 74,44 78,48 32,48" fill="url(#favGrad)" />
+  <circle cx="94" cy="44" r="5" fill="var(--ak-beacon)" />
 </svg>

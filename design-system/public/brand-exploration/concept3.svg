@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+      <!-- Left leg -->
+      <polygon points="20,84 46,14 56,14 36,84" fill="white" />
+      <!-- Right leg terminating in an acute cursor tip -->
+      <polygon points="44,14 54,14 80,84 64,84" fill="white" />
+      <!-- Kinetic crossbar: a dynamic arrow-trail shooting from left to right -->
+      <polygon points="12,56 74,56 86,46 32,46" fill="white" />
+      <!-- Glowing pointer beacon dot at crossbar tip -->
+      <circle cx="86" cy="46" r="4.5" fill="white" />
+    </svg>

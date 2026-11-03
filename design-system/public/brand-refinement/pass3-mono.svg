@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  
+    <defs>
+      <linearGradient id="aerokinMaster" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#7C5CFF" />
+        <stop offset="100%" stop-color="#22D3EE" />
+      </linearGradient>
+      <filter id="coreGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="2.5" result="blur" />
+        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+      </filter>
+    </defs>
+  
+  <!-- Aerokin Delta A: Left Leg, Apex, Right Leg -->
+  <!-- Left Foil -->
+  <path d="M 50 12 L 16 86 L 31 86 L 44 57 L 50 43 L 56 57 L 69 86 L 84 86 L 50 12 Z M 50 32 L 56 46 L 44 46 Z" fill="#F5F5F7" />
+
+  <!-- Kinetic Crossbar: High-velocity cursor beam shooting through the A -->
+  <!-- Left slipstream dash -->
+  <polygon points="8,54 22,54 26,46 12,46" fill="#F5F5F7" opacity="0.65" />
+  <!-- Main crossbar dart breaking rightward into cursor tip -->
+  <path d="M 28 54 L 78 54 L 92 45 L 75 42 L 78 46 L 33 46 Z" fill="#F5F5F7" />
+  <!-- Focus beacon point at cursor apex -->
+  <circle cx="92" cy="45" r="3.5" fill="#22D3EE" />
+</svg>

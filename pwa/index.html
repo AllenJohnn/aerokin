@@ -6,19 +6,30 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <title>AEROKIN</title>
-    <meta name="description" content="Move the air. Move your PC." />
+    <title>AEROKIN · Move the air. Move your PC.</title>
+    <meta name="description" content="Turn your iPhone into a high-precision 60Hz air mouse, precision trackpad, and media remote for Windows PC." />
+    
+    <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AEROKIN · Move the air. Move your PC." />
+    <meta property="og:description" content="iPhone 6DOF Air Mouse & Windows Media Remote. Zero-install, ultra-low latency." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/og-image.png" />
 
     <!-- Apple iOS PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="AEROKIN" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#07070B" />
   </head>
-  <body class="bg-aerokin-bg text-aerokin-text antialiased select-none overscroll-none overflow-hidden touch-none">
+  <body class="bg-aerokin-bg text-aerokin-text antialiased select-none overscroll-none overflow-hidden touch-none font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

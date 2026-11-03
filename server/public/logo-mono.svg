@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Aerokin Delta A -->
+  <polygon points="50,12 16,86 32,86 45,56 50,44" fill="#F5F5F7" />
+  <polygon points="50,12 55,44 60,56 84,86 68,86" fill="#F5F5F7" />
+
+  <!-- Kinetic Slipstream Crossbar -->
+  <polygon points="8,54 22,54 26,44 12,44" fill="#F5F5F7" opacity="0.5" />
+  <polygon points="28,54 78,54 92,44 75,44 78,48 34,48" fill="#F5F5F7" />
+
+  <!-- Cursor Beacon Dot -->
+  <circle cx="92" cy="44" r="3.5" fill="#F5F5F7" />
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+      <!-- Main A body with cursor angle -->
+      <path d="M 50 10 L 84 84 L 64 84 L 52 56 L 36 56 L 24 84 L 14 84 L 46 10 C 47.5 7 50.5 7 50 10 Z" fill="white" />
+      <!-- Sharp cursor arrowhead cutting through the crossbar into negative space -->
+      <polygon points="32,56 76,56 68,44 40,44" fill="white" />
+      <!-- Apex cursor notch -->
+      <polygon points="46,32 54,32 50,20" fill="#07070B" />
+    </svg>

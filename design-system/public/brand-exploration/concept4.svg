@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+      <!-- Solid bold aerodynamic A silhouette with internal negative space chevron -->
+      <path d="M 50 10 L 86 84 L 65 84 L 54 60 L 46 60 L 35 84 L 14 84 Z M 50 32 L 39 52 L 61 52 Z" fill="white" fill-rule="evenodd" />
+      <!-- Negative space kinetic vector slices cutting through left and right wings -->
+      <line x1="10" y1="58" x2="90" y2="58" stroke="#07070B" stroke-width="5" stroke-linecap="round" />
+      <polygon points="68,52 90,58 68,64" fill="white" />
+    </svg>

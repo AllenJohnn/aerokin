@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+      <!-- Left aerodynamic foil leg -->
+      <path d="M 18 84 L 46 14 C 47.5 11 52.5 11 54 14 L 62 30 L 38 78 L 18 84 Z" fill="white" />
+      <!-- Right cursor blade & crossbar -->
+      <path d="M 50 14 L 82 84 L 64 84 L 56 66 L 34 66 L 42 50 L 62 50 L 50 26 Z" fill="white" />
+      <!-- Speed slash accent / beacon -->
+      <polygon points="56,50 86,50 78,66 48,66" fill="white" />
+    </svg>

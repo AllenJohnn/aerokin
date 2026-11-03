@@ -1,0 +1,17 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="aeroGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#7C5CFF" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+  </defs>
+  <!-- Apex and Left Stator Wing -->
+  <path d="M 50 12 L 18 84 L 34 84 L 43 62 L 57 62 L 50 44 Z" fill="url(#aeroGrad)" />
+  <!-- Kinetic Right Cursor Wing (Forms right leg of A + terminates in sharp cursor dart) -->
+  <path d="M 50 12 L 82 84 L 66 84 L 59 66 L 50 44 Z" fill="url(#aeroGrad)" />
+  <!-- Supersonic Air Crossbar shooting left-to-right -->
+  <polygon points="12,56 74,56 86,46 32,46" fill="url(#aeroGrad)" />
+  <!-- Pointer beacon at the tip of the kinetic crossbar -->
+  <circle cx="86" cy="46" r="5" fill="url(#aeroGrad)" />
+</svg>
