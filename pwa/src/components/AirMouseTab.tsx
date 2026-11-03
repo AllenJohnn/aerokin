@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GlassCard, GlowButton, Slider, Toggle, Pill } from '@ui';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -14,6 +14,7 @@ interface AirSettings {
   invertX: boolean;
   invertY: boolean;
   swapAxes: boolean;
+  grip: 'Flat' | 'Auto';
 }
 
 const DEFAULT_SETTINGS: AirSettings = {
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: AirSettings = {
   invertX: false,
   invertY: false,
   swapAxes: false,
+  grip: 'Flat',
 };
 
 const STORAGE_KEY = 'aerokin_airmouse_settings';
@@ -60,7 +62,42 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
   const accumRef = useRef({ dx: 0, dy: 0 });
   const emaRef = useRef({ x: 0, y: 0 });
   const lastTimeRef = useRef<number>(performance.now());
-  const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const lastTelemetryUpdateRef = useRef<number>(0);
+  const pointerDownRef = useRef<{ time: number; x: number; y: number } | null>(null);
+
+  const disengage = useCallback((upX?: number, upY?: number) => {
+    setIsEngaged(false);
+    triggerHaptic('light');
+
+    if (pointerDownRef.current) {
+      const { time, x, y } = pointerDownRef.current;
+      const elapsed = Date.now() - time;
+      const dist = upX !== undefined && upY !== undefined ? Math.hypot(upX - x, upY - y) : 0;
+
+      // Left click only if press < 200ms AND moved < 8px (fixes iOS double-click)
+      if (elapsed < 200 && dist < 8) {
+        sendClick('left');
+        triggerHaptic('heavy');
+      }
+      pointerDownRef.current = null;
+    }
+  }, [sendClick]);
+
+  // Window blur and visibility change handlers to safely disengage
+  useEffect(() => {
+    const handleBlur = () => disengage();
+    const handleVisibility = () => {
+      if (document.hidden) disengage();
+    };
+
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [disengage]);
 
   // 1. DeviceMotion sensor listener (accumulates rotationRate)
   useEffect(() => {
@@ -75,11 +112,36 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
 
       const currentCfg = settingsRef.current;
 
-      // Default TV-remote mapping (screen facing up):
-      // Yaw (Z-axis / alpha) -> horizontal cursor displacement dx
-      // Pitch (X-axis / beta) -> vertical cursor displacement dy
-      let rawX = currentCfg.swapAxes ? (rr.beta || 0) : (rr.alpha || 0);
-      let rawY = currentCfg.swapAxes ? (rr.alpha || 0) : (rr.beta || 0);
+      let yaw = 0;
+      let pitch = 0;
+
+      if (currentCfg.grip === 'Auto' && e.accelerationIncludingGravity) {
+        // Auto Grip: yaw = rotationRate vector dotted with normalized gravity vector
+        const gx = e.accelerationIncludingGravity.x || 0;
+        const gy = e.accelerationIncludingGravity.y || 0;
+        const gz = e.accelerationIncludingGravity.z || 0;
+        const norm = Math.hypot(gx, gy, gz);
+
+        if (norm > 0.2) {
+          const nx = gx / norm;
+          const ny = gy / norm;
+          const nz = gz / norm;
+          // In flat phone orientation, nz ~ 1 -> yaw = rr.alpha
+          yaw = (rr.beta || 0) * nx + (rr.gamma || 0) * ny + (rr.alpha || 0) * nz;
+        } else {
+          yaw = rr.alpha || 0;
+        }
+        pitch = rr.beta || 0;
+      } else {
+        // Flat Grip: TV-remote mapping (screen facing up)
+        // Yaw (Z-axis / alpha) -> horizontal cursor displacement dx
+        // Pitch (X-axis / beta) -> vertical cursor displacement dy
+        yaw = rr.alpha || 0;
+        pitch = rr.beta || 0;
+      }
+
+      let rawX = currentCfg.swapAxes ? pitch : yaw;
+      let rawY = currentCfg.swapAxes ? yaw : pitch;
 
       if (currentCfg.invertX) rawX = -rawX;
       if (currentCfg.invertY) rawY = -rawY;
@@ -98,10 +160,14 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
       accumRef.current.dx += emaRef.current.x * currentCfg.sensitivity * 30 * dt;
       accumRef.current.dy += emaRef.current.y * currentCfg.sensitivity * 30 * dt;
 
-      setLiveTelemetry({
-        yaw: Math.round(filteredX * 10) / 10,
-        pitch: Math.round(filteredY * 10) / 10,
-      });
+      // Throttle live telemetry updates to ~15Hz (every ~66ms) to avoid unnecessary React re-renders
+      if (now - lastTelemetryUpdateRef.current >= 66) {
+        lastTelemetryUpdateRef.current = now;
+        setLiveTelemetry({
+          yaw: Math.round(filteredX * 10) / 10,
+          pitch: Math.round(filteredY * 10) / 10,
+        });
+      }
     };
 
     window.addEventListener('devicemotion', handleMotion);
@@ -134,29 +200,43 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
     return () => cancelAnimationFrame(animId);
   }, [sendMove]);
 
-  // Touch handling on Hold-to-Engage pad
-  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+  // Pointer Events handling on Hold-to-Engage pad with setPointerCapture
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture not supported
+    }
 
-    touchStartRef.current = { time: Date.now(), x: clientX, y: clientY };
+    pointerDownRef.current = { time: Date.now(), x: e.clientX, y: e.clientY };
     setIsEngaged(true);
     triggerHaptic('medium');
     lastTimeRef.current = performance.now();
   };
 
-  const handleTouchEnd = () => {
-    setIsEngaged(false);
-    triggerHaptic('light');
-
-    // Quick tap check (< 200ms): trigger Left Click
-    if (touchStartRef.current) {
-      const elapsed = Date.now() - touchStartRef.current.time;
-      if (elapsed < 200) {
-        sendClick('left');
-        triggerHaptic('heavy');
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
       }
-      touchStartRef.current = null;
+    } catch {
+      // Ignore release errors
+    }
+    disengage(e.clientX, e.clientY);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+    disengage();
+  };
+
+  const handlePointerLeave = () => {
+    if (!pointerDownRef.current) {
+      disengage();
     }
   };
 
@@ -166,7 +246,7 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Pill status={isEngaged ? 'online' : 'idle'} size="sm">
-            {isEngaged ? 'AIR GYRO ACTIVE · 60Hz' : 'STANDBY · HOLD PAD'}
+            {isEngaged ? `AIR GYRO (${settings.grip}) · 60Hz` : 'STANDBY · HOLD PAD'}
           </Pill>
         </div>
 
@@ -191,6 +271,37 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
           <span className="font-mono text-xs uppercase tracking-mono text-aerokin-cyan">
             Air Mouse Calibration
           </span>
+
+          {/* Grip Mode Selection */}
+          <div className="flex flex-col gap-1.5">
+            <span className="font-mono text-xs uppercase tracking-wider text-aerokin-muted">
+              Grip Mode
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => updateSettings({ grip: 'Flat' })}
+                className={`py-2 px-3 rounded-xl border font-mono text-xs transition-colors ${
+                  settings.grip === 'Flat'
+                    ? 'bg-aerokin-cyan/20 border-aerokin-cyan text-white shadow-glow-sm'
+                    : 'bg-white/[0.04] border-white/10 text-aerokin-muted hover:text-white'
+                }`}
+              >
+                Flat (Remote)
+              </button>
+              <button
+                type="button"
+                onClick={() => updateSettings({ grip: 'Auto' })}
+                className={`py-2 px-3 rounded-xl border font-mono text-xs transition-colors ${
+                  settings.grip === 'Auto'
+                    ? 'bg-aerokin-cyan/20 border-aerokin-cyan text-white shadow-glow-sm'
+                    : 'bg-white/[0.04] border-white/10 text-aerokin-muted hover:text-white'
+                }`}
+              >
+                Auto (Gravity 3D)
+              </button>
+            </div>
+          </div>
 
           <Slider
             label="Sensitivity"
@@ -231,14 +342,14 @@ export const AirMouseTab: React.FC<AirMouseTabProps> = ({ sendMove, sendClick })
           </div>
         </GlassCard>
       ) : (
-        /* Main Hold-to-Engage Air Surface */
+        /* Main Hold-to-Engage Air Surface using Pointer Events */
         <div className="flex-1 flex flex-col justify-center items-center gap-4">
           <div
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleTouchStart}
-            onMouseUp={handleTouchEnd}
-            className={`relative w-full flex-1 rounded-3xl border transition-all duration-300 ease-aerokin flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none ${
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onPointerLeave={handlePointerLeave}
+            className={`relative w-full flex-1 rounded-3xl border transition-all duration-300 ease-aerokin flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none touch-none ${
               isEngaged
                 ? 'bg-gradient-to-b from-[#7C5CFF]/20 to-[#22D3EE]/20 border-aerokin-cyan/60 shadow-glow-md scale-[0.99]'
                 : 'bg-aerokin-surface border-aerokin-border hover:border-white/20 active:scale-[0.98]'
