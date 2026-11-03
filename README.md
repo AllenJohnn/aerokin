@@ -1,30 +1,50 @@
-# AEROKIN
+# React + TypeScript + Vite
 
-> **"Move the air. Move your PC."**  
-> Turn your iPhone into an ultra-low latency air mouse, presentation pointer, and media remote for Windows PC.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
----
+Currently, two official plugins are available:
 
-## ✦ Monorepo Structure
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-- [`design-system/`](./design-system): Core AEROKIN design system built with React, TypeScript, Vite, and Tailwind CSS. Contains all design tokens, spatial components, `<AerokinCursor />`, brand assets, and the interactive `/design` route.
-- *(Upcoming)* `pwa/`: iPhone PWA client utilizing device motion/orientation (gyroscope & accelerometer) over Bluetooth LE / WebSockets.
-- *(Upcoming)* `windows-receiver/`: Low-latency native Windows background daemon translating gyro telemetry into cursor input.
+## Expanding the ESLint configuration
 
----
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-## ✦ Getting Started with Design System
+- Configure the top-level `parserOptions` property like this:
 
-```bash
-cd design-system
-pnpm install
-pnpm run dev
+```js
+export default tseslint.config({
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
 ```
 
-Visit `http://localhost:5173/design` to view the component suite and live iPhone remote simulator.
+- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
+- Optionally add `...tseslint.configs.stylisticTypeChecked`
+- Install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
----
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-## ✦ License
-
-Private / All Rights Reserved.
+export default tseslint.config({
+  plugins: {
+    // other plugins...
+    'react-x': reactX,
+    'react-dom': reactDom,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended typescript rules
+    ...reactX.configs['recommended-typescript'].rules,
+    ...reactDom.configs['recommended'].rules,
+  },
+})
+```
