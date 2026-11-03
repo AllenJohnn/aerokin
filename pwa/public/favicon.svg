@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32" fill="none">
+  <rect width="64" height="64" rx="14" fill="#07070B" />
+  <rect width="64" height="64" rx="14" stroke="rgba(255,255,255,0.1)" stroke-width="1.5" />
+  <defs>
+    <linearGradient id="fav-a-grad" x1="12" y1="52" x2="52" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C5CFF" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+    <linearGradient id="fav-trail-grad" x1="18" y1="38" x2="52" y2="33" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C5CFF" stop-opacity="0.3" />
+      <stop offset="40%" stop-color="#7C5CFF" />
+      <stop offset="90%" stop-color="#22D3EE" />
+      <stop offset="100%" stop-color="#FFFFFF" />
+    </linearGradient>
+    <radialGradient id="fav-dot" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="50%" stop-color="#22D3EE" />
+      <stop offset="100%" stop-color="#7C5CFF" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <!-- Legs -->
+  <path d="M 16 51 L 30.5 14 C 31.2 12.2 32.8 12.2 33.5 14 L 48 51" stroke="url(#fav-a-grad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Light Trail -->
+  <path d="M 20 37 Q 34 35 50 33" stroke="url(#fav-trail-grad)" stroke-width="3" stroke-linecap="round" />
+  <!-- Glowing Dot -->
+  <circle cx="50" cy="33" r="5.5" fill="url(#fav-dot)" opacity="0.9" />
+  <circle cx="50" cy="33" r="2.2" fill="#FFFFFF" />
+  <circle cx="50" cy="33" r="1.2" fill="#22D3EE" />
+</svg>
