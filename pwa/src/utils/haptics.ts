@@ -1,20 +1,29 @@
 /**
- * Best-effort haptics for iOS 17.4+ Safari and standard mobile browsers.
- * Uses the hidden <input type="checkbox" switch> trick on iOS Safari,
- * with fallback to navigator.vibrate. Silently ignores if unsupported.
+ * Tactile & Detent Haptics for iOS Safari & Android
+ * Uses navigator.vibrate when available with fallback to iOS switch tap trick.
  */
 
 let hapticElement: HTMLInputElement | null = null;
 
-export function triggerHaptic(type: 'light' | 'medium' | 'heavy' = 'light'): void {
+export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'detent' | 'success' | 'alert' = 'light'): void {
   try {
-    // 1. Standard Vibration API (Android / desktop chrome)
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      const duration = type === 'heavy' ? 25 : type === 'medium' ? 15 : 8;
-      navigator.vibrate(duration);
+      if (type === 'detent') {
+        navigator.vibrate(6);
+      } else if (type === 'light') {
+        navigator.vibrate(10);
+      } else if (type === 'medium') {
+        navigator.vibrate(18);
+      } else if (type === 'heavy') {
+        navigator.vibrate(28);
+      } else if (type === 'success') {
+        navigator.vibrate([12, 40, 18]);
+      } else if (type === 'alert') {
+        navigator.vibrate([25, 30, 25]);
+      }
     }
 
-    // 2. iOS 17.4+ Safari switch haptics trick
+    // iOS 17.4+ Safari switch haptic trick
     if (typeof document !== 'undefined') {
       if (!hapticElement) {
         hapticElement = document.createElement('input');
@@ -31,6 +40,6 @@ export function triggerHaptic(type: 'light' | 'medium' | 'heavy' = 'light'): voi
       hapticElement.click();
     }
   } catch {
-    // Silently ignore if unsupported
+    // Silently ignore
   }
 }

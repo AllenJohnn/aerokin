@@ -1,293 +1,264 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { GlassCard, GlowButton, Slider } from '@ui';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { triggerHaptic } from '../utils/haptics';
-import { SlidersHorizontal, MousePointer } from 'lucide-react';
+import { useGesture } from '@use-gesture/react';
+import { HandPointing, ArrowsVertical, Cursor } from '@phosphor-icons/react';
 
-export interface TrackpadTabProps {
+interface TrackpadTabProps {
   sendMove: (dx: number, dy: number) => void;
-  sendClick: (button: 'left' | 'right') => void;
-  sendScroll: (dy: number) => void;
-}
-
-interface TouchPoint {
-  id: number;
-  x: number;
-  y: number;
+  sendClick: (button: 'left' | 'right' | 'middle') => void;
+  sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
+  sendScroll: (dy: number, dx?: number) => void;
+  isConnected: boolean;
+  onOpenSettings: () => void;
 }
 
 export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   sendMove,
   sendClick,
+  sendButton,
   sendScroll,
+  isConnected,
+  onOpenSettings,
 }) => {
-  const [sensitivity, setSensitivity] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aerokin_trackpad_sens');
-      return saved ? parseFloat(saved) : 1.4;
-    } catch {
-      return 1.4;
+  const padRef = useRef<HTMLDivElement | null>(null);
+
+  // Remainder accumulation for sub-pixel accuracy
+  const remainderXRef = useRef(0);
+  const remainderYRef = useRef(0);
+  const scrollRemainderRef = useRef(0);
+
+  // Drag-and-drop state (tap then hold-drag)
+  const [isDragging, setIsDragging] = useState(false);
+  const lastTapTimeRef = useRef(0);
+  const isInertiaActiveRef = useRef(false);
+  const inertiaAnimRef = useRef<number | null>(null);
+
+  // Stop any active inertia immediately upon new interaction
+  const stopInertia = useCallback(() => {
+    isInertiaActiveRef.current = false;
+    if (inertiaAnimRef.current !== null) {
+      cancelAnimationFrame(inertiaAnimRef.current);
+      inertiaAnimRef.current = null;
     }
-  });
-
-  const [showSettings, setShowSettings] = useState(false);
-  const [activeTouches, setActiveTouches] = useState<TouchPoint[]>([]);
-
-  const prevTouchRef = useRef<{ x: number; y: number }[]>([]);
-  const touchMetaRef = useRef({
-    startTime: 0,
-    maxTouchCount: 1,
-    distanceMoved: 0,
-    velocity: { vx: 0, vy: 0 },
-  });
-
-  const momentumAnimRef = useRef<number | null>(null);
-
-  const handleSensitivityChange = (val: number) => {
-    setSensitivity(val);
-    localStorage.setItem('aerokin_trackpad_sens', val.toString());
-  };
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    // Cancel any running momentum decay
-    if (momentumAnimRef.current) {
-      cancelAnimationFrame(momentumAnimRef.current);
-      momentumAnimRef.current = null;
-    }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const touches = Array.from(e.touches).map((t) => ({ x: t.clientX, y: t.clientY }));
-    prevTouchRef.current = touches;
-
-    const localTouches = Array.from(e.touches).map((t, idx) => ({
-      id: idx,
-      x: t.clientX - rect.left,
-      y: t.clientY - rect.top,
-    }));
-    setActiveTouches(localTouches);
-
-    touchMetaRef.current = {
-      startTime: Date.now(),
-      maxTouchCount: e.touches.length,
-      distanceMoved: 0,
-      velocity: { vx: 0, vy: 0 },
-    };
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const count = e.touches.length;
-
-    if (count > touchMetaRef.current.maxTouchCount) {
-      touchMetaRef.current.maxTouchCount = count;
-    }
-
-    const localTouches = Array.from(e.touches).map((t, idx) => ({
-      id: idx,
-      x: t.clientX - rect.left,
-      y: t.clientY - rect.top,
-    }));
-    setActiveTouches(localTouches);
-
-    const prev = prevTouchRef.current;
-    if (prev.length === 0) {
-      prevTouchRef.current = Array.from(e.touches).map((t) => ({ x: t.clientX, y: t.clientY }));
-      return;
-    }
-
-    if (count === 1 && prev.length >= 1) {
-      // 1-Finger Drag: Mouse Move with dynamic velocity acceleration
-      const currentX = e.touches[0].clientX;
-      const currentY = e.touches[0].clientY;
-      const dx = currentX - prev[0].x;
-      const dy = currentY - prev[0].y;
-      const dist = Math.hypot(dx, dy);
-
-      touchMetaRef.current.distanceMoved += dist;
-      touchMetaRef.current.velocity = { vx: dx, vy: dy };
-
-      // Acceleration curve
-      const accel = 1 + Math.min(dist / 14, 2.8);
-      sendMove(Math.round(dx * sensitivity * accel), Math.round(dy * sensitivity * accel));
-
-      prevTouchRef.current = [{ x: currentX, y: currentY }];
-    } else if (count === 2 && prev.length >= 2) {
-      // 2-Finger Drag: Vertical Scroll
-      const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      const prevAvgY = (prev[0].y + prev[1].y) / 2;
-      const deltaY = -(avgY - prevAvgY); // Natural scrolling direction
-
-      touchMetaRef.current.distanceMoved += Math.abs(deltaY);
-
-      if (Math.abs(deltaY) >= 1) {
-        sendScroll(Math.round(deltaY * 2.2));
-      }
-
-      prevTouchRef.current = [
-        { x: e.touches[0].clientX, y: e.touches[0].clientY },
-        { x: e.touches[1].clientX, y: e.touches[1].clientY },
-      ];
-    }
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const { startTime, maxTouchCount, distanceMoved, velocity } = touchMetaRef.current;
-    const elapsed = Date.now() - startTime;
-
-    if (e.touches.length === 0) {
-      setActiveTouches([]);
-
-      if (elapsed < 240 && distanceMoved < 10) {
-        if (maxTouchCount === 1) {
-          // 1-Finger tap: Left Click
-          triggerHaptic('medium');
-          sendClick('left');
-        } else if (maxTouchCount === 2) {
-          // 2-Finger tap: Right Click
-          triggerHaptic('heavy');
-          sendClick('right');
-        }
-      } else if (distanceMoved >= 10 && (Math.abs(velocity.vx) > 3 || Math.abs(velocity.vy) > 3)) {
-        // Momentum release physics
-        let vx = velocity.vx * 0.75;
-        let vy = velocity.vy * 0.75;
-
-        const decay = () => {
-          vx *= 0.88;
-          vy *= 0.88;
-
-          if (Math.hypot(vx, vy) > 0.4) {
-            sendMove(Math.round(vx * sensitivity), Math.round(vy * sensitivity));
-            momentumAnimRef.current = requestAnimationFrame(decay);
-          } else {
-            momentumAnimRef.current = null;
-          }
-        };
-
-        momentumAnimRef.current = requestAnimationFrame(decay);
-      }
-
-      prevTouchRef.current = [];
-    }
-  };
-
-  // Cleanup momentum on unmount
-  useEffect(() => {
-    return () => {
-      if (momentumAnimRef.current) {
-        cancelAnimationFrame(momentumAnimRef.current);
-      }
-    };
   }, []);
 
-  return (
-    <div className="flex flex-col h-full w-full justify-between gap-3 p-4">
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MousePointer className="w-4 h-4 text-aerokin-cyan" />
-          <span className="font-mono text-xs uppercase tracking-mono text-aerokin-cyan">
-            PRECISION TRACKPAD
-          </span>
-        </div>
+  // Flush accumulated move deltas
+  const flushMove = useCallback(
+    (dx: number, dy: number) => {
+      if (!isConnected) return;
 
-        <button
-          onClick={() => {
-            triggerHaptic('light');
-            setShowSettings(!showSettings);
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-xs font-mono text-aerokin-muted hover:text-white hover:border-aerokin-cyan/40 transition-colors cursor-pointer"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-aerokin-cyan" />
-          <span>{showSettings ? 'Close' : 'Speed'}</span>
-        </button>
-      </div>
+      const totalX = dx + remainderXRef.current;
+      const totalY = dy + remainderYRef.current;
 
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <GlassCard variant="default" padding="md" className="flex flex-col gap-3">
-              <Slider
-                label="Pointer Acceleration Scale"
-                value={sensitivity}
-                onChange={handleSensitivityChange}
-                min={0.6}
-                max={3.0}
-                step={0.1}
-                unit="x"
-              />
-            </GlassCard>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      const sendX = Math.round(totalX * 100) / 100;
+      const sendY = Math.round(totalY * 100) / 100;
 
-      {/* Main Glass Trackpad Surface */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="relative w-full flex-1 rounded-3xl bg-aerokin-surface border border-aerokin-border flex flex-col items-center justify-center p-6 text-center select-none active:border-aerokin-cyan/40 transition-colors shadow-glass overflow-hidden cursor-crosshair touch-none"
-      >
-        {/* Top edge specular line */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+      if (Math.abs(sendX) >= 0.05 || Math.abs(sendY) >= 0.05) {
+        remainderXRef.current = totalX - sendX;
+        remainderYRef.current = totalY - sendY;
+        sendMove(sendX, sendY);
+      } else {
+        remainderXRef.current = totalX;
+        remainderYRef.current = totalY;
+      }
+    },
+    [sendMove, isConnected]
+  );
 
-        {/* Dynamic Finger Ripple & Cursor Trail */}
-        {activeTouches.map((touch) => (
-          <div
-            key={touch.id}
-            className="pointer-events-none absolute rounded-full bg-aerokin-cyan/25 -translate-x-1/2 -translate-y-1/2 blur-sm animate-pulse"
-            style={{
-              left: touch.x,
-              top: touch.y,
-              width: 56,
-              height: 56,
-            }}
-          />
-        ))}
+  // Flush accumulated scroll deltas
+  const flushScroll = useCallback(
+    (dy: number) => {
+      if (!isConnected) return;
 
-        {/* Guide Graphics */}
-        <div className="pointer-events-none flex flex-col items-center opacity-65">
-          <div className="h-16 w-16 rounded-2xl border border-dashed border-white/25 flex items-center justify-center mb-3">
-            <span className="h-2 w-2 rounded-full bg-aerokin-cyan shadow-glow-cyan" />
-          </div>
-          <span className="font-sans text-sm font-semibold text-white">
-            Precision Touch Surface
-          </span>
-          <span className="font-mono text-[11px] text-aerokin-muted mt-1.5 text-center leading-relaxed">
-            1 Finger: Slide to Move · Tap for Left Click<br />
-            2 Fingers: Slide to Scroll · Tap for Right Click
-          </span>
-        </div>
-      </div>
+      const total = dy + scrollRemainderRef.current;
+      const sendVal = Math.trunc(total);
 
-      {/* Bottom Physical Buttons */}
-      <div className="w-full grid grid-cols-2 gap-3">
-        <GlowButton
-          variant="secondary"
-          size="lg"
-          onClick={() => {
-            triggerHaptic('heavy');
-            sendClick('left');
-          }}
-        >
-          Left Click
-        </GlowButton>
+      if (sendVal !== 0) {
+        scrollRemainderRef.current = total - sendVal;
+        sendScroll(sendVal);
+        triggerHaptic('detent');
+      } else {
+        scrollRemainderRef.current = total;
+      }
+    },
+    [sendScroll, isConnected]
+  );
 
-        <GlowButton
-          variant="secondary"
-          size="lg"
-          onClick={() => {
-            triggerHaptic('heavy');
+  // Bind trackpad gestures with @use-gesture/react
+  const bind = useGesture(
+    {
+      onDragStart: ({ event }) => {
+        stopInertia();
+      },
+      onDrag: ({
+        delta: [dx, dy],
+        velocity: [vx, vy],
+        touches,
+        tap,
+        elapsedTime,
+        distance: [distX, distY],
+        active,
+        first,
+        last,
+      }) => {
+        if (!isConnected) return;
+
+        // Two-Finger Gestures (Scroll or Right Click)
+        if (touches >= 2) {
+          // If released quickly as a two-finger tap (< 180ms, < 6px): right click
+          if (last && elapsedTime < 180 && Math.hypot(distX, distY) < 6) {
             sendClick('right');
-          }}
+            triggerHaptic('medium');
+            return;
+          }
+
+          // Two-finger scroll: accumulate vertical delta (scaled for feel)
+          flushScroll(dy * 0.4);
+          return;
+        }
+
+        // Single-Finger Gestures
+        if (first) {
+          const now = performance.now();
+          // Check for tap-then-hold within 280ms to engage drag
+          if (now - lastTapTimeRef.current < 280) {
+            setIsDragging(true);
+            sendButton('left', 'down');
+            triggerHaptic('heavy');
+          }
+        }
+
+        if (active) {
+          // Velocity-based acceleration curve (in px/ms)
+          const speed = Math.hypot(vx, vy); // px/ms
+          const accel = 1.0 + Math.min(2.5, speed * 1.25);
+
+          const moveX = dx * accel;
+          const moveY = dy * accel;
+
+          flushMove(moveX, moveY);
+        }
+
+        if (last) {
+          const totalDist = Math.hypot(distX, distY);
+          const now = performance.now();
+
+          // Handle single-finger tap (< 180ms, < 6px)
+          if (elapsedTime < 180 && totalDist < 6) {
+            if (!isDragging) {
+              sendClick('left');
+              triggerHaptic('light');
+              lastTapTimeRef.current = now;
+            }
+          }
+
+          // Release drag state if active
+          if (isDragging) {
+            setIsDragging(false);
+            sendButton('left', 'up');
+            triggerHaptic('medium');
+            lastTapTimeRef.current = 0;
+          }
+
+          // Two-finger inertia scroll on release
+          if (touches >= 2 && Math.abs(vy) > 0.4) {
+            isInertiaActiveRef.current = true;
+            let currentVy = vy * 12.0 * Math.sign(dy);
+
+            const stepInertia = () => {
+              if (!isInertiaActiveRef.current || Math.abs(currentVy) < 0.5) {
+                stopInertia();
+                return;
+              }
+              flushScroll(currentVy);
+              currentVy *= 0.92; // Friction decay
+              inertiaAnimRef.current = requestAnimationFrame(stepInertia);
+            };
+            inertiaAnimRef.current = requestAnimationFrame(stepInertia);
+          }
+        }
+      },
+    },
+    {
+      drag: {
+        filterTaps: false,
+        pointer: { capture: true },
+        preventScroll: true,
+      },
+    }
+  );
+
+  useEffect(() => {
+    return () => {
+      stopInertia();
+      if (isDragging) {
+        sendButton('left', 'up');
+      }
+    };
+  }, [stopInertia, isDragging, sendButton]);
+
+  return (
+    <div className="flex-1 flex flex-col justify-between p-4 max-w-md mx-auto w-full h-full select-none">
+      {/* Top Trackpad Header Strip */}
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-hw-surface border border-hw-border shadow-hw-well mb-3">
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full transition-all ${
+              isDragging
+                ? 'bg-hw-active shadow-[0_0_8px_var(--hw-active)]'
+                : 'bg-hw-primary shadow-[0_0_6px_var(--hw-primary)]'
+            }`}
+          />
+          <span className="font-display font-bold uppercase text-[11px] tracking-wider text-hw-text">
+            {isDragging ? 'DRAG ENGAGED (HOLDING BUTTON)' : 'PRECISION TRACKPAD'}
+          </span>
+        </div>
+
+        <div className="font-mono text-[10px] text-hw-text-dim">
+          1-FINGER MOVE · 2-FINGER SCROLL
+        </div>
+      </div>
+
+      {/* Main Machined Anodized Trackpad Surface */}
+      <div
+        ref={padRef}
+        {...bind()}
+        className={`flex-1 rounded-2xl border transition-all cursor-crosshair select-none touch-none relative overflow-hidden flex flex-col items-center justify-center p-6 ${
+          isDragging
+            ? 'bg-hw-surface-hl border-hw-active shadow-hw-btn-pressed'
+            : 'bg-hw-surface-sunken border-hw-border-milled shadow-hw-well active:border-hw-primary/60'
+        }`}
+      >
+        {/* Subtle Machined Milled Edge Accent */}
+        <div className="absolute inset-2 rounded-xl border border-white/5 pointer-events-none" />
+
+        {/* Center Target Crosshair */}
+        <div className="w-20 h-20 rounded-full border border-white/5 flex items-center justify-center pointer-events-none">
+          <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center">
+            <div
+              className={`w-2 h-2 rounded-full transition-colors ${
+                isDragging ? 'bg-hw-active shadow-[0_0_8px_var(--hw-active)]' : 'bg-white/20'
+              }`}
+            />
+          </div>
+        </div>
+
+        {/* Instruction Badge */}
+        <div className="absolute bottom-4 font-mono text-[10px] text-hw-text-dim text-center space-y-0.5 pointer-events-none">
+          <div>Tap = Left Click · 2-Finger Tap = Right Click</div>
+          <div>Double-Tap & Hold = Drag & Drop</div>
+        </div>
+      </div>
+
+      {/* Bottom Tactile Bar */}
+      <div className="flex items-center justify-between pt-3 text-[11px] font-mono text-hw-text-muted">
+        <span>ACCELERATION: VELOCITY-BASED</span>
+        <button
+          onClick={onOpenSettings}
+          className="hover:text-hw-text underline underline-offset-4 decoration-hw-border hover:decoration-hw-primary transition-all"
         >
-          Right Click
-        </GlowButton>
+          CONFIGURE CONTROLS
+        </button>
       </div>
     </div>
   );

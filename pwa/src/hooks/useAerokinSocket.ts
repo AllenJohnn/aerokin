@@ -14,15 +14,43 @@ export type MediaAction =
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'unauthorized' | 'disconnected';
 
+export interface NowPlayingData {
+  app?: string;
+  title?: string;
+  artist?: string;
+  art?: string;
+  status: 'playing' | 'paused' | 'stopped' | 'none';
+  position?: number;
+  duration?: number;
+  canSeek?: boolean;
+}
+
+export interface MediaSessionItem {
+  id: string;
+  app: string;
+  title: string;
+  current: boolean;
+}
+
 export interface UseAerokinSocketReturn {
   status: ConnectionStatus;
   latency: number | null;
   token: string | null;
   setToken: (token: string) => void;
   sendMove: (dx: number, dy: number) => void;
-  sendClick: (button: 'left' | 'right') => void;
-  sendScroll: (dy: number) => void;
+  sendClick: (button: 'left' | 'right' | 'middle') => void;
+  sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
+  sendScroll: (dy: number, dx?: number) => void;
   sendMedia: (action: MediaAction) => void;
+  sendSeekBy: (seconds: number) => void;
+  sendSeekTo: (position: number) => void;
+  sendSession: (id: string) => void;
+  sendSetVolume: (level: number) => void;
+  isBackpressured: () => boolean;
+  nowPlaying: NowPlayingData;
+  sessions: MediaSessionItem[];
+  volume: number;
+  muted: boolean;
 }
 
 const STORAGE_TOKEN_KEY = 'aerokin_auth_token';
@@ -43,6 +71,12 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [latency, setLatency] = useState<number | null>(null);
 
+  // Live media state from server
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingData>({ status: 'none' });
+  const [sessions, setSessions] = useState<MediaSessionItem[]>([]);
+  const [volume, setVolume] = useState<number>(50);
+  const [muted, setMuted] = useState<boolean>(false);
+
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -53,6 +87,14 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     localStorage.setItem(STORAGE_TOKEN_KEY, cleaned);
     setTokenState(cleaned);
     backoffDelayRef.current = 1000;
+  }, []);
+
+  const isBackpressured = useCallback((): boolean => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+      return true;
+    }
+    // Skip sending while ws.bufferedAmount > 4KB
+    return socketRef.current.bufferedAmount > 4096;
   }, []);
 
   const sendRaw = useCallback((payload: object) => {
@@ -69,15 +111,22 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   );
 
   const sendClick = useCallback(
-    (button: 'left' | 'right') => {
+    (button: 'left' | 'right' | 'middle' = 'left') => {
       sendRaw({ type: 'click', button });
     },
     [sendRaw]
   );
 
+  const sendButton = useCallback(
+    (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => {
+      sendRaw({ type: 'button', button, state });
+    },
+    [sendRaw]
+  );
+
   const sendScroll = useCallback(
-    (dy: number) => {
-      sendRaw({ type: 'scroll', dy });
+    (dy: number, dx?: number) => {
+      sendRaw({ type: 'scroll', dy, dx });
     },
     [sendRaw]
   );
@@ -85,6 +134,35 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const sendMedia = useCallback(
     (action: MediaAction) => {
       sendRaw({ type: 'media', action });
+    },
+    [sendRaw]
+  );
+
+  const sendSeekBy = useCallback(
+    (seconds: number) => {
+      sendRaw({ type: 'seekby', seconds });
+    },
+    [sendRaw]
+  );
+
+  const sendSeekTo = useCallback(
+    (position: number) => {
+      sendRaw({ type: 'seekto', position });
+    },
+    [sendRaw]
+  );
+
+  const sendSession = useCallback(
+    (id: string) => {
+      sendRaw({ type: 'session', id });
+    },
+    [sendRaw]
+  );
+
+  const sendSetVolume = useCallback(
+    (level: number) => {
+      setVolume(Math.round(level));
+      sendRaw({ type: 'setvolume', level: Math.round(level) });
     },
     [sendRaw]
   );
@@ -105,8 +183,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // In dev mode (port 5174), default to server on port 8443
-      const host = window.location.port === '5174'
+      // In dev mode (e.g. port 5174 or 5173), default to server on port 8443
+      const isDevPort = window.location.port === '5174' || window.location.port === '5173';
+      const host = isDevPort
         ? `${window.location.hostname}:8443`
         : window.location.host;
 
@@ -138,6 +217,29 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
           if (data.type === 'pong' && typeof data.t === 'number') {
             const rtt = Date.now() - data.t;
             setLatency(rtt);
+          } else if (data.type === 'nowplaying') {
+            setNowPlaying({
+              app: data.app,
+              title: data.title,
+              artist: data.artist,
+              art: data.art,
+              status: data.status || 'none',
+              position: data.position,
+              duration: data.duration,
+              canSeek: data.canSeek ?? false,
+            });
+            if (typeof data.volume === 'number') {
+              const norm = data.volume <= 1.0 && data.volume > 0 ? Math.round(data.volume * 100) : Math.round(data.volume);
+              setVolume(norm);
+            }
+            if (typeof data.muted === 'boolean') {
+              setMuted(data.muted);
+            }
+          } else if (data.type === 'sessions' && Array.isArray(data.list)) {
+            setSessions(data.list);
+          } else if (data.type === 'volume' && typeof data.volume === 'number') {
+            const norm = data.volume <= 1.0 && data.volume > 0 ? Math.round(data.volume * 100) : Math.round(data.volume);
+            setVolume(norm);
           }
         } catch {
           // ignore non-json
@@ -192,7 +294,17 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     setToken,
     sendMove,
     sendClick,
+    sendButton,
     sendScroll,
     sendMedia,
+    sendSeekBy,
+    sendSeekTo,
+    sendSession,
+    sendSetVolume,
+    isBackpressured,
+    nowPlaying,
+    sessions,
+    volume,
+    muted,
   };
 }

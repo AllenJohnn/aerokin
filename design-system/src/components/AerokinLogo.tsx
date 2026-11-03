@@ -16,6 +16,8 @@ export interface AerokinLogoProps {
   intro?: boolean;
   /** Monochrome white mode */
   mono?: boolean;
+  /** Theme preset: 'decepticon' (default, optic red beacon) or 'aero' (cyan beacon) */
+  theme?: 'decepticon' | 'aero';
 }
 
 const sizeMap = {
@@ -32,6 +34,7 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
   animated = false,
   intro = false,
   mono = false,
+  theme = 'decepticon',
 }) => {
   const pixelSize = typeof size === 'number' ? size : sizeMap[size];
   const uniqueId = React.useId().replace(/:/g, '');
@@ -43,6 +46,7 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
   const crossbarDartRef = useRef<SVGPolygonElement | null>(null);
   const beaconRef = useRef<SVGCircleElement | null>(null);
 
+  const isDecepticon = theme === 'decepticon';
   const gradMark = `ak-grad-${uniqueId}`;
   const gradTip = `ak-tip-grad-${uniqueId}`;
   const filterGlow = `ak-glow-${uniqueId}`;
@@ -144,17 +148,17 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
       >
         <defs>
           <linearGradient id={gradMark} x1="10%" y1="10%" x2="90%" y2="90%">
-            <stop offset="0%" stopColor="#7C5CFF" />
-            <stop offset="100%" stopColor="#22D3EE" />
+            <stop offset="0%" stopColor={isDecepticon ? "#A855F7" : "#7C5CFF"} />
+            <stop offset="100%" stopColor={isDecepticon ? "#7C3AED" : "#22D3EE"} />
           </linearGradient>
 
           <linearGradient id={gradTip} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#22D3EE" />
-            <stop offset="100%" stopColor="#38BDF8" />
+            <stop offset="0%" stopColor={isDecepticon ? "#FF3B30" : "#22D3EE"} />
+            <stop offset="100%" stopColor={isDecepticon ? "#EF4444" : "#38BDF8"} />
           </linearGradient>
 
           <filter id={filterGlow} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feGaussianBlur stdDeviation={isDecepticon ? "2" : "3"} result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>

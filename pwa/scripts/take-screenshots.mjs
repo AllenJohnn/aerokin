@@ -75,7 +75,7 @@ async function run() {
 
   try {
     // -------------------------------------------------------------------------
-    // PASS 1: DESKTOP LOCALHOST PAIRING DASHBOARD (1440x900)
+    // 1. DESKTOP LOCALHOST PAIRING DASHBOARD (1440x900)
     // -------------------------------------------------------------------------
     console.log('Capturing Desktop Dashboard (1440x900)...');
     const desktopContext = await browser.newContext({
@@ -85,13 +85,9 @@ async function run() {
     });
 
     const desktopPage = await desktopContext.newPage();
-    desktopPage.on('console', (msg) => console.log('[Desktop Console]', msg.type(), msg.text()));
-    desktopPage.on('pageerror', (err) => console.error('[Desktop Page Error]', err));
     await desktopPage.goto(`https://127.0.0.1:8443/?token=${token}`, {
       waitUntil: 'networkidle',
     });
-    // Wait for QR code image to render
-    await desktopPage.waitForSelector('img[alt="AEROKIN Pairing QR Code"]', { timeout: 5000 }).catch(() => {});
     await sleep(1500);
 
     const desktopShot = path.join(SCREENSHOTS_DIR, '01-desktop-pairing-dashboard.png');
@@ -100,9 +96,9 @@ async function run() {
     await desktopContext.close();
 
     // -------------------------------------------------------------------------
-    // PASS 2: IPHONE 14 VIEWPORT (390x844, DPR 3, Touch Enabled)
+    // 2. IPHONE MOBILE EXPERIENCE (390x844, DPR 3, Touch Enabled)
     // -------------------------------------------------------------------------
-    console.log('Capturing iPhone 14 Mobile Experience (390x844 @ 3x DPR)...');
+    console.log('Capturing iPhone Mobile Experience (390x844 @ 3x DPR)...');
     const iphoneContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
       deviceScaleFactor: 3,
@@ -126,38 +122,76 @@ async function run() {
     await iphonePage.goto(`https://127.0.0.1:8443/?token=${token}`, {
       waitUntil: 'networkidle',
     });
-    await sleep(1200);
+    await sleep(1000);
 
     const startShot = path.join(SCREENSHOTS_DIR, '02-iphone-start-screen.png');
     await iphonePage.screenshot({ path: startShot });
     console.log(`✓ Saved: ${startShot}`);
 
-    // Tap "Enable Motion Sensors"
-    const enableBtn = iphonePage.getByRole('button', { name: /Enable Motion/i });
+    // Tap "Initialize Remote Sensors"
+    const enableBtn = iphonePage.getByRole('button', { name: /Initialize Remote|Enable Motion/i });
     if (await enableBtn.isVisible()) {
       await enableBtn.click();
-      await sleep(1200);
+      await sleep(1000);
     }
 
-    // 2B. Air Mouse Tab
-    const airMouseShot = path.join(SCREENSHOTS_DIR, '03-iphone-air-mouse.png');
-    await iphonePage.screenshot({ path: airMouseShot });
-    console.log(`✓ Saved: ${airMouseShot}`);
+    // 2B. Air Pointer Tab (Decepticon Theme)
+    const airPointerShot = path.join(SCREENSHOTS_DIR, '03-iphone-air-pointer-decepticon.png');
+    await iphonePage.screenshot({ path: airPointerShot });
+    console.log(`✓ Saved: ${airPointerShot}`);
 
-    // 2C. Air Mouse Settings Sheet
-    const configBtn = iphonePage.getByRole('button', { name: /Config/i });
-    if (await configBtn.isVisible()) {
-      await configBtn.click();
+    // 2C. Open Settings Drawer
+    const settingsBtn = iphonePage.getByRole('button', { name: /Settings/i });
+    if (await settingsBtn.isVisible()) {
+      await settingsBtn.click();
       await sleep(800);
-      const settingsShot = path.join(SCREENSHOTS_DIR, '04-iphone-air-mouse-settings.png');
+      const settingsShot = path.join(SCREENSHOTS_DIR, '04-iphone-settings-drawer.png');
       await iphonePage.screenshot({ path: settingsShot });
       console.log(`✓ Saved: ${settingsShot}`);
 
-      // Close settings sheet by clicking the backdrop or top X button
-      const backdrop = iphonePage.locator('div.fixed.inset-0.z-50 > div.absolute.inset-0');
-      if (await backdrop.isVisible()) {
-        await backdrop.click({ position: { x: 50, y: 50 }, force: true });
+      // Open Calibration Wizard from Settings
+      const calBtn = iphonePage.getByRole('button', { name: /Calibrate/i });
+      if (await calBtn.isVisible()) {
+        await calBtn.click();
+        await sleep(800);
+        const calShot = path.join(SCREENSHOTS_DIR, '05-iphone-calibration-wizard.png');
+        await iphonePage.screenshot({ path: calShot });
+        console.log(`✓ Saved: ${calShot}`);
+
+        // Close calibration modal
+        const closeCalBtn = iphonePage.getByRole('button', { name: /Close/i });
+        if (await closeCalBtn.isVisible()) {
+          await closeCalBtn.click();
+          await sleep(500);
+        }
+      }
+
+      // Re-open settings to switch to AERO theme
+      if (await settingsBtn.isVisible()) {
+        await settingsBtn.click();
         await sleep(600);
+        const aeroBtn = iphonePage.getByRole('button', { name: /AERO/i });
+        if (await aeroBtn.isVisible()) {
+          await aeroBtn.click();
+          await sleep(600);
+          const aeroShot = path.join(SCREENSHOTS_DIR, '08-iphone-aero-preset.png');
+          await iphonePage.screenshot({ path: aeroShot });
+          console.log(`✓ Saved: ${aeroShot}`);
+
+          // Switch back to DECEPTICON
+          const decepticonBtn = iphonePage.getByRole('button', { name: /DECEPTICON/i });
+          if (await decepticonBtn.isVisible()) {
+            await decepticonBtn.click();
+            await sleep(400);
+          }
+        }
+
+        // Close drawer
+        const closeDrawerBtn = iphonePage.getByRole('button', { name: /Close/i });
+        if (await closeDrawerBtn.isVisible()) {
+          await closeDrawerBtn.click();
+          await sleep(500);
+        }
       }
     }
 
@@ -166,7 +200,7 @@ async function run() {
     if (await trackpadTabBtn.isVisible()) {
       await trackpadTabBtn.click();
       await sleep(800);
-      const trackpadShot = path.join(SCREENSHOTS_DIR, '05-iphone-trackpad.png');
+      const trackpadShot = path.join(SCREENSHOTS_DIR, '06-iphone-trackpad.png');
       await iphonePage.screenshot({ path: trackpadShot });
       console.log(`✓ Saved: ${trackpadShot}`);
     }
@@ -176,7 +210,7 @@ async function run() {
     if (await mediaTabBtn.isVisible()) {
       await mediaTabBtn.click();
       await sleep(800);
-      const mediaShot = path.join(SCREENSHOTS_DIR, '06-iphone-media-remote.png');
+      const mediaShot = path.join(SCREENSHOTS_DIR, '07-iphone-media-remote.png');
       await iphonePage.screenshot({ path: mediaShot });
       console.log(`✓ Saved: ${mediaShot}`);
     }

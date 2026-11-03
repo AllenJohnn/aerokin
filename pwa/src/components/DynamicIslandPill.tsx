@@ -4,7 +4,7 @@ import { LatencySparkline } from './LatencySparkline';
 import { triggerHaptic } from '../utils/haptics';
 
 export interface DynamicIslandPillProps {
-  status: 'connected' | 'reconnecting' | 'unauthorized';
+  status: 'connected' | 'reconnecting' | 'unauthorized' | 'disconnected';
   latency: number | null;
   latencyHistory: number[];
   token: string | null;
@@ -29,35 +29,32 @@ export const DynamicIslandPill: React.FC<DynamicIslandPillProps> = ({
     setIsExpanded((prev) => !prev);
   };
 
-  const statusColor =
+  const ledClass =
     status === 'connected'
-      ? 'bg-aerokin-cyan shadow-glow-cyan'
+      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]'
       : status === 'unauthorized'
-      ? 'bg-red-500 shadow-glow-sm'
+      ? 'bg-hw-active shadow-[0_0_6px_var(--hw-active)]'
       : 'bg-amber-400 animate-pulse';
 
   return (
-    <div className="relative flex flex-col items-center z-50">
+    <div className="relative flex flex-col items-center z-40 select-none">
       <motion.button
         layout
         onClick={handleClick}
         transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-        className={`flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/10 bg-[#07070B]/85 backdrop-blur-2xl shadow-glass transition-colors cursor-pointer select-none active:scale-[0.97] ${
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-hw-oled-bg border border-hw-border-milled shadow-hw-well active:scale-[0.98] transition-all ${
           status === 'unauthorized'
-            ? 'border-red-500/40 hover:border-red-500'
-            : 'hover:border-aerokin-cyan/40'
+            ? 'border-hw-active/50'
+            : 'hover:border-hw-primary/60'
         }`}
       >
-        {/* Pulsing indicator dot */}
+        {/* Hardware LED indicator lamp */}
         <span className="relative flex h-2 w-2">
-          {status === 'connected' && (
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-aerokin-cyan opacity-75" />
-          )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`} />
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${ledClass}`} />
         </span>
 
-        {/* Status label with animated text */}
-        <span className="font-mono text-[11px] font-semibold tracking-mono text-[#F5F5F7] whitespace-nowrap">
+        {/* OLED Text Readout */}
+        <span className="font-mono text-[10.5px] font-bold tracking-wider text-hw-text whitespace-nowrap">
           {status === 'connected'
             ? latency !== null
               ? `CONNECTED · ${latency}ms`
@@ -67,40 +64,40 @@ export const DynamicIslandPill: React.FC<DynamicIslandPillProps> = ({
             : 'RECONNECTING'}
         </span>
 
-        {/* Sparkline on connected state */}
+        {/* Latency Sparkline */}
         {status === 'connected' && (
-          <LatencySparkline history={latencyHistory} width={44} height={14} className="ml-0.5 opacity-90" />
+          <LatencySparkline history={latencyHistory} width={40} height={12} className="ml-0.5 opacity-80" />
         )}
       </motion.button>
 
-      {/* Expanded diagnostic dropdown */}
+      {/* Expanded Machined Telemetry HUD */}
       <AnimatePresence>
         {isExpanded && status === 'connected' && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            initial={{ opacity: 0, y: -6, scale: 0.96 }}
             animate={{ opacity: 1, y: 4, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            className="absolute top-full mt-2 w-64 p-3.5 rounded-2xl border border-white/10 bg-[#0C0C14]/95 backdrop-blur-2xl shadow-glow-md flex flex-col gap-2 font-mono text-xs z-50"
+            className="absolute top-full mt-2 w-64 p-3.5 rounded-xl border border-hw-border-milled bg-hw-surface-raised shadow-2xl flex flex-col gap-2 font-mono text-xs z-50"
           >
-            <div className="flex items-center justify-between text-aerokin-muted text-[10px] uppercase tracking-wider">
-              <span>Telemetry</span>
-              <span className="text-aerokin-cyan">60Hz Loop</span>
+            <div className="flex items-center justify-between text-hw-text-dim text-[10px] uppercase tracking-wider">
+              <span>HARDWARE TELEMETRY</span>
+              <span className="text-hw-primary font-bold">60Hz CORE</span>
             </div>
 
-            <div className="flex items-center justify-between text-white">
-              <span className="text-aerokin-muted">Ping Latency</span>
-              <span className="font-bold text-aerokin-cyan">{latency ?? 0} ms</span>
+            <div className="flex items-center justify-between text-hw-text">
+              <span className="text-hw-text-muted">Round-trip RTT</span>
+              <span className="font-bold text-hw-primary">{latency ?? 0} ms</span>
             </div>
 
-            <div className="flex items-center justify-between text-white">
-              <span className="text-aerokin-muted">Pairing Token</span>
+            <div className="flex items-center justify-between text-hw-text">
+              <span className="text-hw-text-muted">Pairing Token</span>
               <span className="font-bold tracking-widest">{token || '---'}</span>
             </div>
 
-            <div className="flex items-center justify-between text-white">
-              <span className="text-aerokin-muted">Protocol</span>
-              <span className="text-emerald-400">WSS (TLS 1.3)</span>
+            <div className="flex items-center justify-between text-hw-text">
+              <span className="text-hw-text-muted">Security Layer</span>
+              <span className="text-emerald-400 font-bold">WSS (Local CA)</span>
             </div>
 
             <button
@@ -108,9 +105,9 @@ export const DynamicIslandPill: React.FC<DynamicIslandPillProps> = ({
                 triggerHaptic('light');
                 setIsExpanded(false);
               }}
-              className="mt-1 py-1 rounded-lg bg-white/[0.04] text-[10px] text-aerokin-muted hover:text-white transition-colors"
+              className="mt-1 py-1 rounded bg-hw-surface-sunken border border-hw-border-subtle text-[10px] text-hw-text-muted hover:text-hw-text transition-colors"
             >
-              Dismiss
+              Close Telemetry
             </button>
           </motion.div>
         )}

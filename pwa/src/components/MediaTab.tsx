@@ -1,327 +1,385 @@
-import React, { useState, useRef } from 'react';
-import { motion } from 'motion/react';
-import { GlassCard, Pill } from '@ui';
-import { MediaAction } from '../hooks/useAerokinSocket';
+import React, { useState, useEffect, useRef } from 'react';
+import { NowPlayingData, MediaSessionItem, MediaAction } from '../hooks/useAerokinSocket';
 import { triggerHaptic } from '../utils/haptics';
+import * as Slider from '@radix-ui/react-slider';
+import { useDrag } from '@use-gesture/react';
 import {
   Play,
   Pause,
-  SkipBack,
   SkipForward,
-  RotateCcw,
-  RotateCw,
-  Volume2,
-  VolumeX,
-  Volume1,
-  Maximize2,
-  Minimize2,
-} from 'lucide-react';
+  SkipBack,
+  SpeakerHigh,
+  SpeakerSimpleSlash,
+  CornersOut,
+  Disc,
+  ClockCounterClockwise,
+  ClockClockwise,
+  CaretDown,
+} from '@phosphor-icons/react';
 
-export interface MediaTabProps {
+interface MediaTabProps {
+  nowPlaying: NowPlayingData;
+  sessions: MediaSessionItem[];
+  volume: number;
+  muted: boolean;
   sendMedia: (action: MediaAction) => void;
+  sendSeekBy: (seconds: number) => void;
+  sendSeekTo: (position: number) => void;
+  sendSession: (id: string) => void;
+  sendSetVolume: (level: number) => void;
+  seekMethod: 'auto' | 'keys';
+  onOpenSettings: () => void;
 }
 
-export const MediaTab: React.FC<MediaTabProps> = ({ sendMedia }) => {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [volumeLevel, setVolumeLevel] = useState(65); // 0-100 visual dial
+function formatTime(seconds?: number): string {
+  if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
-  const dialRef = useRef<HTMLDivElement | null>(null);
-  const lastAngleRef = useRef<number | null>(null);
+export const MediaTab: React.FC<MediaTabProps> = ({
+  nowPlaying,
+  sessions,
+  volume,
+  muted,
+  sendMedia,
+  sendSeekBy,
+  sendSeekTo,
+  sendSession,
+  sendSetVolume,
+  seekMethod,
+  onOpenSettings,
+}) => {
+  const [showSessionsPicker, setShowSessionsPicker] = useState(false);
+  const [seekToast, setSeekToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleAction = (action: MediaAction, hapticType: 'light' | 'medium' | 'heavy' = 'medium') => {
-    triggerHaptic(hapticType);
+  // Scrubber drag state
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null);
 
-    if (action === 'playpause') {
-      setIsPlaying((prev) => !prev);
-    } else if (action === 'mute') {
-      setIsMuted((prev) => !prev);
-    } else if (action === 'fullscreen') {
-      setIsFullscreen((prev) => !prev);
-    }
+  const displayPosition = scrubPosition !== null ? scrubPosition : nowPlaying.position ?? 0;
+  const duration = nowPlaying.duration ?? 0;
+  const canSeek = !!nowPlaying.canSeek && duration > 0;
+  const isPlaying = nowPlaying.status === 'playing';
 
-    sendMedia(action);
+  const showToast = (text: string) => {
+    setSeekToast(text);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setSeekToast(null);
+    }, 1200);
   };
 
-  // Circular Volume Dial Drag & Detent Haptics
-  const handleDialPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
-    updateDialFromPointer(e);
-  };
+  const handleSeekDelta = (seconds: number) => {
+    triggerHaptic('medium');
+    showToast(`${seconds > 0 ? '+' : ''}${seconds}s`);
 
-  const handleDialPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.buttons > 0) {
-      updateDialFromPointer(e);
-    }
-  };
-
-  const handleDialPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    } catch {}
-    lastAngleRef.current = null;
-  };
-
-  const updateDialFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dialRef.current) return;
-    const rect = dialRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const dx = e.clientX - centerX;
-    const dy = e.clientY - centerY;
-
-    // Angle in radians [-PI, PI]
-    let angle = Math.atan2(dy, dx);
-    // Convert to degrees [0, 360]
-    let deg = (angle * 180) / Math.PI + 90;
-    if (deg < 0) deg += 360;
-
-    if (lastAngleRef.current !== null) {
-      let diff = deg - lastAngleRef.current;
-      // Handle 360 wrap-around
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-
-      // Every ~12 degrees is a volume step
-      if (Math.abs(diff) >= 8) {
-        if (diff > 0) {
-          // Clockwise: Volume Up
-          triggerHaptic('light');
-          sendMedia('volup');
-          setVolumeLevel((prev) => Math.min(prev + 4, 100));
-        } else {
-          // Counter-Clockwise: Volume Down
-          triggerHaptic('light');
-          sendMedia('voldown');
-          setVolumeLevel((prev) => Math.max(prev - 4, 0));
-        }
-        lastAngleRef.current = deg;
-      }
+    if (seekMethod === 'keys') {
+      sendMedia(seconds > 0 ? 'seekfwd' : 'seekback');
     } else {
-      lastAngleRef.current = deg;
+      sendSeekBy(seconds);
     }
   };
 
-  // Dial SVG geometry
-  const dialAngle = (volumeLevel / 100) * 270 - 135; // [-135deg to +135deg]
+  const handlePlayPause = () => {
+    triggerHaptic('medium');
+    sendMedia('playpause');
+  };
+
+  const handleVolumeToggleMute = () => {
+    triggerHaptic('medium');
+    sendMedia('mute');
+  };
+
+  // Knurled Volume Dial using @use-gesture/react
+  const dialRef = useRef<HTMLDivElement | null>(null);
+  const lastVolDetentRef = useRef(volume);
+
+  const bindDial = useDrag(
+    ({ movement: [, my], active, first }) => {
+      if (first) {
+        lastVolDetentRef.current = volume;
+      }
+      // Dragging up increases volume, dragging down decreases
+      const delta = -my * 0.4;
+      const targetVol = Math.max(0, Math.min(100, Math.round(lastVolDetentRef.current + delta)));
+
+      if (targetVol !== volume) {
+        sendSetVolume(targetVol);
+        if (Math.abs(targetVol - volume) >= 2) {
+          triggerHaptic('detent');
+        }
+      }
+    },
+    {
+      pointer: { capture: true },
+      preventDefault: true,
+    }
+  );
 
   return (
-    <div className="flex flex-col h-full w-full justify-between gap-3.5 p-4 overflow-y-auto">
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-xs uppercase tracking-mono text-aerokin-cyan">
-          WINDOWS MEDIA REMOTE
-        </span>
-        <Pill status="online" size="sm">
-          READY
-        </Pill>
+    <div className="flex-1 flex flex-col justify-between p-4 max-w-md mx-auto w-full h-full select-none relative">
+      {/* On-screen Seek Toast Badge */}
+      {seekToast && (
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 px-4 py-2 rounded bg-black/90 border border-hw-border-milled text-white font-mono text-sm font-bold shadow-2xl animate-in fade-in zoom-in-95 duration-100">
+          {seekToast}
+        </div>
+      )}
+
+      {/* 1. Now Playing Card */}
+      <div className="w-full rounded-xl bg-hw-surface border border-hw-border p-4 shadow-hw-well relative overflow-hidden">
+        {/* Source Sessions Dropdown */}
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-hw-border-subtle">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isPlaying
+                  ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]'
+                  : 'bg-white/20'
+              }`}
+            />
+            <span className="font-display font-bold uppercase text-[10px] tracking-wider text-hw-text">
+              {nowPlaying.app ? nowPlaying.app.toUpperCase() : 'NO MEDIA ACTIVE'}
+            </span>
+          </div>
+
+          {sessions.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSessionsPicker((s) => !s)}
+                className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-hw-primary bg-hw-surface-raised px-2 py-0.5 rounded border border-hw-border-milled hover:bg-hw-surface-hl transition-all"
+              >
+                <span>{sessions.length} SOURCES</span>
+                <CaretDown size={12} />
+              </button>
+
+              {showSessionsPicker && (
+                <div className="absolute right-0 top-7 z-40 w-48 rounded bg-hw-surface-raised border border-hw-border-milled shadow-2xl p-1 space-y-1">
+                  {sessions.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        sendSession(s.id);
+                        setShowSessionsPicker(false);
+                        triggerHaptic('light');
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded text-[11px] font-mono flex items-center justify-between transition-colors ${
+                        s.current ? 'bg-hw-primary text-white' : 'text-hw-text-muted hover:bg-white/5'
+                      }`}
+                    >
+                      <span className="truncate">{s.app || s.id}</span>
+                      {s.current && <span className="text-[9px]">ACTIVE</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Media Details */}
+        {nowPlaying.title ? (
+          <div className="flex items-center gap-3.5 my-2">
+            <div className="w-14 h-14 rounded-lg bg-hw-surface-sunken border border-hw-border flex items-center justify-center flex-shrink-0 text-hw-primary shadow-hw-bevel overflow-hidden">
+              {nowPlaying.art ? (
+                <img src={nowPlaying.art} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Disc size={28} className={isPlaying ? 'animate-spin' : ''} />
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h4 className="font-display font-bold text-sm text-hw-text truncate">
+                {nowPlaying.title}
+              </h4>
+              <p className="font-sans text-xs text-hw-text-muted truncate mt-0.5">
+                {nowPlaying.artist || 'Windows System Audio'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="py-6 flex flex-col items-center text-center">
+            <Disc size={32} className="text-hw-text-dim mb-2 opacity-50" />
+            <span className="font-display font-bold text-xs text-hw-text uppercase tracking-wider">
+              No Media Playing
+            </span>
+            <span className="font-mono text-[10px] text-hw-text-dim mt-1">
+              Start playback in YouTube, Netflix, Spotify, or VLC on PC
+            </span>
+          </div>
+        )}
+
+        {/* Draggable Scrubber Timeline */}
+        <div className="mt-4 pt-3 border-t border-hw-border-subtle">
+          <Slider.Root
+            disabled={!canSeek}
+            value={[displayPosition]}
+            max={duration > 0 ? duration : 100}
+            step={1}
+            onValueChange={([val]) => setScrubPosition(val)}
+            onValueCommit={([val]) => {
+              setScrubPosition(null);
+              sendSeekTo(val);
+              triggerHaptic('medium');
+            }}
+            className="relative flex items-center select-none touch-none w-full h-5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Slider.Track className="bg-white/10 relative grow rounded-full h-1.5 overflow-hidden">
+              <Slider.Range className="absolute bg-hw-primary rounded-full h-full" />
+            </Slider.Track>
+            <Slider.Thumb
+              className="block w-4 h-4 bg-white rounded-full shadow-md focus:outline-none"
+              aria-label="Playback Position"
+            />
+          </Slider.Root>
+
+          <div className="flex justify-between font-mono text-[10px] text-hw-text-dim mt-1">
+            <span>{formatTime(displayPosition)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Main Playback Hero Cluster */}
-      <GlassCard variant="default" padding="lg" className="flex flex-col items-center justify-center gap-5">
-        {/* Large Central Play / Pause Button with Morph */}
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-          onClick={() => handleAction('playpause', 'heavy')}
-          className="relative h-24 w-24 rounded-full bg-gradient-to-br from-[#7C5CFF] to-[#22D3EE] p-[2px] shadow-glow-lg flex items-center justify-center cursor-pointer select-none group"
-        >
-          <div className="h-full w-full rounded-full bg-[#07070B]/80 backdrop-blur-xl flex items-center justify-center group-hover:bg-[#07070B]/60 transition-colors">
-            <motion.div
-              key={isPlaying ? 'pause' : 'play'}
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.6, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {isPlaying ? (
-                <Pause className="w-10 h-10 text-white fill-white" />
-              ) : (
-                <Play className="w-10 h-10 text-white fill-white ml-1" />
-              )}
-            </motion.div>
-          </div>
-        </motion.button>
-
-        {/* Primary Scrub / Skip Controls */}
-        <div className="w-full grid grid-cols-4 gap-2">
-          {/* Skip Previous */}
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => handleAction('prev', 'medium')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 active:bg-white/[0.08] transition-colors"
+      {/* 2. Tactile Transport Controls */}
+      <div className="flex flex-col gap-3 my-3">
+        {/* Skip & Seek Row */}
+        <div className="grid grid-cols-4 gap-2">
+          {/* -10s Seek */}
+          <button
+            onClick={() => handleSeekDelta(-10)}
+            className="h-12 rounded-lg bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex items-center justify-center text-hw-text hover:text-white transition-all"
+            title="Seek -10 seconds"
           >
-            <SkipBack className="w-5 h-5 text-white mb-1" />
-            <span className="font-mono text-[9px] text-aerokin-muted uppercase">Prev</span>
-          </motion.button>
+            <ClockCounterClockwise size={20} weight="bold" />
+          </button>
 
-          {/* Seek -10s */}
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => handleAction('seekback', 'medium')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 active:bg-white/[0.08] transition-colors"
+          {/* Prev Track */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              sendMedia('prev');
+            }}
+            className="h-12 rounded-lg bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex items-center justify-center text-hw-text hover:text-white transition-all"
+            title="Previous Track"
           >
-            <RotateCcw className="w-5 h-5 text-aerokin-cyan mb-1" />
-            <span className="font-mono text-[9px] text-aerokin-muted uppercase">-10s</span>
-          </motion.button>
+            <SkipBack size={20} weight="bold" />
+          </button>
 
-          {/* Seek +10s */}
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => handleAction('seekfwd', 'medium')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 active:bg-white/[0.08] transition-colors"
+          {/* Next Track */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              sendMedia('next');
+            }}
+            className="h-12 rounded-lg bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex items-center justify-center text-hw-text hover:text-white transition-all"
+            title="Next Track"
           >
-            <RotateCw className="w-5 h-5 text-aerokin-cyan mb-1" />
-            <span className="font-mono text-[9px] text-aerokin-muted uppercase">+10s</span>
-          </motion.button>
+            <SkipForward size={20} weight="bold" />
+          </button>
 
-          {/* Skip Next */}
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => handleAction('next', 'medium')}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 active:bg-white/[0.08] transition-colors"
+          {/* +10s Seek */}
+          <button
+            onClick={() => handleSeekDelta(10)}
+            className="h-12 rounded-lg bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex items-center justify-center text-hw-text hover:text-white transition-all"
+            title="Seek +10 seconds"
           >
-            <SkipForward className="w-5 h-5 text-white mb-1" />
-            <span className="font-mono text-[9px] text-aerokin-muted uppercase">Next</span>
-          </motion.button>
-        </div>
-      </GlassCard>
-
-      {/* Tactile Circular Volume Dial with Detent Haptics */}
-      <GlassCard variant="default" padding="md" className="flex items-center justify-between gap-4">
-        {/* Rotary Dial */}
-        <div
-          ref={dialRef}
-          onPointerDown={handleDialPointerDown}
-          onPointerMove={handleDialPointerMove}
-          onPointerUp={handleDialPointerUp}
-          onPointerCancel={handleDialPointerUp}
-          className="relative w-28 h-28 rounded-full border border-white/15 bg-white/[0.03] flex items-center justify-center cursor-grab active:cursor-grabbing select-none touch-none shadow-glass flex-shrink-0"
-        >
-          {/* Dial Arc Background */}
-          <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="none"
-              stroke="rgba(255,255,255,0.08)"
-              strokeWidth="5"
-              strokeDasharray="188"
-              strokeDashoffset="47"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="none"
-              stroke="url(#dialGrad)"
-              strokeWidth="5"
-              strokeDasharray="188"
-              strokeDashoffset={188 - (volumeLevel / 100) * 141}
-              strokeLinecap="round"
-            />
-            <defs>
-              <linearGradient id="dialGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#7C5CFF" />
-                <stop offset="100%" stopColor="#22D3EE" />
-              </linearGradient>
-            </defs>
-          </svg>
-
-          {/* Rotating Knob Core */}
-          <div
-            className="w-16 h-16 rounded-full bg-[#0C0C14] border border-white/20 flex items-center justify-center shadow-lg transition-transform"
-            style={{ transform: `rotate(${dialAngle}deg)` }}
-          >
-            {/* Notch indicator */}
-            <div className="absolute top-1.5 w-1.5 h-3 rounded-full bg-aerokin-cyan shadow-glow-sm" />
-          </div>
-
-          <div className="pointer-events-none absolute font-mono text-[10px] font-bold text-white">
-            {volumeLevel}%
-          </div>
+            <ClockClockwise size={20} weight="bold" />
+          </button>
         </div>
 
-        {/* Quick Stepper Buttons */}
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[10px] text-aerokin-muted uppercase tracking-wider">
-              Volume Rotary
+        {/* Big Primary Play/Pause Dial Key */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              sendMedia('fullscreen');
+            }}
+            className="rounded-xl bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex flex-col items-center justify-center p-3 text-hw-text hover:text-white transition-all"
+          >
+            <CornersOut size={22} weight="bold" />
+            <span className="font-display font-bold text-[10px] uppercase mt-1">FULLSCREEN</span>
+          </button>
+
+          {/* Play / Pause Toggle Button */}
+          <button
+            onClick={handlePlayPause}
+            className="rounded-xl bg-hw-surface-raised border border-hw-border-milled shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex flex-col items-center justify-center p-3 text-white transition-all ring-1 ring-hw-primary/40 relative overflow-hidden"
+          >
+            <div className="w-12 h-12 rounded-full bg-hw-primary flex items-center justify-center shadow-hw-btn mb-1">
+              {isPlaying ? <Pause size={24} weight="fill" /> : <Play size={24} weight="fill" className="ml-0.5" />}
+            </div>
+            <span className="font-display font-bold text-xs uppercase tracking-wider">
+              {isPlaying ? 'PAUSE' : 'PLAY'}
             </span>
-            <span className="font-mono text-[10px] text-aerokin-cyan">Detent Haptic</span>
-          </div>
+          </button>
 
-          <div className="grid grid-cols-2 gap-2">
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => {
-                triggerHaptic('light');
-                sendMedia('voldown');
-                setVolumeLevel((v) => Math.max(v - 5, 0));
-              }}
-              className="py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 flex items-center justify-center gap-1.5"
-            >
-              <Volume1 className="w-4 h-4 text-white" />
-              <span className="font-mono text-xs text-white">Vol −</span>
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => {
-                triggerHaptic('light');
-                sendMedia('volup');
-                setVolumeLevel((v) => Math.min(v + 5, 100));
-              }}
-              className="py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 flex items-center justify-center gap-1.5"
-            >
-              <Volume2 className="w-4 h-4 text-white" />
-              <span className="font-mono text-xs text-white">Vol +</span>
-            </motion.button>
-          </div>
-
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => handleAction('mute', 'heavy')}
-            className={`py-2 px-3 rounded-xl border font-mono text-xs flex items-center justify-center gap-1.5 transition-colors ${
-              isMuted
-                ? 'bg-red-500/20 border-red-500/50 text-red-400'
-                : 'bg-white/[0.04] border-white/10 text-aerokin-muted hover:text-white'
+          {/* Mute Toggle */}
+          <button
+            onClick={handleVolumeToggleMute}
+            className={`rounded-xl border shadow-hw-btn active:shadow-hw-btn-pressed active:translate-y-[1px] flex flex-col items-center justify-center p-3 transition-all ${
+              muted
+                ? 'bg-hw-active/20 border-hw-active text-hw-active'
+                : 'bg-hw-surface border-hw-border text-hw-text hover:text-white'
             }`}
           >
-            <VolumeX className="w-4 h-4" />
-            <span>{isMuted ? 'Muted (Tap to Unmute)' : 'Mute Master Audio'}</span>
-          </motion.button>
+            {muted ? <SpeakerSimpleSlash size={22} weight="bold" /> : <SpeakerHigh size={22} weight="bold" />}
+            <span className="font-display font-bold text-[10px] uppercase mt-1">
+              {muted ? 'MUTED' : 'MUTE'}
+            </span>
+          </button>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Presentation & Display Cluster */}
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        onClick={() => handleAction('fullscreen', 'heavy')}
-        className={`w-full py-3.5 px-4 rounded-2xl border font-mono text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-          isFullscreen
-            ? 'bg-aerokin-cyan/20 border-aerokin-cyan text-white shadow-glow-sm'
-            : 'bg-white/[0.04] border-white/10 text-white hover:border-white/25 active:bg-white/[0.08]'
-        }`}
-      >
-        {isFullscreen ? (
-          <>
-            <Minimize2 className="w-4 h-4 text-aerokin-cyan" />
-            <span>Exit Fullscreen (F)</span>
-          </>
-        ) : (
-          <>
-            <Maximize2 className="w-4 h-4 text-aerokin-cyan" />
-            <span>Toggle Fullscreen (F)</span>
-          </>
-        )}
-      </motion.button>
+      {/* 3. Knurled Volume Dial Section */}
+      <div className="w-full rounded-xl bg-hw-surface border border-hw-border p-3.5 shadow-hw-well flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="font-display font-bold uppercase text-[10px] tracking-wider text-hw-text-muted">
+            MASTER VOLUME
+          </span>
+          <span className="font-mono font-bold text-lg text-hw-text">
+            {muted ? 'MUTED' : `${Math.round(volume)}%`}
+          </span>
+          <span className="font-mono text-[9px] text-hw-text-dim">
+            Drag dial up/down to adjust
+          </span>
+        </div>
+
+        {/* Machined Knurled Rotary Dial */}
+        <div
+          ref={dialRef}
+          {...bindDial()}
+          className="w-16 h-16 rounded-full bg-hw-surface-raised border border-hw-border-milled shadow-hw-btn active:shadow-hw-btn-pressed flex items-center justify-center cursor-ns-resize touch-none select-none relative group"
+        >
+          {/* Knurled Outer Texture & Encoder Ticks */}
+          <div className="absolute inset-1 rounded-full border border-white/10 pointer-events-none" />
+
+          {/* Rotating Volume Pip */}
+          <div
+            className="w-full h-full rounded-full flex items-start justify-center pt-1 transition-transform pointer-events-none"
+            style={{ transform: `rotate(${Math.min(270, Math.max(0, (Math.round(volume) / 100) * 270)) - 135}deg)` }}
+          >
+            <div className="w-1.5 h-3 rounded-full bg-hw-primary shadow-[0_0_6px_var(--hw-primary)]" />
+          </div>
+
+          <div className="absolute w-8 h-8 rounded-full bg-hw-surface-sunken border border-hw-border flex items-center justify-center text-[10.5px] font-mono font-bold text-hw-text pointer-events-none shadow-hw-well">
+            {Math.round(volume)}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Utility Bar */}
+      <div className="flex items-center justify-between pt-3 text-[11px] font-mono text-hw-text-muted">
+        <span>SEEK: {seekMethod.toUpperCase()}</span>
+        <button
+          onClick={onOpenSettings}
+          className="hover:text-hw-text underline underline-offset-4 decoration-hw-border hover:decoration-hw-primary transition-all"
+        >
+          CONFIGURE CONTROLS
+        </button>
+      </div>
     </div>
   );
 };
