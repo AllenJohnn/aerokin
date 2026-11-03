@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import crypto from 'node:crypto';
 import qrcode from 'qrcode-terminal';
 import { getLocalIPv4 } from './network.js';
+import { getOrCreateToken } from './token.js';
 import { startServer } from './server.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,16 +13,9 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const CERTS_DIR = path.join(ROOT_DIR, '.certs');
 
-/**
- * Generates a random 6-character authentication token.
- */
-function generateToken(): string {
-  return crypto.randomBytes(3).toString('hex').toUpperCase();
-}
-
 async function main() {
   const lanIp = getLocalIPv4();
-  const token = generateToken();
+  const token = getOrCreateToken(CERTS_DIR);
   const url = `https://${lanIp}:${PORT}/?token=${token}`;
 
   startServer({
@@ -40,7 +33,7 @@ async function main() {
   console.log('======================================================\n');
   console.log(`[Status]  HTTPS & WebSocket listening on port ${PORT}`);
   console.log(`[Network] Wi-Fi IPv4: ${lanIp}`);
-  console.log(`[Token]   Auth Token: ${token}`);
+  console.log(`[Token]   Auth Token: ${token} (persisted in .certs/token.txt)`);
   console.log(`[Connect] URL:        ${url}\n`);
   console.log('Scan this QR code with your iPhone:');
 

@@ -9,15 +9,31 @@ export interface SslCredentials {
 
 /**
  * Loads or generates an SSL certificate and private key.
- * Caches the generated credentials in server/.certs to avoid regenerating on every boot.
- * Includes localhost, 127.0.0.1, and the laptop's LAN IP in the Subject Alternative Names (SANs).
+ * Caches the generated credentials in server/.certs.
+ * Stores the LAN IP in server/.certs/ip.txt. If the current IP differs,
+ * regenerates the certificate with the new IP in Subject Alternative Names (SANs)
+ * and warns that the iPhone will need to re-trust the certificate.
  */
 export function getOrCreateCert(lanIp: string, certsDir: string): SslCredentials {
   const keyPath = path.join(certsDir, 'key.pem');
   const certPath = path.join(certsDir, 'cert.pem');
+  const ipPath = path.join(certsDir, 'ip.txt');
 
-  // If already cached, read from disk
-  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  // Check previously saved IP
+  let cachedIp: string | null = null;
+  if (fs.existsSync(ipPath)) {
+    try {
+      cachedIp = fs.readFileSync(ipPath, 'utf8').trim();
+    } catch {
+      cachedIp = null;
+    }
+  }
+
+  const ipChanged = !cachedIp || cachedIp !== lanIp;
+  const certsExist = fs.existsSync(keyPath) && fs.existsSync(certPath);
+
+  // If IP is unchanged and certificate files exist, reuse them
+  if (!ipChanged && certsExist) {
     try {
       const key = fs.readFileSync(keyPath, 'utf8');
       const cert = fs.readFileSync(certPath, 'utf8');
@@ -29,12 +45,18 @@ export function getOrCreateCert(lanIp: string, certsDir: string): SslCredentials
     }
   }
 
+  // If IP has changed, notify user about iPhone re-trusting certificate
+  if (ipChanged && cachedIp) {
+    console.log(`\n[AEROKIN] LAN IP changed from ${cachedIp} to ${lanIp}. Regenerating SSL certificate...`);
+    console.log('[AEROKIN] NOTE: Your iPhone will need to re-trust the certificate when connecting to the new IP.\n');
+  }
+
   // Ensure directory exists
   if (!fs.existsSync(certsDir)) {
     fs.mkdirSync(certsDir, { recursive: true });
   }
 
-  // Generate self-signed certificate with IP SANs
+  // Generate self-signed certificate with updated IP in SANs
   const attrs = [
     { name: 'commonName', value: lanIp },
     { name: 'organizationName', value: 'AEROKIN' },
@@ -58,6 +80,7 @@ export function getOrCreateCert(lanIp: string, certsDir: string): SslCredentials
 
   fs.writeFileSync(keyPath, pems.private, 'utf8');
   fs.writeFileSync(certPath, pems.cert, 'utf8');
+  fs.writeFileSync(ipPath, lanIp, 'utf8');
 
   return {
     key: pems.private,

@@ -1,9 +1,8 @@
 import https from 'node:https';
-import path from 'node:path';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { getOrCreateCert } from './cert.js';
-import { handleMove, handleClick, handleScroll, handleMedia } from './input.js';
+import { createMoveCoalescer, handleClick, handleScroll, handleMedia } from './input.js';
 
 export interface ServerConfig {
   port: number;
@@ -27,7 +26,6 @@ export function startServer(config: ServerConfig): {
     res.json({ status: 'ok', service: 'aerokin-server' });
   });
 
-  // Load or generate TLS credentials
   const sslCreds = getOrCreateCert(config.lanIp, config.certsDir);
 
   const httpsServer = https.createServer(
@@ -38,10 +36,18 @@ export function startServer(config: ServerConfig): {
     app
   );
 
-  // Attach WebSocket server on the same HTTPS instance
   const wss = new WebSocketServer({ server: httpsServer });
 
   wss.on('connection', (ws: WebSocket, req) => {
+    let coalescer: ReturnType<typeof createMoveCoalescer> | null = null;
+
+    const cleanup = () => {
+      if (coalescer) {
+        coalescer.destroy();
+        coalescer = null;
+      }
+    };
+
     try {
       const parsedUrl = new URL(
         req.url || '',
@@ -55,6 +61,9 @@ export function startServer(config: ServerConfig): {
         return;
       }
 
+      // Initialize per-connection move coalescer (~8ms flush loop)
+      coalescer = createMoveCoalescer(8);
+
       // Send greeting upon authorized connection
       ws.send(JSON.stringify({ type: 'hello', ok: true }));
 
@@ -64,7 +73,7 @@ export function startServer(config: ServerConfig): {
           const msg = JSON.parse(raw);
 
           if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
-            return; // Ignore malformed message
+            return;
           }
 
           switch (msg.type) {
@@ -75,30 +84,37 @@ export function startServer(config: ServerConfig): {
               break;
 
             case 'move':
-              await handleMove(msg.dx, msg.dy);
+              // Coalesced per connection (~8ms flush, only one OS call in flight)
+              coalescer?.addMove(msg.dx, msg.dy);
               break;
 
             case 'click':
+              // Immediate click execution
               await handleClick(msg.button);
               break;
 
             case 'scroll':
+              // Immediate scroll execution
               await handleScroll(msg.dy);
               break;
 
             case 'media':
+              // Immediate media key execution
               await handleMedia(msg.action);
               break;
 
             default:
-              // Ignore unknown types
               break;
           }
         } catch {
           // Ignore JSON parse errors or bad payloads; never crash
         }
       });
+
+      ws.on('close', cleanup);
+      ws.on('error', cleanup);
     } catch {
+      cleanup();
       ws.close(4001, 'Unauthorized');
     }
   });
