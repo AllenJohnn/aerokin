@@ -74,7 +74,7 @@ export const MotionPermissionScreen: React.FC<MotionPermissionScreenProps> = ({
       >
         <button
           onClick={handleRequestMotion}
-          className="w-full h-12 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-transform active:scale-[0.97] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-sm font-semibold transition-transform active:scale-[0.97] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Enable motion
         </button>

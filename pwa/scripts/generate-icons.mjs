@@ -55,20 +55,20 @@ async function generateIcons() {
 
   const svgContent = fs.readFileSync(SVG_SOURCE, 'utf8');
 
-  // 1. Apple Touch Icon: 180x180, OPAQUE #07070B background, 24px padding (132x132 logo)
+  // 1. Apple Touch Icon: 180x180, OPAQUE #000000 background, 24px padding (132x132 logo)
   const logoInner132 = await sharp(Buffer.from(svgContent)).resize(132, 132).toBuffer();
   await sharp({
     create: {
       width: 180,
       height: 180,
       channels: 4,
-      background: '#07070B',
+      background: '#000000',
     },
   })
     .composite([{ input: logoInner132, top: 24, left: 24 }])
     .png()
     .toFile(path.join(PUBLIC_DIR, 'apple-touch-icon.png'));
-  console.log('✓ apple-touch-icon.png (180x180, opaque)');
+  console.log('✓ apple-touch-icon.png (180x180, opaque #000)');
 
   // 2. icon-192.png
   await sharp(Buffer.from(svgContent)).resize(192, 192).png().toFile(path.join(PUBLIC_DIR, 'icon-192.png'));
@@ -78,20 +78,20 @@ async function generateIcons() {
   await sharp(Buffer.from(svgContent)).resize(512, 512).png().toFile(path.join(PUBLIC_DIR, 'icon-512.png'));
   console.log('✓ icon-512.png (512x512)');
 
-  // 4. icon-512-maskable.png (400x400 safe zone on 512x512 background)
+  // 4. icon-512-maskable.png (400x400 safe zone on 512x512 #000000 background)
   const logo400 = await sharp(Buffer.from(svgContent)).resize(400, 400).toBuffer();
   await sharp({
     create: {
       width: 512,
       height: 512,
       channels: 4,
-      background: '#07070B',
+      background: '#000000',
     },
   })
     .composite([{ input: logo400, top: 56, left: 56 }])
     .png()
     .toFile(path.join(PUBLIC_DIR, 'icon-512-maskable.png'));
-  console.log('✓ icon-512-maskable.png (512x512, maskable safe zone)');
+  console.log('✓ icon-512-maskable.png (512x512, maskable safe zone #000)');
 
   // 5. favicon.ico (16, 32, 48)
   const favSource = fs.existsSync(path.join(PUBLIC_DIR, 'favicon.svg'))
@@ -109,6 +109,14 @@ async function generateIcons() {
   ]);
   fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.ico'), icoBuffer);
   console.log('✓ favicon.ico (16/32/48 multi-resolution)');
+
+  // 6. og-image.png (1200x630 from og-image.svg)
+  const ogSvgPath = path.join(PUBLIC_DIR, 'og-image.svg');
+  if (fs.existsSync(ogSvgPath)) {
+    const ogSvg = fs.readFileSync(ogSvgPath);
+    await sharp(ogSvg).resize(1200, 630).png().toFile(path.join(PUBLIC_DIR, 'og-image.png'));
+    console.log('✓ og-image.png (1200x630, plain black #000)');
+  }
 }
 
 generateIcons().catch((err) => {

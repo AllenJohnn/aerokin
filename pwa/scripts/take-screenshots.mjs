@@ -59,19 +59,6 @@ async function checkNoOverflow(page, label) {
   }
 }
 
-async function setTheme(page, theme) {
-  await page.evaluate((t) => {
-    localStorage.setItem('aerokin_theme', t);
-    document.documentElement.setAttribute('data-theme', t);
-    if (t === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, theme);
-  await sleep(300);
-}
-
 async function run() {
   console.log('--- Starting Aerokin Server for Playwright Verification ---');
 
@@ -105,8 +92,6 @@ async function run() {
   });
 
   try {
-    const themes = ['dark', 'light'];
-
     // =========================================================================
     // 1. DESKTOP DASHBOARDS (1440x900 & 1280x720)
     // =========================================================================
@@ -116,27 +101,24 @@ async function run() {
     ];
 
     for (const dvp of desktopViewports) {
-      for (const theme of themes) {
-        console.log(`\nCapturing Desktop Dashboard (${dvp.name}, ${theme})...`);
-        const desktopContext = await browser.newContext({
-          viewport: { width: dvp.width, height: dvp.height },
-          deviceScaleFactor: 1,
-          ignoreHTTPSErrors: true,
-        });
+      console.log(`\nCapturing Desktop Dashboard (${dvp.name})...`);
+      const desktopContext = await browser.newContext({
+        viewport: { width: dvp.width, height: dvp.height },
+        deviceScaleFactor: 1,
+        ignoreHTTPSErrors: true,
+      });
 
-        const page = await desktopContext.newPage();
-        await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
-          waitUntil: 'networkidle',
-        });
-        await sleep(1000);
-        await setTheme(page, theme);
-        await checkNoOverflow(page, `Desktop Dashboard ${dvp.name} (${theme})`);
+      const page = await desktopContext.newPage();
+      await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
+        waitUntil: 'networkidle',
+      });
+      await sleep(1000);
+      await checkNoOverflow(page, `Desktop Dashboard ${dvp.name}`);
 
-        const filename = path.join(SCREENSHOTS_DIR, `desktop-${dvp.name}-${theme}.png`);
-        await page.screenshot({ path: filename });
-        console.log(`✓ Saved: ${filename}`);
-        await desktopContext.close();
-      }
+      const filename = path.join(SCREENSHOTS_DIR, `desktop-${dvp.name}.png`);
+      await page.screenshot({ path: filename });
+      console.log(`✓ Saved: ${filename}`);
+      await desktopContext.close();
     }
 
     // =========================================================================
@@ -148,85 +130,82 @@ async function run() {
     ];
 
     for (const vp of mobileViewports) {
-      for (const theme of themes) {
-        console.log(`\nCapturing Mobile Screens (${vp.name}, ${theme})...`);
-        const mobileContext = await browser.newContext({
-          viewport: { width: vp.width, height: vp.height },
-          deviceScaleFactor: vp.dpr,
-          isMobile: true,
-          hasTouch: true,
-          ignoreHTTPSErrors: true,
-        });
+      console.log(`\nCapturing Mobile Screens (${vp.name})...`);
+      const mobileContext = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: vp.dpr,
+        isMobile: true,
+        hasTouch: true,
+        ignoreHTTPSErrors: true,
+      });
 
-        const page = await mobileContext.newPage();
+      const page = await mobileContext.newPage();
 
-        // Emulate iOS permission prompt for Start Screen
-        await page.addInitScript(() => {
-          window.DeviceMotionEvent = {
-            requestPermission: async () => 'granted',
-          };
-        });
+      // Emulate iOS permission prompt for Start Screen
+      await page.addInitScript(() => {
+        window.DeviceMotionEvent = {
+          requestPermission: async () => 'granted',
+        };
+      });
 
-        // 2A. Start Screen (Permission prompt)
-        await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
-          waitUntil: 'networkidle',
-        });
+      // 2A. Start Screen (Permission prompt)
+      await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
+        waitUntil: 'networkidle',
+      });
+      await sleep(600);
+      await checkNoOverflow(page, `Start Screen ${vp.name}`);
+
+      const startShot = path.join(SCREENSHOTS_DIR, `start-${vp.name}.png`);
+      await page.screenshot({ path: startShot });
+      console.log(`✓ Saved: ${startShot}`);
+
+      // Click "Enable motion" to proceed to main app
+      const enableBtn = page.getByRole('button', { name: /Enable motion/i });
+      if (await enableBtn.isVisible()) {
+        await enableBtn.click();
         await sleep(600);
-        await setTheme(page, theme);
-        await checkNoOverflow(page, `Start Screen ${vp.name} (${theme})`);
-
-        const startShot = path.join(SCREENSHOTS_DIR, `start-${vp.name}-${theme}.png`);
-        await page.screenshot({ path: startShot });
-        console.log(`✓ Saved: ${startShot}`);
-
-        // Click "Enable motion" to proceed to main app
-        const enableBtn = page.getByRole('button', { name: /Enable motion/i });
-        if (await enableBtn.isVisible()) {
-          await enableBtn.click();
-          await sleep(600);
-        }
-
-        // 2B. Pointer Tab
-        await checkNoOverflow(page, `Pointer Tab ${vp.name} (${theme})`);
-        const pointerShot = path.join(SCREENSHOTS_DIR, `pointer-${vp.name}-${theme}.png`);
-        await page.screenshot({ path: pointerShot });
-        console.log(`✓ Saved: ${pointerShot}`);
-
-        // 2C. Trackpad Tab
-        const trackpadTabBtn = page.getByRole('tab', { name: /Trackpad/i });
-        if (await trackpadTabBtn.isVisible()) {
-          await trackpadTabBtn.click();
-          await sleep(600);
-          await checkNoOverflow(page, `Trackpad Tab ${vp.name} (${theme})`);
-          const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}-${theme}.png`);
-          await page.screenshot({ path: trackpadShot });
-          console.log(`✓ Saved: ${trackpadShot}`);
-        }
-
-        // 2D. Media Tab
-        const mediaTabBtn = page.getByRole('tab', { name: /Media/i });
-        if (await mediaTabBtn.isVisible()) {
-          await mediaTabBtn.click();
-          await sleep(600);
-          await checkNoOverflow(page, `Media Tab ${vp.name} (${theme})`);
-          const mediaShot = path.join(SCREENSHOTS_DIR, `media-${vp.name}-${theme}.png`);
-          await page.screenshot({ path: mediaShot });
-          console.log(`✓ Saved: ${mediaShot}`);
-        }
-
-        // 2E. Settings Sheet (open sheet last so it doesn't block tab navigation)
-        const settingsBtn = page.getByRole('button', { name: /Settings/i });
-        if (await settingsBtn.isVisible()) {
-          await settingsBtn.click();
-          await sleep(600);
-          await checkNoOverflow(page, `Settings Sheet ${vp.name} (${theme})`);
-          const settingsShot = path.join(SCREENSHOTS_DIR, `settings-${vp.name}-${theme}.png`);
-          await page.screenshot({ path: settingsShot });
-          console.log(`✓ Saved: ${settingsShot}`);
-        }
-
-        await mobileContext.close();
       }
+
+      // 2B. Pointer Tab
+      await checkNoOverflow(page, `Pointer Tab ${vp.name}`);
+      const pointerShot = path.join(SCREENSHOTS_DIR, `pointer-${vp.name}.png`);
+      await page.screenshot({ path: pointerShot });
+      console.log(`✓ Saved: ${pointerShot}`);
+
+      // 2C. Trackpad Tab
+      const trackpadTabBtn = page.getByRole('tab', { name: /Trackpad/i });
+      if (await trackpadTabBtn.isVisible()) {
+        await trackpadTabBtn.click();
+        await sleep(600);
+        await checkNoOverflow(page, `Trackpad Tab ${vp.name}`);
+        const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}.png`);
+        await page.screenshot({ path: trackpadShot });
+        console.log(`✓ Saved: ${trackpadShot}`);
+      }
+
+      // 2D. Media Tab
+      const mediaTabBtn = page.getByRole('tab', { name: /Media/i });
+      if (await mediaTabBtn.isVisible()) {
+        await mediaTabBtn.click();
+        await sleep(600);
+        await checkNoOverflow(page, `Media Tab ${vp.name}`);
+        const mediaShot = path.join(SCREENSHOTS_DIR, `media-${vp.name}.png`);
+        await page.screenshot({ path: mediaShot });
+        console.log(`✓ Saved: ${mediaShot}`);
+      }
+
+      // 2E. Settings Sheet (open sheet last so it doesn't block tab navigation)
+      const settingsBtn = page.getByRole('button', { name: /Settings/i });
+      if (await settingsBtn.isVisible()) {
+        await settingsBtn.click();
+        await sleep(600);
+        await checkNoOverflow(page, `Settings Sheet ${vp.name}`);
+        const settingsShot = path.join(SCREENSHOTS_DIR, `settings-${vp.name}.png`);
+        await page.screenshot({ path: settingsShot });
+        console.log(`✓ Saved: ${settingsShot}`);
+      }
+
+      await mobileContext.close();
     }
 
     console.log('\n======================================================');

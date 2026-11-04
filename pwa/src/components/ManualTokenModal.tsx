@@ -64,7 +64,7 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
 
           <button
             type="submit"
-            className="w-full h-12 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium transition-transform active:scale-[0.97]"
+            className="w-full h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-xs font-semibold transition-transform active:scale-[0.97]"
           >
             Connect
           </button>

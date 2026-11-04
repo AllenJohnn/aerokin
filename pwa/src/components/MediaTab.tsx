@@ -115,7 +115,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({
                         triggerHaptic('light');
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs truncate transition-colors ${
-                        s.current ? 'bg-accent text-white' : 'text-foreground hover:bg-surface'
+                        s.current ? 'bg-accent text-black font-semibold' : 'text-foreground hover:bg-surface'
                       }`}
                     >
                       {s.app || s.title || s.id}
@@ -209,7 +209,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({
         {/* Big Large Play/Pause button (64px+) */}
         <button
           onClick={handlePlayPause}
-          className="h-16 w-16 rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center transition-transform active:scale-[0.97] shadow-sm min-h-[64px] min-w-[64px]"
+          className="h-16 w-16 rounded-full bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black flex items-center justify-center transition-transform active:scale-[0.97] shadow-sm min-h-[64px] min-w-[64px]"
           aria-label={isPlaying ? 'Pause' : 'Play'}
           title={isPlaying ? 'Pause' : 'Play'}
         >

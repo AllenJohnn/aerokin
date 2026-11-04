@@ -11,7 +11,6 @@ import { DesktopDashboard } from './components/DesktopDashboard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { CalibrationModal } from './components/CalibrationModal';
 import { triggerHaptic } from './utils/haptics';
-import { ThemeMode } from './theme/tokens';
 import {
   AirPointerConfig,
   CalibrationData,
@@ -26,40 +25,15 @@ import {
   Monitor,
 } from '@phosphor-icons/react';
 
-const STORAGE_THEME_KEY = 'aerokin_theme';
 const STORAGE_CONFIG_KEY = 'aerokin_config';
 const STORAGE_CALIBRATION_KEY = 'aerokin_calibration';
 const STORAGE_SEEK_METHOD_KEY = 'aerokin_seek_method';
 
 export const App: React.FC = () => {
-  // 1. Theme State (system by default)
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'system';
-    const saved = localStorage.getItem(STORAGE_THEME_KEY);
-    if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
-    return 'system';
-  });
-
+  // Always true dark mode
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'system') {
-      root.removeAttribute('data-theme');
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    } else {
-      root.setAttribute('data-theme', theme);
-      if (theme === 'dark') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    }
-    localStorage.setItem(STORAGE_THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.classList.add('dark');
+  }, []);
 
   // 2. Air Pointer Engine Config
   const [config, setConfig] = useState<AirPointerConfig>(() => {
@@ -172,7 +146,6 @@ export const App: React.FC = () => {
     return (
       <DesktopDashboard
         onSwitchToPhoneView={() => setIsDesktopMode(false)}
-        theme={theme}
       />
     );
   }
@@ -182,7 +155,6 @@ export const App: React.FC = () => {
     return (
       <MotionPermissionScreen
         onPermissionGranted={() => setHasMotionPermission(true)}
-        theme={theme}
       />
     );
   }
@@ -379,8 +351,6 @@ export const App: React.FC = () => {
       <SettingsDrawer
         isOpen={showSettingsDrawer}
         onOpenChange={setShowSettingsDrawer}
-        theme={theme}
-        onThemeChange={setTheme}
         config={config}
         onConfigChange={handleConfigChange}
         calibration={calibration}
@@ -408,7 +378,6 @@ export const App: React.FC = () => {
             setShowAuthModal(false);
           }}
           isRejected={status === 'unauthorized'}
-          theme={theme}
         />
       )}
     </div>

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
-import { ThemeMode } from '../theme/tokens';
 import { AirPointerConfig, CalibrationData } from '../engine/airPointer';
 import { triggerHaptic } from '../utils/haptics';
 import { Slider } from './ui/Slider';
@@ -9,8 +8,6 @@ import { Copy, Check, ArrowClockwise } from '@phosphor-icons/react';
 interface SettingsDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  theme: ThemeMode;
-  onThemeChange: (theme: ThemeMode) => void;
   config: AirPointerConfig;
   onConfigChange: (newConfig: Partial<AirPointerConfig>) => void;
   calibration: CalibrationData;
@@ -25,8 +22,6 @@ interface SettingsDrawerProps {
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   isOpen,
   onOpenChange,
-  theme,
-  onThemeChange,
   config,
   onConfigChange,
   calibration,
@@ -58,7 +53,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 text-sm">
           {/* Section 1: Pointer */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="text-xs font-medium text-muted-foreground">
               Pointer
             </h3>
 
@@ -91,7 +86,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     config.mode === 'magic'
-                      ? 'bg-accent text-white'
+                      ? 'bg-accent text-black font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -104,7 +99,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     config.mode === 'hold'
-                      ? 'bg-accent text-white'
+                      ? 'bg-accent text-black font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -128,7 +123,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                       onResetCalibration();
                       triggerHaptic('medium');
                     }}
-                    className="p-2 rounded-lg border border-border bg-raised text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 rounded-lg border border-border bg-raised text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                     title="Reset calibration"
                     aria-label="Reset calibration"
                   >
@@ -140,7 +135,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     onOpenChange(false);
                     onOpenCalibrationWizard();
                   }}
-                  className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors"
+                  className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors min-h-[44px] flex items-center justify-center"
                 >
                   Calibrate
                 </button>
@@ -152,7 +147,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           {/* Section 2: Media */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="text-xs font-medium text-muted-foreground">
               Media
             </h3>
 
@@ -167,7 +162,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     seekMethod === 'auto'
-                      ? 'bg-accent text-white'
+                      ? 'bg-accent text-black font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -180,7 +175,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     seekMethod === 'keys'
-                      ? 'bg-accent text-white'
+                      ? 'bg-accent text-black font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -192,41 +187,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           <div className="h-[1px] bg-border" />
 
-          {/* Section 3: Appearance */}
+          {/* Section 3: Connection */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Appearance
-            </h3>
-
-            {/* Theme segmented control */}
-            <div className="flex items-center justify-between py-1">
-              <span className="text-sm text-foreground">Theme</span>
-              <div className="inline-flex rounded-xl bg-raised p-1 border border-border">
-                {(['system', 'light', 'dark'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      onThemeChange(t);
-                      triggerHaptic('light');
-                    }}
-                    className={`capitalize px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                      theme === t
-                        ? 'bg-accent text-white'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="h-[1px] bg-border" />
-
-          {/* Section 4: Connection */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="text-xs font-medium text-muted-foreground">
               Connection
             </h3>
 
@@ -242,7 +205,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 {token && (
                   <button
                     onClick={handleCopyToken}
-                    className="p-2 rounded-lg border border-border bg-raised hover:bg-border text-foreground transition-colors"
+                    className="p-2 rounded-lg border border-border bg-raised hover:bg-border text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                     title="Copy token"
                     aria-label="Copy token"
                   >
@@ -255,7 +218,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                       onOpenChange(false);
                       onOpenAuthModal();
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors"
+                    className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors min-h-[44px] flex items-center justify-center"
                   >
                     Re-pair
                   </button>

@@ -5,7 +5,7 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
     "../design-system/src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: ['class', '[data-theme="dark"]'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -17,9 +17,8 @@ export default {
         'muted-foreground': 'var(--muted)',
         accent: {
           DEFAULT: 'var(--accent)',
-          hover: 'var(--accent-hover)',
+          pressed: 'var(--accent-pressed)',
         },
-        'optic-red': 'var(--optic-red)',
         success: 'var(--success)',
         error: 'var(--error)',
       },
@@ -35,8 +34,7 @@ export default {
         btn: '12px',
       },
       boxShadow: {
-        sheet: '0 -4px 24px 0 rgba(0, 0, 0, 0.16)',
-        'sheet-dark': '0 -4px 32px 0 rgba(0, 0, 0, 0.45)',
+        sheet: '0 -4px 24px 0 rgba(0, 0, 0, 0.6)',
       },
     },
   },

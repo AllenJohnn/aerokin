@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { AerokinLogo } from '@ui';
-import { ThemeMode } from '../theme/tokens';
 import {
   Copy,
   Check,
@@ -29,7 +28,6 @@ interface ServerStatusResponse {
 
 export interface DesktopDashboardProps {
   onSwitchToPhoneView: () => void;
-  theme?: ThemeMode;
 }
 
 export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
@@ -60,7 +58,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
         const qr1 = await QRCode.toDataURL(trustUrl, {
           margin: 1,
           scale: 5,
-          color: { dark: '#09090B', light: '#FFFFFF' },
+          color: { dark: '#000000', light: '#FFFFFF' },
         });
         setTrustQrUrl(qr1);
 
@@ -68,7 +66,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
         const qr2 = await QRCode.toDataURL(data.url, {
           margin: 1,
           scale: 5,
-          color: { dark: '#09090B', light: '#FFFFFF' },
+          color: { dark: '#000000', light: '#FFFFFF' },
         });
         setPairQrUrl(qr2);
       })
@@ -189,7 +187,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
 
               {/* Step 2: Pairing */}
               <div className="flex flex-col items-center text-center">
-                <div className="w-6 h-6 rounded-full bg-accent text-white font-mono text-xs font-semibold flex items-center justify-center mb-3">
+                <div className="w-6 h-6 rounded-full bg-accent text-black font-mono text-xs font-semibold flex items-center justify-center mb-3">
                   2
                 </div>
                 <h3 className="text-xs font-semibold text-foreground">

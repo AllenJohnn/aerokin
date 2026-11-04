@@ -1,31 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
   <style>
-    :root {
-      --ak-color: #22D3EE;
-      --ak-beacon: #38BDF8;
-      --ak-trail: #7C5CFF;
-    }
+    .ak-body { fill: #F5F5F5; }
+    .ak-dot { fill: #FF5A1F; }
     @media (prefers-color-scheme: light) {
-      :root {
-        --ak-color: #0F172A;
-        --ak-beacon: #2563EB;
-        --ak-trail: #4F46E5;
-      }
+      .ak-body { fill: #000000; }
     }
   </style>
-  <defs>
-    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="var(--ak-trail)" />
-      <stop offset="100%" stop-color="var(--ak-color)" />
-    </linearGradient>
-  </defs>
-
-  <!-- Heavyweight Delta A for extreme legibility at 16px -->
-  <polygon points="50,10 12,88 34,88 46,58 50,46" fill="url(#favGrad)" />
-  <polygon points="50,10 54,46 58,58 88,88 66,88" fill="url(#favGrad)" />
-
-  <!-- Kinetic crossbar and cursor tip -->
-  <polygon points="6,56 22,56 26,44 10,44" fill="url(#favGrad)" opacity="0.7" />
-  <polygon points="26,56 78,56 94,44 74,44 78,48 32,48" fill="url(#favGrad)" />
-  <circle cx="94" cy="44" r="5" fill="var(--ak-beacon)" />
+  <polygon points="50,12 16,86 34,86 46,56 50,45" class="ak-body" />
+  <polygon points="50,12 54,45 58,56 84,86 66,86" class="ak-body" />
+  <polygon points="8,53 22,53 26,44 12,44" class="ak-body" opacity="0.6" />
+  <polygon points="26,53 76,53 90,44 74,44 77,48 32,48" class="ak-body" />
+  <circle cx="90" cy="44" r="4.5" class="ak-dot" />
 </svg>

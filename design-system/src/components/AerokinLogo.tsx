@@ -47,27 +47,33 @@ export const AerokinLogo: React.FC<AerokinLogoProps> = ({
         {/* Left Wing */}
         <polygon
           points="50,14 18,84 34,84 46,56 50,45"
-          className={mono ? 'fill-current' : 'fill-accent'}
+          className={mono ? 'fill-current' : 'fill-[#F5F5F5]'}
         />
 
         {/* Right Wing */}
         <polygon
           points="50,14 54,45 59,56 82,84 66,84"
-          className={mono ? 'fill-current' : 'fill-accent'}
+          className={mono ? 'fill-current' : 'fill-[#F5F5F5]'}
+        />
+
+        {/* Left trail dash */}
+        <polygon
+          points="8,53 22,53 26,44 12,44"
+          className={mono ? 'fill-current opacity-60' : 'fill-[#F5F5F5] opacity-60'}
         />
 
         {/* Dynamic Horizontal Dart */}
         <polygon
           points="26,53 76,53 90,44 74,44 77,48 32,48"
-          className={mono ? 'fill-current' : 'fill-accent'}
+          className={mono ? 'fill-current' : 'fill-[#F5F5F5]'}
         />
 
-        {/* Tip Dot */}
+        {/* Tip Dot: ONE orange dot as cursor beacon */}
         <circle
           cx="90"
           cy="44"
-          r="3"
-          className={mono ? 'fill-current' : 'fill-accent'}
+          r="3.5"
+          className={mono ? 'fill-current' : 'fill-[#FF5A1F]'}
         />
       </svg>
 

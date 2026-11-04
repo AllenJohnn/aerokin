@@ -194,7 +194,7 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
 
               <button
                 onClick={handleFinish}
-                className="w-full mt-6 h-11 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium transition-transform active:scale-[0.97]"
+                className="w-full mt-6 h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-xs font-semibold transition-transform active:scale-[0.97]"
               >
                 Save calibration
               </button>

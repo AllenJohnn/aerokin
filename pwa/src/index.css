@@ -11,64 +11,16 @@
 
 @layer base {
   :root {
-    --bg: #09090B;
-    --surface: #111113;
-    --raised: #18181B;
-    --border: #232326;
-    --text: #FAFAFA;
-    --muted: #8A8A93;
-    --accent: #8B5CF6;
-    --accent-hover: #7C3AED;
-    --optic-red: #FF3B30;
-    --success: #10B981;
-    --error: #EF4444;
-  }
-
-  /* Light theme when explicitly set */
-  [data-theme="light"] {
-    --bg: #FFFFFF;
-    --surface: #F4F4F5;
-    --raised: #E4E4E7;
-    --border: #E4E4E7;
-    --text: #09090B;
-    --muted: #71717A;
-    --accent: #8B5CF6;
-    --accent-hover: #7C3AED;
-    --optic-red: #FF3B30;
-    --success: #10B981;
-    --error: #EF4444;
-  }
-
-  /* Dark theme when explicitly set */
-  [data-theme="dark"] {
-    --bg: #09090B;
-    --surface: #111113;
-    --raised: #18181B;
-    --border: #232326;
-    --text: #FAFAFA;
-    --muted: #8A8A93;
-    --accent: #8B5CF6;
-    --accent-hover: #7C3AED;
-    --optic-red: #FF3B30;
-    --success: #10B981;
-    --error: #EF4444;
-  }
-
-  /* System theme default when data-theme is system or unset */
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-      --bg: #FFFFFF;
-      --surface: #F4F4F5;
-      --raised: #E4E4E7;
-      --border: #E4E4E7;
-      --text: #09090B;
-      --muted: #71717A;
-      --accent: #8B5CF6;
-      --accent-hover: #7C3AED;
-      --optic-red: #FF3B30;
-      --success: #10B981;
-      --error: #EF4444;
-    }
+    --bg: #000000;
+    --surface: #0A0A0A;
+    --raised: #121212;
+    --border: #1F1F1F;
+    --text: #F5F5F5;
+    --muted: #8A8A8A;
+    --accent: #FF5A1F;
+    --accent-pressed: #E64A12;
+    --success: #3DDC84;
+    --error: #FF453A;
   }
 
   html,
@@ -116,7 +68,7 @@
   padding-right: max(env(safe-area-inset-right, 0px), 20px);
 }
 
-/* Tabular numbers utility */
+/* Tabular numerals utility */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
