@@ -75,6 +75,20 @@ async function main() {
   console.log('------------------------------------------------------');
   qrcode.generate(pairUrl, { small: true });
 
+  const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
+  const hostedPairUrl = rawHosted
+    ? `${rawHosted}/#host=${lanIp}:${HTTPS_PORT}&code=${token}`
+    : undefined;
+
+  if (hostedPairUrl && rawHosted) {
+    console.log('\n------------------------------------------------------');
+    console.log('  QR #3: CONNECT VIA HOSTED STATIC PWA');
+    console.log(`  Hosted static app: ${rawHosted}`);
+    console.log(`  Pair URL:          ${hostedPairUrl}`);
+    console.log('------------------------------------------------------');
+    qrcode.generate(hostedPairUrl, { small: true });
+  }
+
   console.log('\n------------------------------------------------------');
   console.log('TIPS:');
   console.log('• On Laptop: Run "pnpm run trust" once to eliminate browser warnings on PC.');

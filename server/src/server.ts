@@ -15,6 +15,7 @@ import {
   WS_MAX_PAYLOAD_BYTES,
   WS_CLOSE_POLICY_VIOLATION,
 } from './protocol.js';
+import { parseAllowedOrigins, isOriginAllowed } from './origin.js';
 import { MediaManager, NowPlayingData, MediaSessionItem } from './media-manager.js';
 
 export interface ServerConfig {
@@ -23,6 +24,7 @@ export interface ServerConfig {
   token: string;
   publicDir: string;
   certsDir: string;
+  allowedOrigins?: Set<string>;
 }
 
 export interface ActivityEvent {
@@ -51,6 +53,8 @@ export function startServer(config: ServerConfig): {
   mediaManager: MediaManager;
 } {
   const app = express();
+  const allowedOrigins =
+    config.allowedOrigins || parseAllowedOrigins(process.env.AEROKIN_ALLOWED_ORIGINS);
 
   // In-memory state for desktop localhost dashboard
   const activeSockets = new Set<WebSocket>();
@@ -97,12 +101,29 @@ export function startServer(config: ServerConfig): {
   // Serve static PWA files from public folder
   app.use(express.static(config.publicDir));
 
-  // Health check endpoint (accessible to all)
-  app.get('/health', (_req, res) => {
+  // Health check endpoint (accessible to all; CORS enabled ONLY for allow-listed origins)
+  app.options('/health', (req, res) => {
+    const origin = req.headers.origin;
+    if (origin && isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.sendStatus(204);
+    } else {
+      res.sendStatus(403);
+    }
+  });
+
+  app.get('/health', (req, res) => {
+    const origin = req.headers.origin;
+    if (origin && isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    }
     res.json({ status: 'ok', service: 'aerokin-server' });
   });
 
-  // REST API: Pairing info (URL + Token) - LOOPBACK ONLY (403 for LAN)
+  // REST API: Pairing info (URL + Token) - LOOPBACK ONLY (403 for LAN, NO CORS)
   app.get('/api/pair', (req, res) => {
     if (!isLoopback(req)) {
       res.status(403).json({ error: 'Forbidden: Loopback only' });
@@ -111,9 +132,17 @@ export function startServer(config: ServerConfig): {
 
     const pairUrl = `https://${config.lanIp}:${config.port}/?token=${config.token}`;
     const mdnsUrl = `https://aerokin.local:${config.port}/?token=${config.token}`;
+
+    const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
+    const hostedPairUrl = rawHosted
+      ? `${rawHosted}/#host=${config.lanIp}:${config.port}&code=${config.token}`
+      : undefined;
+
     res.json({
       url: pairUrl,
       mdnsUrl,
+      hostedUrl: rawHosted || undefined,
+      hostedPairUrl,
       token: config.token,
       lanIp: config.lanIp,
       port: config.port,
@@ -234,6 +263,15 @@ export function startServer(config: ServerConfig): {
   const wss = new WebSocketServer({
     server: httpsServer,
     maxPayload: WS_MAX_PAYLOAD_BYTES,
+    verifyClient: (info, callback) => {
+      const origin = info.origin;
+      if (isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
+        callback(true);
+      } else {
+        // Disallowed origin rejected before upgrade with HTTP 403 Forbidden
+        callback(false, 403, 'Forbidden: Disallowed Origin');
+      }
+    },
   });
 
   wss.on('connection', (ws: WebSocket, req) => {
