@@ -16,6 +16,21 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../server/public'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-radix': [
+            '@radix-ui/react-slider',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+            'vaul',
+          ],
+          'vendor-motion': ['motion'],
+        },
+      },
+    },
   },
   server: {
     port: 5174,

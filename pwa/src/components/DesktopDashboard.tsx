@@ -1,19 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { AerokinLogo } from '@ui';
-import { LatencySparkline } from './LatencySparkline';
-import { ThemePreset } from '../theme/tokens';
+import { ThemeMode } from '../theme/tokens';
 import {
-  DeviceMobile,
-  WifiHigh,
-  QrCode,
   Copy,
   Check,
-  Pulse,
+  DeviceMobile,
   Share,
-  PlusSquare,
-  ShieldCheck,
-  Terminal,
 } from '@phosphor-icons/react';
 
 interface PairData {
@@ -36,12 +29,11 @@ interface ServerStatusResponse {
 
 export interface DesktopDashboardProps {
   onSwitchToPhoneView: () => void;
-  theme?: ThemePreset;
+  theme?: ThemeMode;
 }
 
 export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
   onSwitchToPhoneView,
-  theme = 'decepticon',
 }) => {
   const [pairData, setPairData] = useState<PairData | null>(null);
   const [trustQrUrl, setTrustQrUrl] = useState<string | null>(null);
@@ -52,9 +44,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
     lastLatency: null,
     recentEvents: [],
   });
-  const [latencyHistory, setLatencyHistory] = useState<number[]>([12, 14, 11, 15, 12]);
 
-  // 1. Fetch pair information from loopback API
+  // 1. Fetch pairing information
   useEffect(() => {
     fetch('/api/pair')
       .then((res) => {
@@ -64,20 +55,20 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
       .then(async (data: PairData) => {
         setPairData(data);
 
-        // QR 1: Trust URL http://<ip>:8080
+        // QR 1: Certificate URL
         const trustUrl = `http://${data.lanIp}:8080`;
         const qr1 = await QRCode.toDataURL(trustUrl, {
-          margin: 1.5,
-          scale: 6,
-          color: { dark: '#0A0B0E', light: '#FFFFFF' },
+          margin: 1,
+          scale: 5,
+          color: { dark: '#09090B', light: '#FFFFFF' },
         });
         setTrustQrUrl(qr1);
 
-        // QR 2: Pairing URL https://<ip>:8443/?token=<token>
+        // QR 2: Pairing URL
         const qr2 = await QRCode.toDataURL(data.url, {
-          margin: 1.5,
-          scale: 6,
-          color: { dark: '#0A0B0E', light: '#FFFFFF' },
+          margin: 1,
+          scale: 5,
+          color: { dark: '#09090B', light: '#FFFFFF' },
         });
         setPairQrUrl(qr2);
       })
@@ -86,7 +77,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
       });
   }, []);
 
-  // 2. Poll server status every 1.5 seconds
+  // 2. Poll server status
   useEffect(() => {
     const interval = setInterval(() => {
       fetch('/api/status')
@@ -101,9 +92,6 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
               lastLatency: data.lastLatency ?? null,
               recentEvents: data.recentEvents ?? [],
             });
-            if (data.lastLatency !== null && data.lastLatency !== undefined) {
-              setLatencyHistory((prev) => [...prev.slice(-15), data.lastLatency!]);
-            }
           }
         })
         .catch(() => {});
@@ -122,200 +110,188 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
   const recentEvents = status.recentEvents ?? [];
 
   return (
-    <div className="min-h-screen w-full bg-hw-bg text-hw-text flex flex-col justify-between p-6 lg:p-10 select-none">
-      {/* Top Machined Header */}
-      <header className="flex items-center justify-between pb-6 border-b border-hw-border max-w-7xl mx-auto w-full">
-        <AerokinLogo size={42} withWordmark withTagline theme={theme} />
+    <div className="min-h-[100dvh] w-full bg-bg text-foreground flex flex-col justify-between py-6 px-6 select-none">
+      <div className="max-w-[960px] mx-auto w-full flex-1 flex flex-col justify-between">
+        {/* Top Header */}
+        <header className="flex items-center justify-between pb-6 border-b border-border">
+          <AerokinLogo size={28} withWordmark />
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="px-3 py-1 rounded bg-hw-surface-sunken border border-hw-border flex items-center gap-2 font-mono text-xs">
+          <div className="flex items-center gap-4">
+            {/* Connection status */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface border border-border text-xs">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  activeClients > 0
-                    ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]'
-                    : 'bg-white/20'
+                  activeClients > 0 ? 'bg-success' : 'bg-muted-foreground/30'
                 }`}
               />
-              <span className="text-hw-text font-bold">
-                {activeClients > 0 ? `${activeClients} IPHONE CONNECTED` : 'WAITING FOR IPHONE'}
+              <span className="text-foreground font-medium">
+                {activeClients > 0
+                  ? `${activeClients} iPhone connected`
+                  : 'Waiting for iPhone'}
               </span>
-            </div>
-
-            {status.lastLatency !== null && (
-              <div className="px-2.5 py-1 rounded bg-hw-surface-sunken border border-hw-border font-mono text-xs text-hw-primary font-bold">
-                {status.lastLatency}ms
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={onSwitchToPhoneView}
-            className="hidden sm:flex items-center gap-2 py-1.5 px-3.5 rounded bg-hw-surface border border-hw-border shadow-hw-btn active:shadow-hw-btn-pressed hover:border-hw-primary text-xs font-display font-bold uppercase tracking-wider text-hw-text transition-all"
-          >
-            <DeviceMobile size={16} className="text-hw-primary" weight="bold" />
-            <span>Open Phone Simulator</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Machined Console Content */}
-      <main className="max-w-7xl mx-auto w-full my-auto py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: 3-Step Pairing Station */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="rounded-2xl bg-hw-surface border border-hw-border p-6 shadow-hw-well flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-hw-border-subtle mb-6">
-              <div className="flex items-center gap-2">
-                <QrCode size={20} className="text-hw-primary" weight="bold" />
-                <span className="font-display font-bold text-sm uppercase tracking-wider text-hw-text">
-                  3-Step iPhone Setup Station
+              {status.lastLatency !== null && status.lastLatency !== undefined && (
+                <span className="font-mono tabular-nums text-muted-foreground ml-1">
+                  {status.lastLatency} ms
                 </span>
-              </div>
-              <span className="font-mono text-[10px] text-hw-text-dim uppercase">
-                Zero App Store Install
+              )}
+            </div>
+
+            <button
+              onClick={onSwitchToPhoneView}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface hover:bg-raised text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <DeviceMobile size={15} />
+              <span>Simulator</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="py-8 flex flex-col gap-8">
+          {/* Three numbered steps in a clean list */}
+          <div className="rounded-2xl bg-surface border border-border p-6 flex flex-col gap-6">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <h2 className="text-sm font-semibold text-foreground">
+                Set up iPhone remote
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                Same Wi-Fi network required
               </span>
             </div>
 
-            {/* 3 Step Flow */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Step 1: Install Local CA Certificate */}
-              <div className="rounded-xl bg-hw-surface-sunken border border-hw-border p-4 flex flex-col items-center text-center">
-                <div className="w-6 h-6 rounded-full bg-hw-primary/20 text-hw-primary font-mono text-xs font-bold flex items-center justify-center mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Step 1: Certificate */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-6 h-6 rounded-full bg-raised text-foreground font-mono text-xs font-semibold flex items-center justify-center mb-3 border border-border">
                   1
                 </div>
-                <span className="font-display font-bold text-xs uppercase tracking-wide text-hw-text">
-                  Install Certificate
-                </span>
-                <span className="font-mono text-[9px] text-hw-text-dim mt-0.5 mb-3">
-                  One-time 10-year root
-                </span>
+                <h3 className="text-xs font-semibold text-foreground">
+                  Install certificate
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Scan to install local root CA
+                </p>
 
-                <div className="p-2 bg-white rounded-lg shadow-md mb-3">
+                <div className="p-2 bg-white rounded-xl border border-border shadow-sm mb-3">
                   {trustQrUrl ? (
-                    <img src={trustQrUrl} alt="Trust QR" className="w-28 h-28 object-contain" />
+                    <img src={trustQrUrl} alt="Certificate QR" className="w-28 h-28 object-contain" />
                   ) : (
-                    <div className="w-28 h-28 flex items-center justify-center text-xs font-mono text-zinc-400">
+                    <div className="w-28 h-28 flex items-center justify-center text-xs font-mono text-muted-foreground">
                       Loading...
                     </div>
                   )}
                 </div>
 
-                <p className="font-sans text-[11px] text-hw-text-muted leading-relaxed">
-                  Scan QR with iPhone Camera &rarr; tap Allow &rarr; Settings &rarr; Profile Downloaded &rarr; Install &rarr; Enable full trust.
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  Tap Allow &rarr; Profile Downloaded &rarr; Install &rarr; Enable full trust in Settings.
                 </p>
               </div>
 
-              {/* Step 2: Scan Pairing QR */}
-              <div className="rounded-xl bg-hw-surface-sunken border border-hw-border p-4 flex flex-col items-center text-center ring-1 ring-hw-primary/30">
-                <div className="w-6 h-6 rounded-full bg-hw-primary text-white font-mono text-xs font-bold flex items-center justify-center mb-2 shadow-sm">
+              {/* Step 2: Pairing */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-6 h-6 rounded-full bg-accent text-white font-mono text-xs font-semibold flex items-center justify-center mb-3">
                   2
                 </div>
-                <span className="font-display font-bold text-xs uppercase tracking-wide text-hw-text">
-                  Pair Remote
-                </span>
-                <span className="font-mono text-[9px] text-hw-text-dim mt-0.5 mb-3">
-                  Secure local link
-                </span>
+                <h3 className="text-xs font-semibold text-foreground">
+                  Pair remote
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Scan to open secure remote
+                </p>
 
-                <div className="p-2 bg-white rounded-lg shadow-md mb-3">
+                <div className="p-2 bg-white rounded-xl border border-border shadow-sm mb-3">
                   {pairQrUrl ? (
                     <img src={pairQrUrl} alt="Pairing QR" className="w-28 h-28 object-contain" />
                   ) : (
-                    <div className="w-28 h-28 flex items-center justify-center text-xs font-mono text-zinc-400">
+                    <div className="w-28 h-28 flex items-center justify-center text-xs font-mono text-muted-foreground">
                       Loading...
                     </div>
                   )}
                 </div>
 
-                <p className="font-sans text-[11px] text-hw-text-muted leading-relaxed">
-                  Scan to pair with PC on port 8443. Opens with green SSL lock and full gyroscopic permissions.
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  Opens Aerokin over secure local HTTPS on port 8443.
                 </p>
               </div>
 
               {/* Step 3: Add to Home Screen */}
-              <div className="rounded-xl bg-hw-surface-sunken border border-hw-border p-4 flex flex-col items-center text-center">
-                <div className="w-6 h-6 rounded-full bg-white/10 text-hw-text-muted font-mono text-xs font-bold flex items-center justify-center mb-2">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-6 h-6 rounded-full bg-raised text-foreground font-mono text-xs font-semibold flex items-center justify-center mb-3 border border-border">
                   3
                 </div>
-                <span className="font-display font-bold text-xs uppercase tracking-wide text-hw-text">
-                  Home Screen
-                </span>
-                <span className="font-mono text-[9px] text-hw-text-dim mt-0.5 mb-3">
-                  Fullscreen standalone
-                </span>
+                <h3 className="text-xs font-semibold text-foreground">
+                  Add to Home Screen
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Fullscreen standalone view
+                </p>
 
-                <div className="w-28 h-28 rounded-lg bg-hw-surface flex flex-col items-center justify-center gap-2 border border-hw-border mb-3 text-hw-primary">
-                  <Share size={24} />
-                  <PlusSquare size={24} />
+                <div className="w-28 h-28 rounded-xl bg-raised border border-border flex items-center justify-center mb-3 text-muted-foreground">
+                  <Share size={32} />
                 </div>
 
-                <p className="font-sans text-[11px] text-hw-text-muted leading-relaxed">
-                  In Safari, tap <Share className="inline w-3 h-3 text-hw-primary" /> &rarr; "Add to Home Screen" for a fullscreen native remote experience.
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  In Safari, tap Share &rarr; Add to Home Screen for a native fullscreen controller.
                 </p>
               </div>
             </div>
 
-            {/* Token & Link Strip */}
+            {/* Token + Copy row */}
             {pairData && (
-              <div className="mt-6 pt-4 border-t border-hw-border-subtle flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs">
+              <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-hw-text-dim">Pairing Token:</span>
-                  <span className="font-bold text-base text-hw-primary tracking-widest">
+                  <span className="text-muted-foreground">Token:</span>
+                  <span className="font-mono text-sm font-semibold tabular-nums text-foreground tracking-wider">
                     {pairData.token}
                   </span>
                   <button
                     onClick={() => handleCopy(pairData.token)}
-                    className="p-1 rounded hover:bg-white/5 text-hw-text-muted hover:text-hw-text transition-colors"
-                    title="Copy Token"
+                    className="p-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground transition-colors"
+                    title="Copy token"
+                    aria-label="Copy token"
                   >
-                    {copiedToken ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    {copiedToken ? (
+                      <Check size={14} className="text-success" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
                   </button>
                 </div>
 
-                <div className="text-[11px] text-hw-text-dim truncate max-w-sm">
+                <span className="font-mono text-[11px] text-muted-foreground truncate max-w-sm">
                   {pairData.url}
-                </div>
+                </span>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Right Column: Live Event Monitor & Network Telemetry */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* Live Telemetry Console */}
-          <div className="rounded-2xl bg-hw-surface border border-hw-border p-6 shadow-hw-well flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-hw-border-subtle mb-4">
-              <div className="flex items-center gap-2">
-                <Pulse size={18} className="text-hw-primary" weight="bold" />
-                <span className="font-display font-bold text-xs uppercase tracking-wider text-hw-text">
-                  Live Event Monitor
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] text-hw-text-dim">RTT History:</span>
-                <LatencySparkline history={latencyHistory} width={54} height={16} />
-              </div>
+          {/* Quiet Event Log */}
+          <div className="rounded-2xl bg-surface border border-border p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <span className="text-xs font-semibold text-foreground">
+                Event log
+              </span>
+              <span className="text-xs font-mono tabular-nums text-muted-foreground">
+                {recentEvents.length} events
+              </span>
             </div>
 
-            {/* Console Terminal Log */}
-            <div className="h-64 rounded-xl bg-hw-oled-bg border border-hw-border-subtle p-3.5 font-mono text-xs overflow-y-auto flex flex-col gap-1.5 shadow-hw-well">
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-1 font-mono text-xs">
               {recentEvents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-hw-text-dim text-center gap-1">
-                  <Terminal size={22} className="opacity-40 animate-pulse text-hw-primary" />
-                  <span className="text-xs">Awaiting client inputs...</span>
-                  <span className="text-[10px]">Sweep air pointer or touch trackpad on iPhone</span>
+                <div className="py-4 text-center text-muted-foreground text-xs">
+                  Awaiting client events...
                 </div>
               ) : (
                 recentEvents.slice().reverse().map((ev) => (
                   <div
                     key={ev.id}
-                    className="flex items-center justify-between py-0.5 border-b border-white/[0.03] text-[11px]"
+                    className="flex items-center justify-between py-1 border-b border-border/50 text-[11px]"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-hw-primary font-bold">[{ev.type.toUpperCase()}]</span>
-                      <span className="text-hw-text truncate">{ev.summary}</span>
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="text-muted-foreground uppercase">[{ev.type}]</span>
+                      <span className="text-foreground truncate">{ev.summary}</span>
                     </div>
-                    <span className="text-hw-text-dim text-[10px]">
+                    <span className="text-muted-foreground tabular-nums ml-2 flex-shrink-0">
                       {new Date(ev.time).toLocaleTimeString()}
                     </span>
                   </div>
@@ -323,30 +299,19 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
               )}
             </div>
           </div>
+        </main>
 
-          {/* Wi-Fi Note */}
-          <div className="p-4 rounded-xl bg-hw-surface-sunken border border-hw-border-subtle flex items-start gap-3 text-xs text-hw-text-muted">
-            <WifiHigh size={20} className="text-hw-primary flex-shrink-0 mt-0.5" weight="bold" />
-            <div className="flex flex-col leading-relaxed">
-              <span className="font-display font-bold text-hw-text uppercase">Same Wi-Fi Required</span>
-              <span className="text-[11px]">
-                Ensure your iPhone and Windows laptop are connected to the same Wi-Fi router or personal hotspot ({pairData?.lanIp || 'Local LAN'}).
-              </span>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Desktop Footer */}
-      <footer className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-hw-border max-w-7xl mx-auto w-full text-xs text-hw-text-muted gap-2">
-        <span className="font-mono text-[11px]">AEROKIN v2.0 · Windows Native Automation Core</span>
-        <button
-          onClick={onSwitchToPhoneView}
-          className="text-hw-primary hover:underline font-mono text-[11px]"
-        >
-          Switch to iPhone Mobile View &rarr;
-        </button>
-      </footer>
+        {/* Footer */}
+        <footer className="pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <span>Aerokin</span>
+          <button
+            onClick={onSwitchToPhoneView}
+            className="hover:text-foreground transition-colors"
+          >
+            Switch to phone view &rarr;
+          </button>
+        </footer>
+      </div>
     </div>
   );
 };

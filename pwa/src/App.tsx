@@ -4,7 +4,6 @@ import { AerokinLogo } from '@ui';
 import { useAerokinSocket } from './hooks/useAerokinSocket';
 import { MotionPermissionScreen } from './components/MotionPermissionScreen';
 import { ManualTokenModal } from './components/ManualTokenModal';
-import { DynamicIslandPill } from './components/DynamicIslandPill';
 import { AirMouseTab } from './components/AirMouseTab';
 import { TrackpadTab } from './components/TrackpadTab';
 import { MediaTab } from './components/MediaTab';
@@ -12,7 +11,7 @@ import { DesktopDashboard } from './components/DesktopDashboard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { CalibrationModal } from './components/CalibrationModal';
 import { triggerHaptic } from './utils/haptics';
-import { ThemePreset } from './theme/tokens';
+import { ThemeMode } from './theme/tokens';
 import {
   AirPointerConfig,
   CalibrationData,
@@ -20,9 +19,9 @@ import {
   DEFAULT_CALIBRATION,
 } from './engine/airPointer';
 import {
-  Compass,
-  Cursor,
-  FilmStrip,
+  NavigationArrow,
+  HandPointing,
+  PlayPause,
   Gear,
   Monitor,
 } from '@phosphor-icons/react';
@@ -33,14 +32,32 @@ const STORAGE_CALIBRATION_KEY = 'aerokin_calibration';
 const STORAGE_SEEK_METHOD_KEY = 'aerokin_seek_method';
 
 export const App: React.FC = () => {
-  // 1. Theme State (DECEPTICON by default)
-  const [theme, setTheme] = useState<ThemePreset>(() => {
-    if (typeof window === 'undefined') return 'decepticon';
-    return (localStorage.getItem(STORAGE_THEME_KEY) as ThemePreset) || 'decepticon';
+  // 1. Theme State (system by default)
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'system';
+    const saved = localStorage.getItem(STORAGE_THEME_KEY);
+    if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
+    return 'system';
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    if (theme === 'system') {
+      root.removeAttribute('data-theme');
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    } else {
+      root.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    }
     localStorage.setItem(STORAGE_THEME_KEY, theme);
   }, [theme]);
 
@@ -112,8 +129,7 @@ export const App: React.FC = () => {
   });
 
   // 7. Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'air-mouse' | 'trackpad' | 'media'>('air-mouse');
-  const [latencyHistory, setLatencyHistory] = useState<number[]>([12, 14, 11, 15, 12]);
+  const [activeTab, setActiveTab] = useState<'pointer' | 'trackpad' | 'media'>('pointer');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showCalibrationModal, setShowCalibrationModal] = useState(false);
@@ -140,19 +156,13 @@ export const App: React.FC = () => {
     muted,
   } = useAerokinSocket();
 
-  useEffect(() => {
-    if (latency !== null) {
-      setLatencyHistory((prev) => [...prev.slice(-15), latency]);
-    }
-  }, [latency]);
-
   const tabs = [
-    { id: 'air-mouse', label: 'Air Pointer', icon: Compass },
-    { id: 'trackpad', label: 'Trackpad', icon: Cursor },
-    { id: 'media', label: 'Media', icon: FilmStrip },
+    { id: 'pointer', label: 'Pointer', icon: NavigationArrow },
+    { id: 'trackpad', label: 'Trackpad', icon: HandPointing },
+    { id: 'media', label: 'Media', icon: PlayPause },
   ] as const;
 
-  const handleTabChange = (newTabId: 'air-mouse' | 'trackpad' | 'media') => {
+  const handleTabChange = (newTabId: 'pointer' | 'trackpad' | 'media') => {
     triggerHaptic('light');
     setActiveTab(newTabId);
   };
@@ -178,55 +188,93 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="relative flex flex-col h-[100dvh] w-full bg-hw-bg text-hw-text overflow-hidden pt-safe pb-safe select-none touch-none">
-      {/* Top Header Bar with Machined Dynamic Island Connection Pill & Settings Key */}
-      <header className="flex items-center justify-between px-4 py-2 border-b border-hw-border bg-hw-surface z-30 shadow-sm">
-        <AerokinLogo size={32} withWordmark theme={theme} />
+    <div className="relative flex flex-col h-[100dvh] w-full bg-bg text-foreground overflow-hidden pt-safe pb-safe select-none touch-none">
+      {/* Top Bar: logo mark left, small connection status center-left, settings icon right */}
+      <header className="flex items-center justify-between px-gutter h-13 min-h-[52px] border-b border-border bg-bg z-30">
+        <div className="flex items-center gap-3">
+          {/* Logo mark (no wordmark under 400px) */}
+          <div className="flex items-center flex-shrink-0">
+            <div className="min-[400px]:hidden">
+              <AerokinLogo size={24} />
+            </div>
+            <div className="hidden min-[400px]:block">
+              <AerokinLogo size={24} withWordmark />
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <DynamicIslandPill
-            status={status === 'disconnected' ? 'reconnecting' : status}
-            latency={latency}
-            latencyHistory={latencyHistory}
-            token={token}
-            onOpenAuthModal={() => setShowAuthModal(true)}
-          />
+          {/* Small connection status: dot + latency / status */}
+          <button
+            onClick={() => {
+              if (status === 'unauthorized') {
+                setShowAuthModal(true);
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer py-1.5 px-2 rounded-lg"
+            title={status}
+            aria-label={`Connection status: ${status}`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                status === 'connected'
+                  ? 'bg-success'
+                  : status === 'reconnecting'
+                  ? 'bg-amber-400'
+                  : status === 'unauthorized'
+                  ? 'bg-optic-red'
+                  : 'bg-muted-foreground/40'
+              }`}
+            />
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              {status === 'connected'
+                ? latency !== null
+                  ? `${latency} ms`
+                  : 'Connected'
+                : status === 'reconnecting'
+                ? 'Reconnecting'
+                : status === 'unauthorized'
+                ? 'Auth required'
+                : 'Disconnected'}
+            </span>
+          </button>
+        </div>
+
+        {/* Right side: Settings icon + optional simulator toggle */}
+        <div className="flex items-center gap-1">
+          {typeof window !== 'undefined' &&
+            window.matchMedia('(min-width: 768px)').matches && (
+              <button
+                onClick={() => setIsDesktopMode(true)}
+                className="w-10 h-10 min-w-[48px] min-h-[48px] rounded-xl text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                title="Desktop pairing station"
+                aria-label="Desktop station"
+              >
+                <Monitor size={18} />
+              </button>
+            )}
 
           <button
             onClick={() => {
               triggerHaptic('light');
               setShowSettingsDrawer(true);
             }}
-            className="p-1.5 rounded-lg border border-hw-border bg-hw-surface-sunken hover:border-hw-primary text-hw-text-muted hover:text-hw-text active:scale-95 transition-all"
-            title="Remote Settings"
+            className="w-10 h-10 min-w-[48px] min-h-[48px] rounded-xl text-muted-foreground hover:text-foreground active:scale-[0.97] flex items-center justify-center transition-transform"
+            title="Settings"
             aria-label="Settings"
           >
-            <Gear size={16} weight="bold" />
+            <Gear size={20} />
           </button>
-
-          {/* Desktop simulator return button */}
-          {typeof window !== 'undefined' &&
-            window.matchMedia('(min-width: 768px)').matches && (
-              <button
-                onClick={() => setIsDesktopMode(true)}
-                className="p-1.5 rounded-lg border border-hw-border bg-hw-surface-sunken text-hw-text-muted hover:text-hw-text transition-colors"
-                title="Return to Desktop Pairing Station"
-              >
-                <Monitor size={16} weight="bold" />
-              </button>
-            )}
         </div>
       </header>
 
-      {/* Main Tab Content Display */}
+      {/* Main Tab Content */}
       <main className="flex-1 w-full overflow-hidden relative z-10 flex flex-col">
         <AnimatePresence mode="wait">
-          {activeTab === 'air-mouse' && (
+          {activeTab === 'pointer' && (
             <motion.div
-              key="air-mouse"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
+              key="pointer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col"
             >
@@ -245,9 +293,9 @@ export const App: React.FC = () => {
           {activeTab === 'trackpad' && (
             <motion.div
               key="trackpad"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col"
             >
@@ -265,9 +313,9 @@ export const App: React.FC = () => {
           {activeTab === 'media' && (
             <motion.div
               key="media"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col"
             >
@@ -289,9 +337,9 @@ export const App: React.FC = () => {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Machined Hardware TabBar */}
-      <nav className="p-3 flex justify-center z-20">
-        <div className="relative flex items-center p-1 rounded-xl bg-hw-surface border border-hw-border-milled shadow-hw-well w-full max-w-sm">
+      {/* Tab bar: 3 equal tabs, icon above short label, spring-sliding indicator */}
+      <nav className="px-gutter pt-1 pb-safe flex justify-center z-20 bg-bg border-t border-border">
+        <div className="relative flex items-center w-full max-w-sm h-14">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -299,27 +347,35 @@ export const App: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`relative flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg font-display text-xs font-bold uppercase tracking-wider transition-all z-10 cursor-pointer ${
-                  isActive ? 'text-white' : 'text-hw-text-muted hover:text-hw-text'
+                className={`relative flex-1 flex flex-col items-center justify-center py-1.5 h-12 rounded-xl transition-colors z-10 cursor-pointer min-h-[48px] ${
+                  isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
+                aria-selected={isActive}
+                role="tab"
               >
-                {/* Active Milled Button Face */}
                 {isActive && (
                   <motion.div
                     layoutId="activeTabIndicator"
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                    className="absolute inset-0 rounded-lg bg-hw-surface-raised border border-hw-primary/60 shadow-hw-btn"
+                    transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+                    className="absolute inset-0 rounded-xl bg-surface border border-border"
                   />
                 )}
-                <Icon size={16} weight="bold" className={`z-10 ${isActive ? 'text-hw-primary' : ''}`} />
-                <span className="z-10 text-[11px]">{tab.label}</span>
+                <Icon
+                  size={20}
+                  className={`z-10 transition-colors ${
+                    isActive ? 'text-accent' : 'text-muted-foreground'
+                  }`}
+                />
+                <span className="z-10 text-[11px] font-medium leading-tight mt-0.5 whitespace-nowrap">
+                  {tab.label}
+                </span>
               </button>
             );
           })}
         </div>
       </nav>
 
-      {/* Settings Vaul Drawer */}
+      {/* Settings Vaul Sheet */}
       <SettingsDrawer
         isOpen={showSettingsDrawer}
         onOpenChange={setShowSettingsDrawer}
@@ -332,9 +388,11 @@ export const App: React.FC = () => {
         onOpenCalibrationWizard={() => setShowCalibrationModal(true)}
         seekMethod={seekMethod}
         onSeekMethodChange={handleSeekMethodChange}
+        token={token}
+        onOpenAuthModal={() => setShowAuthModal(true)}
       />
 
-      {/* Gyroscopic Calibration Modal */}
+      {/* Calibration Modal */}
       <CalibrationModal
         isOpen={showCalibrationModal}
         onClose={() => setShowCalibrationModal(false)}

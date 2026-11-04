@@ -2,17 +2,14 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { AerokinLogo } from '@ui';
 import { triggerHaptic } from '../utils/haptics';
-import { ThemePreset } from '../theme/tokens';
-import { Compass, Lightning, ShieldCheck, WarningCircle } from '@phosphor-icons/react';
 
 export interface MotionPermissionScreenProps {
   onPermissionGranted: () => void;
-  theme?: ThemePreset;
+  theme?: string;
 }
 
 export const MotionPermissionScreen: React.FC<MotionPermissionScreenProps> = ({
   onPermissionGranted,
-  theme = 'decepticon',
 }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -45,75 +42,48 @@ export const MotionPermissionScreen: React.FC<MotionPermissionScreenProps> = ({
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-between min-h-[100dvh] w-full p-6 pt-safe pb-safe text-center select-none overflow-hidden bg-hw-bg text-hw-text">
-      {/* Main Chassis Panel */}
+    <div className="relative flex flex-col justify-between min-h-[100dvh] w-full px-gutter pt-safe pb-safe bg-bg text-foreground select-none overflow-hidden">
+      {/* Centered Hero Content with Lots of Whitespace */}
+      <div className="flex-1 flex flex-col items-center justify-center text-center max-w-sm mx-auto w-full py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+          className="flex flex-col items-center"
+        >
+          <div className="mb-6">
+            <AerokinLogo size={56} />
+          </div>
+
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Aerokin
+          </h1>
+
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+            Control your PC from your iPhone.
+          </p>
+        </motion.div>
+      </div>
+
+      {/* Bottom Action Area */}
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="flex-1 flex flex-col items-center justify-center max-w-sm z-10 my-auto w-full"
+        transition={{ type: 'spring', stiffness: 400, damping: 34, delay: 0.05 }}
+        className="w-full max-w-sm mx-auto pb-4 flex flex-col items-center"
       >
-        {/* Animated Machined Logo */}
-        <div className="p-4 rounded-2xl bg-hw-surface border border-hw-border shadow-hw-well mb-6">
-          <AerokinLogo size={84} intro={true} animated={true} theme={theme} />
-        </div>
-
-        <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-wider text-hw-text uppercase">
-          AEROKIN
-        </h1>
-
-        <p className="font-mono text-xs uppercase tracking-[0.24em] text-hw-primary mt-2 font-bold">
-          Move the air. Move your PC.
-        </p>
-
-        <p className="font-sans text-xs text-hw-text-muted mt-3 max-w-xs leading-relaxed">
-          Machined 6-axis air pointer, haptic precision trackpad, and universal media console.
-        </p>
-
-        {/* Machined Hardware Spec Matrix */}
-        <div className="grid grid-cols-3 gap-2 mt-6 w-full max-w-xs">
-          <div className="flex flex-col items-center p-2.5 rounded-lg border border-hw-border-subtle bg-hw-surface-sunken">
-            <Compass size={18} className="text-hw-primary mb-1" weight="bold" />
-            <span className="font-mono text-[10px] text-hw-text font-bold">60Hz Gyro</span>
-            <span className="font-mono text-[8.5px] text-hw-text-dim">1€ Filter</span>
-          </div>
-          <div className="flex flex-col items-center p-2.5 rounded-lg border border-hw-border-subtle bg-hw-surface-sunken">
-            <Lightning size={18} className="text-amber-400 mb-1" weight="bold" />
-            <span className="font-mono text-[10px] text-hw-text font-bold">&lt;15ms RTT</span>
-            <span className="font-mono text-[8.5px] text-hw-text-dim">WebSocket</span>
-          </div>
-          <div className="flex flex-col items-center p-2.5 rounded-lg border border-hw-border-subtle bg-hw-surface-sunken">
-            <ShieldCheck size={18} className="text-emerald-400 mb-1" weight="bold" />
-            <span className="font-mono text-[10px] text-hw-text font-bold">Local CA</span>
-            <span className="font-mono text-[8.5px] text-hw-text-dim">Zero Warning</span>
-          </div>
-        </div>
-
-        {errorMsg && (
-          <div className="mt-4 flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono">
-            <WarningCircle size={16} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Bottom Tactile Action Block */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-sm flex flex-col gap-3 z-10"
-      >
-        <div className="p-3 rounded-lg bg-hw-surface-sunken border border-hw-border-subtle text-[11px] font-mono text-hw-text-dim text-center">
-          Tap below to initialize 6-DOF gyroscopic sensors for air mouse navigation.
-        </div>
-
         <button
           onClick={handleRequestMotion}
-          className="w-full py-4 px-6 rounded-xl bg-hw-primary hover:bg-hw-primary-hover active:scale-[0.98] text-white font-display font-bold text-sm uppercase tracking-wider transition-all shadow-hw-btn"
+          className="w-full h-12 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-transform active:scale-[0.97] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          Initialize Remote Sensors
+          Enable motion
         </button>
+
+        {errorMsg && (
+          <p className="mt-3 text-xs text-error text-center">
+            {errorMsg}
+          </p>
+        )}
       </motion.div>
     </div>
   );

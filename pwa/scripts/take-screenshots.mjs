@@ -40,8 +40,40 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function checkNoOverflow(page, label) {
+  const overflow = await page.evaluate(() => {
+    const docEl = document.documentElement;
+    const body = document.body;
+    return {
+      docScrollWidth: docEl.scrollWidth,
+      docClientWidth: docEl.clientWidth,
+      bodyScrollWidth: body.scrollWidth,
+      bodyClientWidth: body.clientWidth,
+      hasOverflow: docEl.scrollWidth > docEl.clientWidth || body.scrollWidth > body.clientWidth,
+    };
+  });
+
+  if (overflow.hasOverflow) {
+    console.error(`[OVERFLOW ERROR] ${label}: scrollWidth exceeds clientWidth!`, overflow);
+    throw new Error(`Horizontal overflow detected in ${label}`);
+  }
+}
+
+async function setTheme(page, theme) {
+  await page.evaluate((t) => {
+    localStorage.setItem('aerokin_theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+    if (t === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, theme);
+  await sleep(300);
+}
+
 async function run() {
-  console.log('--- Starting AEROKIN Server for Playwright Verification ---');
+  console.log('--- Starting Aerokin Server for Playwright Verification ---');
 
   const tokenFile = path.join(ROOT_DIR, 'server/.certs/token.txt');
   let token = '4EA378';
@@ -49,7 +81,6 @@ async function run() {
     token = fs.readFileSync(tokenFile, 'utf8').trim();
   }
 
-  // Start server process
   const serverProcess = spawn('node', ['server/dist/index.js'], {
     cwd: ROOT_DIR,
     shell: false,
@@ -74,149 +105,133 @@ async function run() {
   });
 
   try {
-    // -------------------------------------------------------------------------
-    // 1. DESKTOP LOCALHOST PAIRING DASHBOARD (1440x900)
-    // -------------------------------------------------------------------------
-    console.log('Capturing Desktop Dashboard (1440x900)...');
-    const desktopContext = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: 1,
-      ignoreHTTPSErrors: true,
-    });
+    const themes = ['dark', 'light'];
 
-    const desktopPage = await desktopContext.newPage();
-    await desktopPage.goto(`https://127.0.0.1:8443/?token=${token}`, {
-      waitUntil: 'networkidle',
-    });
-    await sleep(1500);
+    // =========================================================================
+    // 1. DESKTOP DASHBOARDS (1440x900 & 1280x720)
+    // =========================================================================
+    const desktopViewports = [
+      { name: '1440x900', width: 1440, height: 900 },
+      { name: '1280x720', width: 1280, height: 720 },
+    ];
 
-    const desktopShot = path.join(SCREENSHOTS_DIR, '01-desktop-pairing-dashboard.png');
-    await desktopPage.screenshot({ path: desktopShot, fullPage: false });
-    console.log(`✓ Saved: ${desktopShot}`);
-    await desktopContext.close();
+    for (const dvp of desktopViewports) {
+      for (const theme of themes) {
+        console.log(`\nCapturing Desktop Dashboard (${dvp.name}, ${theme})...`);
+        const desktopContext = await browser.newContext({
+          viewport: { width: dvp.width, height: dvp.height },
+          deviceScaleFactor: 1,
+          ignoreHTTPSErrors: true,
+        });
 
-    // -------------------------------------------------------------------------
-    // 2. IPHONE MOBILE EXPERIENCE (390x844, DPR 3, Touch Enabled)
-    // -------------------------------------------------------------------------
-    console.log('Capturing iPhone Mobile Experience (390x844 @ 3x DPR)...');
-    const iphoneContext = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
-      userAgent:
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-      ignoreHTTPSErrors: true,
-    });
+        const page = await desktopContext.newPage();
+        await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
+          waitUntil: 'networkidle',
+        });
+        await sleep(1000);
+        await setTheme(page, theme);
+        await checkNoOverflow(page, `Desktop Dashboard ${dvp.name} (${theme})`);
 
-    const iphonePage = await iphoneContext.newPage();
-
-    // Emulate iOS DeviceMotionEvent with requestPermission to trigger start screen
-    await iphonePage.addInitScript(() => {
-      window.DeviceMotionEvent = {
-        requestPermission: async () => 'granted',
-      };
-    });
-
-    // 2A. Start Screen (Motion Permission)
-    await iphonePage.goto(`https://127.0.0.1:8443/?token=${token}`, {
-      waitUntil: 'networkidle',
-    });
-    await sleep(1000);
-
-    const startShot = path.join(SCREENSHOTS_DIR, '02-iphone-start-screen.png');
-    await iphonePage.screenshot({ path: startShot });
-    console.log(`✓ Saved: ${startShot}`);
-
-    // Tap "Initialize Remote Sensors"
-    const enableBtn = iphonePage.getByRole('button', { name: /Initialize Remote|Enable Motion/i });
-    if (await enableBtn.isVisible()) {
-      await enableBtn.click();
-      await sleep(1000);
+        const filename = path.join(SCREENSHOTS_DIR, `desktop-${dvp.name}-${theme}.png`);
+        await page.screenshot({ path: filename });
+        console.log(`✓ Saved: ${filename}`);
+        await desktopContext.close();
+      }
     }
 
-    // 2B. Air Pointer Tab (Decepticon Theme)
-    const airPointerShot = path.join(SCREENSHOTS_DIR, '03-iphone-air-pointer-decepticon.png');
-    await iphonePage.screenshot({ path: airPointerShot });
-    console.log(`✓ Saved: ${airPointerShot}`);
+    // =========================================================================
+    // 2. MOBILE VIEWPORTS: 390x844 @ 3x (iPhone) and 360x740 (Android/Compact)
+    // =========================================================================
+    const mobileViewports = [
+      { name: '390x844-3x', width: 390, height: 844, dpr: 3 },
+      { name: '360x740-1x', width: 360, height: 740, dpr: 1 },
+    ];
 
-    // 2C. Open Settings Drawer
-    const settingsBtn = iphonePage.getByRole('button', { name: /Settings/i });
-    if (await settingsBtn.isVisible()) {
-      await settingsBtn.click();
-      await sleep(800);
-      const settingsShot = path.join(SCREENSHOTS_DIR, '04-iphone-settings-drawer.png');
-      await iphonePage.screenshot({ path: settingsShot });
-      console.log(`✓ Saved: ${settingsShot}`);
+    for (const vp of mobileViewports) {
+      for (const theme of themes) {
+        console.log(`\nCapturing Mobile Screens (${vp.name}, ${theme})...`);
+        const mobileContext = await browser.newContext({
+          viewport: { width: vp.width, height: vp.height },
+          deviceScaleFactor: vp.dpr,
+          isMobile: true,
+          hasTouch: true,
+          ignoreHTTPSErrors: true,
+        });
 
-      // Open Calibration Wizard from Settings
-      const calBtn = iphonePage.getByRole('button', { name: /Calibrate/i });
-      if (await calBtn.isVisible()) {
-        await calBtn.click();
-        await sleep(800);
-        const calShot = path.join(SCREENSHOTS_DIR, '05-iphone-calibration-wizard.png');
-        await iphonePage.screenshot({ path: calShot });
-        console.log(`✓ Saved: ${calShot}`);
+        const page = await mobileContext.newPage();
 
-        // Close calibration modal
-        const closeCalBtn = iphonePage.getByRole('button', { name: /Close/i });
-        if (await closeCalBtn.isVisible()) {
-          await closeCalBtn.click();
-          await sleep(500);
-        }
-      }
+        // Emulate iOS permission prompt for Start Screen
+        await page.addInitScript(() => {
+          window.DeviceMotionEvent = {
+            requestPermission: async () => 'granted',
+          };
+        });
 
-      // Re-open settings to switch to AERO theme
-      if (await settingsBtn.isVisible()) {
-        await settingsBtn.click();
+        // 2A. Start Screen (Permission prompt)
+        await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
+          waitUntil: 'networkidle',
+        });
         await sleep(600);
-        const aeroBtn = iphonePage.getByRole('button', { name: /AERO/i });
-        if (await aeroBtn.isVisible()) {
-          await aeroBtn.click();
+        await setTheme(page, theme);
+        await checkNoOverflow(page, `Start Screen ${vp.name} (${theme})`);
+
+        const startShot = path.join(SCREENSHOTS_DIR, `start-${vp.name}-${theme}.png`);
+        await page.screenshot({ path: startShot });
+        console.log(`✓ Saved: ${startShot}`);
+
+        // Click "Enable motion" to proceed to main app
+        const enableBtn = page.getByRole('button', { name: /Enable motion/i });
+        if (await enableBtn.isVisible()) {
+          await enableBtn.click();
           await sleep(600);
-          const aeroShot = path.join(SCREENSHOTS_DIR, '08-iphone-aero-preset.png');
-          await iphonePage.screenshot({ path: aeroShot });
-          console.log(`✓ Saved: ${aeroShot}`);
-
-          // Switch back to DECEPTICON
-          const decepticonBtn = iphonePage.getByRole('button', { name: /DECEPTICON/i });
-          if (await decepticonBtn.isVisible()) {
-            await decepticonBtn.click();
-            await sleep(400);
-          }
         }
 
-        // Close drawer
-        const closeDrawerBtn = iphonePage.getByRole('button', { name: /Close/i });
-        if (await closeDrawerBtn.isVisible()) {
-          await closeDrawerBtn.click();
-          await sleep(500);
+        // 2B. Pointer Tab
+        await checkNoOverflow(page, `Pointer Tab ${vp.name} (${theme})`);
+        const pointerShot = path.join(SCREENSHOTS_DIR, `pointer-${vp.name}-${theme}.png`);
+        await page.screenshot({ path: pointerShot });
+        console.log(`✓ Saved: ${pointerShot}`);
+
+        // 2C. Trackpad Tab
+        const trackpadTabBtn = page.getByRole('tab', { name: /Trackpad/i });
+        if (await trackpadTabBtn.isVisible()) {
+          await trackpadTabBtn.click();
+          await sleep(600);
+          await checkNoOverflow(page, `Trackpad Tab ${vp.name} (${theme})`);
+          const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}-${theme}.png`);
+          await page.screenshot({ path: trackpadShot });
+          console.log(`✓ Saved: ${trackpadShot}`);
         }
+
+        // 2D. Media Tab
+        const mediaTabBtn = page.getByRole('tab', { name: /Media/i });
+        if (await mediaTabBtn.isVisible()) {
+          await mediaTabBtn.click();
+          await sleep(600);
+          await checkNoOverflow(page, `Media Tab ${vp.name} (${theme})`);
+          const mediaShot = path.join(SCREENSHOTS_DIR, `media-${vp.name}-${theme}.png`);
+          await page.screenshot({ path: mediaShot });
+          console.log(`✓ Saved: ${mediaShot}`);
+        }
+
+        // 2E. Settings Sheet (open sheet last so it doesn't block tab navigation)
+        const settingsBtn = page.getByRole('button', { name: /Settings/i });
+        if (await settingsBtn.isVisible()) {
+          await settingsBtn.click();
+          await sleep(600);
+          await checkNoOverflow(page, `Settings Sheet ${vp.name} (${theme})`);
+          const settingsShot = path.join(SCREENSHOTS_DIR, `settings-${vp.name}-${theme}.png`);
+          await page.screenshot({ path: settingsShot });
+          console.log(`✓ Saved: ${settingsShot}`);
+        }
+
+        await mobileContext.close();
       }
     }
 
-    // 2D. Trackpad Tab
-    const trackpadTabBtn = iphonePage.getByRole('button', { name: /Trackpad/i });
-    if (await trackpadTabBtn.isVisible()) {
-      await trackpadTabBtn.click();
-      await sleep(800);
-      const trackpadShot = path.join(SCREENSHOTS_DIR, '06-iphone-trackpad.png');
-      await iphonePage.screenshot({ path: trackpadShot });
-      console.log(`✓ Saved: ${trackpadShot}`);
-    }
-
-    // 2E. Media Tab
-    const mediaTabBtn = iphonePage.getByRole('button', { name: /Media/i });
-    if (await mediaTabBtn.isVisible()) {
-      await mediaTabBtn.click();
-      await sleep(800);
-      const mediaShot = path.join(SCREENSHOTS_DIR, '07-iphone-media-remote.png');
-      await iphonePage.screenshot({ path: mediaShot });
-      console.log(`✓ Saved: ${mediaShot}`);
-    }
-
-    await iphoneContext.close();
-    console.log('\n--- ALL VERIFICATION SCREENSHOTS CAPTURED SUCCESSFULLY! ---');
+    console.log('\n======================================================');
+    console.log('✓ ALL PLAYWRIGHT SCREENSHOTS & OVERFLOW CHECKS PASSED!');
+    console.log('======================================================\n');
   } finally {
     await browser.close();
     serverProcess.kill('SIGINT');

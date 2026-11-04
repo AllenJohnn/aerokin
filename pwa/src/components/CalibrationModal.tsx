@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CalibrationData } from '../engine/airPointer';
 import { triggerHaptic } from '../utils/haptics';
-import { ArrowRight, ArrowUp, Check, X, Compass } from '@phosphor-icons/react';
+import { ArrowRight, ArrowUp, Check, X } from '@phosphor-icons/react';
 
 interface CalibrationModalProps {
   isOpen: boolean;
@@ -47,9 +47,7 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
         samplesRef.current.shift();
       }
 
-      // Check if sweep threshold met (> 35 deg/s)
       if (mag > 35 && samplesRef.current.length >= 8) {
-        // Average recent samples to find dominant axis
         let sumA = 0, sumB = 0, sumG = 0;
         for (const s of samplesRef.current) {
           sumA += s.alpha;
@@ -112,19 +110,16 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none">
-      <div className="w-full max-w-sm rounded-lg bg-hw-surface border border-hw-border shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 select-none">
+      <div className="w-full max-w-sm rounded-2xl bg-surface border border-border overflow-hidden flex flex-col shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-hw-surface-raised border-b border-hw-border">
-          <div className="flex items-center gap-2">
-            <Compass size={18} className="text-hw-primary" weight="bold" />
-            <span className="font-display font-bold uppercase tracking-wider text-xs text-hw-text">
-              Air Pointer Calibration
-            </span>
-          </div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <span className="text-sm font-semibold text-foreground">
+            Calibration
+          </span>
           <button
             onClick={onClose}
-            className="p-1 rounded text-hw-text-muted hover:text-hw-text hover:bg-white/5 active:scale-95 transition-all"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Close"
           >
             <X size={18} />
@@ -135,23 +130,23 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
         <div className="p-6 flex flex-col items-center text-center">
           {step === 'right' && (
             <>
-              <div className="w-16 h-16 rounded-full bg-hw-surface-sunken border border-hw-border flex items-center justify-center mb-4 text-hw-primary shadow-hw-well">
-                <ArrowRight size={32} weight="bold" className="animate-pulse" />
+              <div className="w-14 h-14 rounded-full bg-raised border border-border flex items-center justify-center mb-4 text-accent">
+                <ArrowRight size={24} />
               </div>
-              <h3 className="font-display font-bold text-base text-hw-text uppercase tracking-wide">
-                Step 1: Sweep Right
+              <h3 className="text-base font-semibold text-foreground">
+                Step 1: Sweep right
               </h3>
-              <p className="font-sans text-xs text-hw-text-muted mt-2 leading-relaxed">
-                Hold your phone naturally and firmly flick or sweep it to the right across the air.
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                Hold your phone naturally and firmly sweep it to the right across the air.
               </p>
-              <div className="w-full mt-6 bg-hw-surface-sunken p-2.5 rounded border border-hw-border-subtle">
-                <div className="flex justify-between text-[10px] font-mono text-hw-text-dim mb-1">
-                  <span>DETECTING VELOCITY</span>
+              <div className="w-full mt-6 bg-raised p-3 rounded-xl border border-border">
+                <div className="flex justify-between text-xs font-mono tabular-nums text-muted-foreground mb-1.5">
+                  <span>Velocity</span>
                   <span>{peakRate} deg/s</span>
                 </div>
-                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-hw-primary transition-all duration-75"
+                    className="h-full bg-accent transition-all duration-75"
                     style={{ width: `${Math.min(100, (peakRate / 40) * 100)}%` }}
                   />
                 </div>
@@ -161,23 +156,23 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
 
           {step === 'up' && (
             <>
-              <div className="w-16 h-16 rounded-full bg-hw-surface-sunken border border-hw-border flex items-center justify-center mb-4 text-hw-active shadow-hw-well">
-                <ArrowUp size={32} weight="bold" className="animate-pulse" />
+              <div className="w-14 h-14 rounded-full bg-raised border border-border flex items-center justify-center mb-4 text-accent">
+                <ArrowUp size={24} />
               </div>
-              <h3 className="font-display font-bold text-base text-hw-text uppercase tracking-wide">
-                Step 2: Sweep Up
+              <h3 className="text-base font-semibold text-foreground">
+                Step 2: Sweep up
               </h3>
-              <p className="font-sans text-xs text-hw-text-muted mt-2 leading-relaxed">
-                Now pitch or sweep the phone upward like pointing at the top of your PC display.
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                Now sweep the phone upward toward your PC display.
               </p>
-              <div className="w-full mt-6 bg-hw-surface-sunken p-2.5 rounded border border-hw-border-subtle">
-                <div className="flex justify-between text-[10px] font-mono text-hw-text-dim mb-1">
-                  <span>DETECTING VELOCITY</span>
+              <div className="w-full mt-6 bg-raised p-3 rounded-xl border border-border">
+                <div className="flex justify-between text-xs font-mono tabular-nums text-muted-foreground mb-1.5">
+                  <span>Velocity</span>
                   <span>{peakRate} deg/s</span>
                 </div>
-                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-hw-active transition-all duration-75"
+                    className="h-full bg-accent transition-all duration-75"
                     style={{ width: `${Math.min(100, (peakRate / 40) * 100)}%` }}
                   />
                 </div>
@@ -187,32 +182,21 @@ export const CalibrationModal: React.FC<CalibrationModalProps> = ({
 
           {step === 'done' && (
             <>
-              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 text-emerald-400">
-                <Check size={32} weight="bold" />
+              <div className="w-14 h-14 rounded-full bg-success/10 border border-success/30 flex items-center justify-center mb-4 text-success">
+                <Check size={24} />
               </div>
-              <h3 className="font-display font-bold text-base text-hw-text uppercase tracking-wide">
-                Calibration Calibrated
+              <h3 className="text-base font-semibold text-foreground">
+                Calibration complete
               </h3>
-              <p className="font-sans text-xs text-hw-text-muted mt-2">
-                Optimal coordinate axes and signs have been locked into hardware memory.
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                Motion axes and directions have been updated.
               </p>
-
-              <div className="w-full mt-4 p-3 rounded bg-hw-surface-sunken border border-hw-border-subtle text-left font-mono text-[11px] space-y-1">
-                <div className="flex justify-between text-hw-text-muted">
-                  <span>YAW AXIS</span>
-                  <span className="text-hw-text font-bold uppercase">{detectedYawAxis} ({detectedYawSign > 0 ? '+1' : '-1'})</span>
-                </div>
-                <div className="flex justify-between text-hw-text-muted">
-                  <span>PITCH AXIS</span>
-                  <span className="text-hw-text font-bold uppercase">{detectedPitchAxis} ({detectedPitchSign > 0 ? '+1' : '-1'})</span>
-                </div>
-              </div>
 
               <button
                 onClick={handleFinish}
-                className="w-full mt-6 py-2.5 px-4 rounded bg-hw-primary hover:bg-hw-primary-hover active:scale-[0.98] text-white font-display font-bold text-xs uppercase tracking-wider transition-all shadow-hw-btn"
+                className="w-full mt-6 h-11 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium transition-transform active:scale-[0.97]"
               >
-                Save & Apply Calibration
+                Save calibration
               </button>
             </>
           )}

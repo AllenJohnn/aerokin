@@ -1,12 +1,12 @@
 {
-  "name": "AEROKIN",
-  "short_name": "AEROKIN",
-  "description": "Move the air. Move your PC. iPhone Air Mouse & Media Remote for Windows.",
+  "name": "Aerokin",
+  "short_name": "Aerokin",
+  "description": "Control your PC from your iPhone.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#07070B",
-  "theme_color": "#07070B",
+  "background_color": "#09090B",
+  "theme_color": "#09090B",
   "icons": [
     {
       "src": "/icon-192.png",

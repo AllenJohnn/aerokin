@@ -1,70 +1,74 @@
-@import "@fontsource/chakra-petch/400.css";
-@import "@fontsource/chakra-petch/500.css";
-@import "@fontsource/chakra-petch/600.css";
-@import "@fontsource/chakra-petch/700.css";
-@import "@fontsource/oxanium/400.css";
-@import "@fontsource/oxanium/600.css";
-@import "@fontsource/oxanium/700.css";
-@import "@fontsource/jetbrains-mono/400.css";
-@import "@fontsource/jetbrains-mono/500.css";
-@import "@fontsource/jetbrains-mono/600.css";
 @import "@fontsource/geist-sans/400.css";
 @import "@fontsource/geist-sans/500.css";
 @import "@fontsource/geist-sans/600.css";
-@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+@import "@fontsource/geist-mono/600.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* Default DECEPTICON Hardware Theme Variables */
-  :root,
-  [data-theme="decepticon"] {
-    --hw-bg: #0A0B0E;
-    --hw-surface: #12141B;
-    --hw-surface-raised: #181B24;
-    --hw-surface-sunken: #0E1015;
-    --hw-surface-hl: #222634;
-    --hw-border: rgba(255, 255, 255, 0.08);
-    --hw-border-subtle: rgba(255, 255, 255, 0.04);
-    --hw-border-milled: rgba(255, 255, 255, 0.14);
-    --hw-text: #F0F2F6;
-    --hw-text-muted: #848C9E;
-    --hw-text-dim: #4B5263;
-    --hw-primary: #8B5CF6;
-    --hw-primary-hover: #A78BFA;
-    --hw-optic-red: #FF2E2E;
-    --hw-active: #FF2E2E;
-    --hw-oled-bg: #08090C;
-    --hw-oled-text: #A78BFA;
-    --hw-led-green: #10B981;
-    --hw-led-amber: #F59E0B;
-    --hw-led-red: #FF2E2E;
+  :root {
+    --bg: #09090B;
+    --surface: #111113;
+    --raised: #18181B;
+    --border: #232326;
+    --text: #FAFAFA;
+    --muted: #8A8A93;
+    --accent: #8B5CF6;
+    --accent-hover: #7C3AED;
+    --optic-red: #FF3B30;
+    --success: #10B981;
+    --error: #EF4444;
   }
 
-  /* AERO Preset Variables */
-  [data-theme="aero"] {
-    --hw-bg: #07070B;
-    --hw-surface: #101118;
-    --hw-surface-raised: #181A25;
-    --hw-surface-sunken: #0B0C12;
-    --hw-surface-hl: #232637;
-    --hw-border: rgba(255, 255, 255, 0.08);
-    --hw-border-subtle: rgba(255, 255, 255, 0.04);
-    --hw-border-milled: rgba(255, 255, 255, 0.14);
-    --hw-text: #F5F5F7;
-    --hw-text-muted: #8A8A96;
-    --hw-text-dim: #4F4F5B;
-    --hw-primary: #7C5CFF;
-    --hw-primary-hover: #957CFF;
-    --hw-optic-red: #F43F5E;
-    --hw-active: #22D3EE;
-    --hw-oled-bg: #06070B;
-    --hw-oled-text: #22D3EE;
-    --hw-led-green: #22D3EE;
-    --hw-led-amber: #FBBF24;
-    --hw-led-red: #F43F5E;
+  /* Light theme when explicitly set */
+  [data-theme="light"] {
+    --bg: #FFFFFF;
+    --surface: #F4F4F5;
+    --raised: #E4E4E7;
+    --border: #E4E4E7;
+    --text: #09090B;
+    --muted: #71717A;
+    --accent: #8B5CF6;
+    --accent-hover: #7C3AED;
+    --optic-red: #FF3B30;
+    --success: #10B981;
+    --error: #EF4444;
+  }
+
+  /* Dark theme when explicitly set */
+  [data-theme="dark"] {
+    --bg: #09090B;
+    --surface: #111113;
+    --raised: #18181B;
+    --border: #232326;
+    --text: #FAFAFA;
+    --muted: #8A8A93;
+    --accent: #8B5CF6;
+    --accent-hover: #7C3AED;
+    --optic-red: #FF3B30;
+    --success: #10B981;
+    --error: #EF4444;
+  }
+
+  /* System theme default when data-theme is system or unset */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #FFFFFF;
+      --surface: #F4F4F5;
+      --raised: #E4E4E7;
+      --border: #E4E4E7;
+      --text: #09090B;
+      --muted: #71717A;
+      --accent: #8B5CF6;
+      --accent-hover: #7C3AED;
+      --optic-red: #FF3B30;
+      --success: #10B981;
+      --error: #EF4444;
+    }
   }
 
   html,
@@ -74,10 +78,12 @@
     height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
-    background-color: var(--hw-bg);
-    color: var(--hw-text);
-    font-family: "Geist Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-touch-callout: none;
@@ -88,7 +94,7 @@
   }
 }
 
-/* Safe area padding utilities for iPhone notch, dynamic island, home bar */
+/* Safe area insets with 20px screen gutters */
 .pt-safe {
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
 }
@@ -98,77 +104,29 @@
 }
 
 .pl-safe {
-  padding-left: max(env(safe-area-inset-left, 0px), 16px);
+  padding-left: max(env(safe-area-inset-left, 0px), 20px);
 }
 
 .pr-safe {
-  padding-right: max(env(safe-area-inset-right, 0px), 16px);
+  padding-right: max(env(safe-area-inset-right, 0px), 20px);
 }
 
-/* Machined Hardware Utilities */
-@layer utilities {
-  .knurled-surface {
-    background-image: repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.03) 0px,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px,
-      transparent 5px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      rgba(255, 255, 255, 0.03) 0px,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px,
-      transparent 5px
-    );
-  }
+.px-gutter {
+  padding-left: max(env(safe-area-inset-left, 0px), 20px);
+  padding-right: max(env(safe-area-inset-right, 0px), 20px);
+}
 
-  .chamfer-sm {
-    clip-path: polygon(
-      4px 0%,
-      calc(100% - 4px) 0%,
-      100% 4px,
-      100% calc(100% - 4px),
-      calc(100% - 4px) 100%,
-      4px 100%,
-      0% calc(100% - 4px),
-      0% 4px
-    );
-  }
+/* Tabular numbers utility */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
 
-  .chamfer-md {
-    clip-path: polygon(
-      8px 0%,
-      calc(100% - 8px) 0%,
-      100% 8px,
-      100% calc(100% - 8px),
-      calc(100% - 8px) 100%,
-      8px 100%,
-      0% calc(100% - 8px),
-      0% 8px
-    );
-  }
-
-  .oled-matrix {
-    background-color: var(--hw-oled-bg);
-    border: 1px solid var(--hw-border-subtle);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 0 1px rgba(0, 0, 0, 0.9);
-  }
-
-  .led-lamp {
-    position: relative;
-    border-radius: 9999px;
-  }
-
-  .led-lamp::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: 9999px;
-    background: inherit;
-    filter: blur(2px);
-    opacity: 0.7;
-    pointer-events: none;
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
