@@ -1,6 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { triggerHaptic } from '../utils/haptics';
-import { useGesture } from '@use-gesture/react';
+import {
+  TrackpadGestureEngine,
+  TrackpadIntent,
+  loadTrackpadConfig,
+} from '../engine/trackpadGestures';
 
 interface TrackpadTabProps {
   sendMove: (dx: number, dy: number) => void;
@@ -21,17 +25,15 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   isConnected,
 }) => {
   const padRef = useRef<HTMLDivElement | null>(null);
+  const engineRef = useRef<TrackpadGestureEngine | null>(null);
 
-  // Remainder accumulation for sub-pixel accuracy
-  const remainderXRef = useRef(0);
-  const remainderYRef = useRef(0);
-  const scrollRemainderRef = useRef(0);
+  if (!engineRef.current) {
+    engineRef.current = new TrackpadGestureEngine(loadTrackpadConfig());
+  }
 
-  // Drag-and-drop state
   const [isDragging, setIsDragging] = useState(false);
-  const lastTapTimeRef = useRef(0);
-  const isInertiaActiveRef = useRef(false);
-  const inertiaAnimRef = useRef<number | null>(null);
+  const momentumAnimRef = useRef<number | null>(null);
+  const lastMomentumTimeRef = useRef<number>(0);
 
   // Hint visibility: fades out after first use
   const [showHint, setShowHint] = useState(() => {
@@ -46,158 +48,159 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
     }
   }, [showHint]);
 
-  // Stop active inertia
-  const stopInertia = useCallback(() => {
-    isInertiaActiveRef.current = false;
-    if (inertiaAnimRef.current !== null) {
-      cancelAnimationFrame(inertiaAnimRef.current);
-      inertiaAnimRef.current = null;
+  // Dispatch recognizer intents to parent callbacks
+  const dispatchIntents = useCallback(
+    (intents: TrackpadIntent[]) => {
+      for (const intent of intents) {
+        switch (intent.type) {
+          case 'move':
+            if (isConnected) sendMove(intent.dx, intent.dy);
+            break;
+          case 'click':
+            if (isConnected) sendClick(intent.button);
+            break;
+          case 'button':
+            if (isConnected) sendButton(intent.button, intent.state);
+            break;
+          case 'scroll':
+            if (isConnected) sendScroll(intent.dy, intent.dx);
+            break;
+          case 'haptic':
+            triggerHaptic(intent.style);
+            break;
+          case 'drag_status':
+            setIsDragging(intent.isDragging);
+            break;
+        }
+      }
+    },
+    [isConnected, sendMove, sendClick, sendButton, sendScroll]
+  );
+
+  // Momentum animation loop (only active if momentum is enabled in config)
+  const stopMomentumLoop = useCallback(() => {
+    if (momentumAnimRef.current !== null) {
+      cancelAnimationFrame(momentumAnimRef.current);
+      momentumAnimRef.current = null;
     }
+    engineRef.current?.stopMomentum();
   }, []);
 
-  // Flush accumulated move deltas
-  const flushMove = useCallback(
-    (dx: number, dy: number) => {
-      if (!isConnected) return;
+  const startMomentumLoop = useCallback(() => {
+    if (momentumAnimRef.current !== null) return;
+    lastMomentumTimeRef.current = performance.now();
 
-      const totalX = dx + remainderXRef.current;
-      const totalY = dy + remainderYRef.current;
+    const step = (now: number) => {
+      const dt = Math.min(50, now - lastMomentumTimeRef.current);
+      lastMomentumTimeRef.current = now;
 
-      const sendX = Math.round(totalX * 100) / 100;
-      const sendY = Math.round(totalY * 100) / 100;
-
-      if (Math.abs(sendX) >= 0.05 || Math.abs(sendY) >= 0.05) {
-        remainderXRef.current = totalX - sendX;
-        remainderYRef.current = totalY - sendY;
-        sendMove(sendX, sendY);
-      } else {
-        remainderXRef.current = totalX;
-        remainderYRef.current = totalY;
+      const engine = engineRef.current;
+      if (!engine || !engine.isMomentumActive()) {
+        momentumAnimRef.current = null;
+        return;
       }
-    },
-    [sendMove, isConnected]
-  );
 
-  // Flush accumulated scroll deltas
-  const flushScroll = useCallback(
-    (dy: number) => {
-      if (!isConnected) return;
+      const intents = engine.stepMomentum(dt);
+      dispatchIntents(intents);
 
-      const total = dy + scrollRemainderRef.current;
-      const sendVal = Math.trunc(total);
-
-      if (sendVal !== 0) {
-        scrollRemainderRef.current = total - sendVal;
-        sendScroll(sendVal);
-        triggerHaptic('detent');
+      if (engine.isMomentumActive()) {
+        momentumAnimRef.current = requestAnimationFrame(step);
       } else {
-        scrollRemainderRef.current = total;
-      }
-    },
-    [sendScroll, isConnected]
-  );
-
-  // Bind trackpad gestures
-  const bind = useGesture(
-    {
-      onDragStart: () => {
-        stopInertia();
-        dismissHint();
-      },
-      onDrag: ({
-        delta: [dx, dy],
-        velocity: [vx, vy],
-        touches,
-        elapsedTime,
-        distance: [distX, distY],
-        active,
-        first,
-        last,
-      }) => {
-        if (!isConnected) return;
-
-        // Two-Finger Gestures (Scroll or Right Click)
-        if (touches >= 2) {
-          if (last && elapsedTime < 180 && Math.hypot(distX, distY) < 6) {
-            sendClick('right');
-            triggerHaptic('medium');
-            return;
-          }
-
-          flushScroll(dy * 0.4);
-          return;
-        }
-
-        // Single-Finger Gestures
-        if (first) {
-          const now = performance.now();
-          if (now - lastTapTimeRef.current < 280) {
-            setIsDragging(true);
-            sendButton('left', 'down');
-            triggerHaptic('heavy');
-          }
-        }
-
-        if (active) {
-          const speed = Math.hypot(vx, vy);
-          const accel = 1.0 + Math.min(2.5, speed * 1.25);
-          flushMove(dx * accel, dy * accel);
-        }
-
-        if (last) {
-          const totalDist = Math.hypot(distX, distY);
-          const now = performance.now();
-
-          if (elapsedTime < 180 && totalDist < 6) {
-            if (!isDragging) {
-              sendClick('left');
-              triggerHaptic('light');
-              lastTapTimeRef.current = now;
-            }
-          }
-
-          if (isDragging) {
-            setIsDragging(false);
-            sendButton('left', 'up');
-            triggerHaptic('medium');
-            lastTapTimeRef.current = 0;
-          }
-
-          if (touches >= 2 && Math.abs(vy) > 0.4) {
-            isInertiaActiveRef.current = true;
-            let currentVy = vy * 12.0 * Math.sign(dy);
-
-            const stepInertia = () => {
-              if (!isInertiaActiveRef.current || Math.abs(currentVy) < 0.5) {
-                stopInertia();
-                return;
-              }
-              flushScroll(currentVy);
-              currentVy *= 0.92;
-              inertiaAnimRef.current = requestAnimationFrame(stepInertia);
-            };
-            inertiaAnimRef.current = requestAnimationFrame(stepInertia);
-          }
-        }
-      },
-    },
-    {
-      drag: {
-        filterTaps: false,
-        pointer: { capture: true },
-        preventScroll: true,
-      },
-    }
-  );
-
-  useEffect(() => {
-    return () => {
-      stopInertia();
-      if (isDragging) {
-        sendButton('left', 'up');
+        momentumAnimRef.current = null;
       }
     };
-  }, [stopInertia, isDragging, sendButton]);
+
+    momentumAnimRef.current = requestAnimationFrame(step);
+  }, [dispatchIntents]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dismissHint();
+    stopMomentumLoop();
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+
+    const intents =
+      engineRef.current?.processEvent({
+        type: 'down',
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        time: performance.now(),
+      }) || [];
+    dispatchIntents(intents);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const intents =
+      engineRef.current?.processEvent({
+        type: 'move',
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        time: performance.now(),
+      }) || [];
+    dispatchIntents(intents);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    const engine = engineRef.current;
+    const intents =
+      engine?.processEvent({
+        type: 'up',
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        time: performance.now(),
+      }) || [];
+    dispatchIntents(intents);
+
+    if (engine?.isMomentumActive()) {
+      startMomentumLoop();
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    stopMomentumLoop();
+    const intents =
+      engineRef.current?.processEvent({
+        type: 'cancel',
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        time: performance.now(),
+      }) || [];
+    dispatchIntents(intents);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopMomentumLoop();
+      const intents =
+        engineRef.current?.processEvent({
+          type: 'cancel',
+          id: 0,
+          x: 0,
+          y: 0,
+          time: performance.now(),
+        }) || [];
+      dispatchIntents(intents);
+    };
+  }, [stopMomentumLoop, dispatchIntents]);
 
   const handleLeftClickBar = () => {
     sendClick('left');
@@ -213,11 +216,16 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
 
   return (
     <div className="flex-1 flex flex-col justify-between px-gutter py-3 w-full h-full select-none max-w-lg mx-auto">
-      {/* Plain surface with subtle hint that fades after first use */}
+      {/* Precision Trackpad Surface with pointer capture and state machine gesture handling */}
       <div
         ref={padRef}
-        {...bind()}
-        className={`relative flex-1 w-full rounded-2xl bg-surface border border-border flex flex-col items-center justify-center p-6 select-none touch-none transition-colors ${
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{ touchAction: 'none' }}
+        className={`relative flex-1 w-full rounded-2xl bg-surface border border-border flex flex-col items-center justify-center p-6 select-none touch-none overscroll-none transition-colors ${
           isDragging ? 'border-optic-red' : ''
         }`}
       >
