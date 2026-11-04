@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { requestWakeLock, releaseWakeLock } from '../utils/wakelock';
+import {
+  isHostedMode,
+  consumeConnectionFragment,
+  validateHost,
+  STORAGE_HOST_KEY,
+  STORAGE_TOKEN_KEY,
+} from '../utils/hosting';
 
 export type MediaAction =
   | 'playpause'
@@ -36,7 +43,12 @@ export interface UseAerokinSocketReturn {
   status: ConnectionStatus;
   latency: number | null;
   token: string | null;
+  host: string | null;
+  isHosted: boolean;
+  connectionError: string | null;
   setToken: (token: string) => void;
+  setHost: (host: string) => void;
+  connectManually: () => void;
   sendMove: (dx: number, dy: number) => void;
   sendClick: (button: 'left' | 'right' | 'middle') => void;
   sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
@@ -53,23 +65,40 @@ export interface UseAerokinSocketReturn {
   muted: boolean;
 }
 
-const STORAGE_TOKEN_KEY = 'aerokin_auth_token';
-
 export function useAerokinSocket(): UseAerokinSocketReturn {
-  // Read token from URL query or localStorage
+  const isHosted = isHostedMode();
+
+  // Read initial connection credentials from URL fragment (hosted) or search params (agent-served) or localStorage
+  const [host, setHostState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const fragment = consumeConnectionFragment();
+    return fragment.host;
+  });
+
   const [token, setTokenState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
+    const fragment = consumeConnectionFragment();
+    if (fragment.code) return fragment.code;
+
+    // Check ?token= for agent-served mode
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     if (urlToken && urlToken.trim().length > 0) {
-      localStorage.setItem(STORAGE_TOKEN_KEY, urlToken.trim());
-      return urlToken.trim();
+      const clean = urlToken.trim().toUpperCase();
+      localStorage.setItem(STORAGE_TOKEN_KEY, clean);
+      return clean;
     }
     return localStorage.getItem(STORAGE_TOKEN_KEY) || null;
   });
 
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [latency, setLatency] = useState<number | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // In hosted mode, require a user gesture (Connect button) to initiate the connection
+  // to avoid triggering browser Local Network prompts without user interaction.
+  // In agent-served mode, connect automatically as before.
+  const [connectTrigger, setConnectTrigger] = useState<number>(() => (isHosted ? 0 : 1));
 
   // Live media state from server
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData>({ status: 'none' });
@@ -89,11 +118,24 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     backoffDelayRef.current = 1000;
   }, []);
 
+  const setHost = useCallback((newHost: string) => {
+    const validated = validateHost(newHost);
+    if (validated.valid && validated.normalized) {
+      localStorage.setItem(STORAGE_HOST_KEY, validated.normalized);
+      setHostState(validated.normalized);
+      backoffDelayRef.current = 1000;
+    }
+  }, []);
+
+  const connectManually = useCallback(() => {
+    setConnectionError(null);
+    setConnectTrigger((prev) => prev + 1);
+  }, []);
+
   const isBackpressured = useCallback((): boolean => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       return true;
     }
-    // Skip sending while ws.bufferedAmount > 4KB
     return socketRef.current.bufferedAmount > 4096;
   }, []);
 
@@ -173,6 +215,16 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       return;
     }
 
+    if (isHosted && !host) {
+      setStatus('disconnected');
+      return;
+    }
+
+    if (connectTrigger === 0) {
+      setStatus('disconnected');
+      return;
+    }
+
     let isMounted = true;
 
     function connect() {
@@ -182,98 +234,135 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
         socketRef.current.close();
       }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // In dev mode (e.g. port 5174 or 5173), default to server on port 8443
-      const isDevPort = window.location.port === '5174' || window.location.port === '5173';
-      const host = isDevPort
-        ? `${window.location.hostname}:8443`
-        : window.location.host;
+      let wsUrl: string;
 
-      const wsUrl = `${protocol}//${host}/?token=${encodeURIComponent(token)}`;
+      if (isHosted) {
+        if (!host) {
+          setStatus('disconnected');
+          setConnectionError('PC host address not configured');
+          return;
+        }
+        // Hosted static PWA connects directly to the local PC agent via WSS
+        wsUrl = `wss://${host}/?token=${encodeURIComponent(token)}`;
+      } else {
+        // Agent-served flow (same-origin local server)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const isDevPort = window.location.port === '5174' || window.location.port === '5173';
+        const devServerPort = import.meta.env.VITE_DEV_SERVER_PORT || '8443';
+        const targetHost = isDevPort
+          ? `${window.location.hostname}:${devServerPort}`
+          : window.location.host;
+
+        wsUrl = `${protocol}//${targetHost}/?token=${encodeURIComponent(token)}`;
+      }
 
       setStatus((prev) => (prev === 'connected' ? 'connected' : 'reconnecting'));
 
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
+      try {
+        const ws = new WebSocket(wsUrl);
+        socketRef.current = ws;
 
-      ws.onopen = () => {
-        if (!isMounted) return;
-        setStatus('connected');
-        backoffDelayRef.current = 1000;
-        requestWakeLock();
+        ws.onopen = () => {
+          if (!isMounted) return;
+          setStatus('connected');
+          setConnectionError(null);
+          backoffDelayRef.current = 1000;
+          requestWakeLock();
 
-        // Start ping loop every 2s
-        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
-          }
-        }, 2000);
-      };
+          if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
+            }
+          }, 2000);
+        };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'pong' && typeof data.t === 'number') {
-            const rtt = Date.now() - data.t;
-            setLatency(rtt);
-          } else if (data.type === 'nowplaying') {
-            setNowPlaying({
-              app: data.app,
-              title: data.title,
-              artist: data.artist,
-              art: data.art,
-              status: data.status || 'none',
-              position: data.position,
-              duration: data.duration,
-              canSeek: data.canSeek ?? false,
-            });
-            if (typeof data.volume === 'number') {
-              const norm = data.volume <= 1.0 && data.volume > 0 ? Math.round(data.volume * 100) : Math.round(data.volume);
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'pong' && typeof data.t === 'number') {
+              const rtt = Date.now() - data.t;
+              setLatency(rtt);
+            } else if (data.type === 'nowplaying') {
+              setNowPlaying({
+                app: data.app,
+                title: data.title,
+                artist: data.artist,
+                art: data.art,
+                status: data.status || 'none',
+                position: data.position,
+                duration: data.duration,
+                canSeek: data.canSeek ?? false,
+              });
+              if (typeof data.volume === 'number') {
+                const norm =
+                  data.volume <= 1.0 && data.volume > 0
+                    ? Math.round(data.volume * 100)
+                    : Math.round(data.volume);
+                setVolume(norm);
+              }
+              if (typeof data.muted === 'boolean') {
+                setMuted(data.muted);
+              }
+            } else if (data.type === 'sessions' && Array.isArray(data.list)) {
+              setSessions(data.list);
+            } else if (data.type === 'volume' && typeof data.volume === 'number') {
+              const norm =
+                data.volume <= 1.0 && data.volume > 0
+                  ? Math.round(data.volume * 100)
+                  : Math.round(data.volume);
               setVolume(norm);
             }
-            if (typeof data.muted === 'boolean') {
-              setMuted(data.muted);
-            }
-          } else if (data.type === 'sessions' && Array.isArray(data.list)) {
-            setSessions(data.list);
-          } else if (data.type === 'volume' && typeof data.volume === 'number') {
-            const norm = data.volume <= 1.0 && data.volume > 0 ? Math.round(data.volume * 100) : Math.round(data.volume);
-            setVolume(norm);
+          } catch {}
+        };
+
+        ws.onclose = (event) => {
+          if (!isMounted) return;
+          releaseWakeLock();
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
           }
-        } catch {
-          // ignore non-json
-        }
-      };
 
-      ws.onclose = (event) => {
-        if (!isMounted) return;
-        releaseWakeLock();
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-          pingIntervalRef.current = null;
-        }
+          if (event.code === 4001) {
+            setStatus('unauthorized');
+            setConnectionError('Invalid pairing code. Check PC terminal.');
+            return;
+          }
 
-        // Close code 4001 indicates invalid / unauthorized token
-        if (event.code === 4001) {
-          setStatus('unauthorized');
-          return;
-        }
+          if (event.code === 1008) {
+            setStatus('disconnected');
+            setConnectionError(event.reason || 'Connection rejected: Policy violation or disallowed Origin');
+            return;
+          }
 
-        setStatus('reconnecting');
+          setStatus('reconnecting');
+          if (isHosted) {
+            setConnectionError(
+              'Cannot reach PC. Ensure you are on the same Wi-Fi, the CA certificate is installed, and Local Network permission is allowed.'
+            );
+          }
 
-        // Exponential backoff auto-reconnect (1s, 2s, 4s, max 8s)
-        const delay = backoffDelayRef.current;
-        backoffDelayRef.current = Math.min(delay * 1.5, 8000);
+          const delay = backoffDelayRef.current;
+          backoffDelayRef.current = Math.min(delay * 1.5, 8000);
 
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (isMounted) connect();
-        }, delay);
-      };
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isMounted) connect();
+          }, delay);
+        };
 
-      ws.onerror = () => {
-        ws.close();
-      };
+        ws.onerror = () => {
+          if (isMounted && isHosted) {
+            setConnectionError(
+              'Connection failed. Ensure same Wi-Fi, CA certificate trusted, and Local Network permission granted.'
+            );
+          }
+          ws.close();
+        };
+      } catch (err: any) {
+        setStatus('disconnected');
+        setConnectionError(err?.message || 'WebSocket connection error');
+      }
     }
 
     connect();
@@ -285,13 +374,18 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       if (socketRef.current) socketRef.current.close();
     };
-  }, [token]);
+  }, [token, host, isHosted, connectTrigger]);
 
   return {
     status,
     latency,
     token,
+    host,
+    isHosted,
+    connectionError,
     setToken,
+    setHost,
+    connectManually,
     sendMove,
     sendClick,
     sendButton,
