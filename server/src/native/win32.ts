@@ -214,7 +214,10 @@ export class Win32Input {
   }
 
   /**
-   * Dispatches vertical (and optional horizontal) wheel scrolling
+   * Dispatches vertical (and optional horizontal) wheel scrolling.
+   * Takes raw Windows wheel deltas (e.g. +/-120 per notch or sub-notch values for high-resolution scrolling).
+   * Positive dy = wheel forward/up; negative dy = wheel backward/down.
+   * Positive dx = wheel right; negative dx = wheel left.
    */
   public static scroll(dy: number, dx: number = 0): boolean {
     let success = false;
@@ -231,7 +234,7 @@ export class Win32Input {
         if (sent > 0) success = true;
       }
       if (!success && mouseEventFn) {
-        mouseEventFn(MOUSEEVENTF_WHEEL, 0, 0, mouseData, 0);
+        mouseEventFn(MOUSEEVENTF_WHEEL, 0, 0, mouseData >>> 0, 0);
         success = true;
       }
     }
@@ -246,7 +249,7 @@ export class Win32Input {
         buf.writeUInt32LE(MOUSEEVENTF_HWHEEL, 20);
         SendInputFn(1, buf, 40);
       } else if (mouseEventFn) {
-        mouseEventFn(MOUSEEVENTF_HWHEEL, 0, 0, mouseData, 0);
+        mouseEventFn(MOUSEEVENTF_HWHEEL, 0, 0, mouseData >>> 0, 0);
       }
     }
 

@@ -135,43 +135,123 @@ export async function handleButton(button: unknown, state: unknown): Promise<voi
   }
 }
 
-// Remainder state for scrolling
-let scrollRemainderDy = 0;
-let scrollRemainderDx = 0;
+// Win32 & Protocol Scroll Constants
+export const WHEEL_DELTA = 120;
+export const SCROLL_UNITS_PER_NOTCH = 12; // 12 protocol units = 1 standard 120-unit wheel notch
+export const WHEEL_DELTA_PER_UNIT = WHEEL_DELTA / SCROLL_UNITS_PER_NOTCH; // 10 Windows wheel units per protocol unit
+export const MAX_SCROLL_DELTA = 500;
+
+export interface Scroller {
+  scroll: (dyRaw: unknown, dxRaw?: unknown) => Promise<void>;
+  destroy: () => void;
+  getRemainders: () => { remainderWheelDy: number; remainderWheelDx: number };
+}
 
 /**
- * Handles mouse scroll commands with float remainder carry.
- * Positive dy = scroll down / wheel notch, negative dy = up.
- * Optional dx for horizontal scrolling.
+ * SCROLL PROTOCOL SPECIFICATION:
+ * Protocol message format:
+ *   { type: 'scroll', dy: number, dx?: number }
+ *
+ * Direction convention:
+ *   - Positive dy = page scrolls DOWN (content moves up).
+ *   - Negative dy = page scrolls UP (content moves down).
+ *   - Positive dx = page scrolls RIGHT (content moves left).
+ *   - Negative dx = page scrolls LEFT (content moves right).
+ *
+ * Responsibility:
+ *   The client applies user preference (natural vs inverted scrolling).
+ *   The server does NOT invert; it treats incoming dy/dx strictly as page-scroll directions.
+ *
+ * Windows wheel unit mapping:
+ *   Standard Windows mouse wheel notch = 120 units (WHEEL_DELTA).
+ *   1 protocol unit = WHEEL_DELTA / SCROLL_UNITS_PER_NOTCH = 10 Windows wheel units.
+ *
+ * Windows wheel sign convention:
+ *   - MOUSEEVENTF_WHEEL: Positive dwData rotates wheel forward (away from user) -> page scrolls UP.
+ *     Therefore, to scroll page DOWN (positive protocol dy), Windows wheel delta must be NEGATIVE.
+ *     Windows dy = -protocol dy * WHEEL_DELTA_PER_UNIT.
+ *   - MOUSEEVENTF_HWHEEL: Positive dwData tilts wheel right -> page scrolls RIGHT.
+ *     Therefore, Windows dx = protocol dx * WHEEL_DELTA_PER_UNIT.
+ *   - nut-js fallback: follows the exact same convention (positive protocol dy calls mouse.scrollDown).
+ */
+export function createScroller(): Scroller {
+  let remainderWheelDy = 0;
+  let remainderWheelDx = 0;
+  let fallbackNotchRemainderDy = 0;
+
+  return {
+    async scroll(dyRaw: unknown, dxRaw?: unknown): Promise<void> {
+      if (typeof dyRaw !== 'number' || !Number.isFinite(dyRaw)) return;
+      const dxVal = typeof dxRaw === 'number' && Number.isFinite(dxRaw) ? dxRaw : 0;
+
+      // Clamp per-message bounds
+      const clampedDy = Math.max(-MAX_SCROLL_DELTA, Math.min(MAX_SCROLL_DELTA, dyRaw));
+      const clampedDx = Math.max(-MAX_SCROLL_DELTA, Math.min(MAX_SCROLL_DELTA, dxVal));
+
+      // Protocol dy > 0 -> page down -> Windows wheel delta is negative
+      // Protocol dx > 0 -> page right -> Windows hwheel delta is positive
+      const targetWheelDy = -clampedDy * WHEEL_DELTA_PER_UNIT;
+      const targetWheelDx = clampedDx * WHEEL_DELTA_PER_UNIT;
+
+      // Accumulate with fractional carry
+      const totalWheelDy = targetWheelDy + remainderWheelDy;
+      const totalWheelDx = targetWheelDx + remainderWheelDx;
+
+      const intWheelDy = Math.trunc(totalWheelDy) || 0;
+      const intWheelDx = Math.trunc(totalWheelDx) || 0;
+
+      remainderWheelDy = totalWheelDy - intWheelDy;
+      remainderWheelDx = totalWheelDx - intWheelDx;
+
+      if (intWheelDy === 0 && intWheelDx === 0) return;
+
+      try {
+        if (Win32Input.isSupported()) {
+          const ok = Win32Input.scroll(intWheelDy, intWheelDx);
+          if (ok) return;
+        }
+
+        // Fallback to nut-js:
+        // Positive protocol dy (negative intWheelDy) -> scroll DOWN
+        // Negative protocol dy (positive intWheelDy) -> scroll UP
+        const totalNotches = -intWheelDy / WHEEL_DELTA + fallbackNotchRemainderDy;
+        const intNotches = Math.trunc(totalNotches);
+        fallbackNotchRemainderDy = totalNotches - intNotches;
+
+        if (intNotches > 0) {
+          await mouse.scrollDown(intNotches);
+        } else if (intNotches < 0) {
+          await mouse.scrollUp(-intNotches);
+        }
+      } catch {
+        // Ignore input errors
+      }
+    },
+    destroy() {
+      remainderWheelDy = 0;
+      remainderWheelDx = 0;
+      fallbackNotchRemainderDy = 0;
+    },
+    getRemainders() {
+      return { remainderWheelDy, remainderWheelDx };
+    },
+  };
+}
+
+// Module-level default scroller for backward-compatibility with standalone handleScroll calls
+let defaultScroller = createScroller();
+
+/**
+ * Handles mouse scroll commands with float remainder carry using the default scroller.
  */
 export async function handleScroll(dyRaw: unknown, dxRaw?: unknown): Promise<void> {
-  if (typeof dyRaw !== 'number' || isNaN(dyRaw)) return;
-  const dxVal = typeof dxRaw === 'number' && !isNaN(dxRaw) ? dxRaw : 0;
+  return defaultScroller.scroll(dyRaw, dxRaw);
+}
 
-  scrollRemainderDy += dyRaw;
-  scrollRemainderDx += dxVal;
-
-  const intDy = Math.trunc(scrollRemainderDy);
-  const intDx = Math.trunc(scrollRemainderDx);
-
-  scrollRemainderDy -= intDy;
-  scrollRemainderDx -= intDx;
-
-  if (intDy === 0 && intDx === 0) return;
-
-  try {
-    if (Win32Input.isSupported()) {
-      const ok = Win32Input.scroll(intDy, intDx);
-      if (ok) return;
-    }
-
-    // Fallback to nut-js
-    if (intDy > 0) {
-      await mouse.scrollDown(intDy);
-    } else if (intDy < 0) {
-      await mouse.scrollUp(-intDy);
-    }
-  } catch {
-    // Ignore input errors
-  }
+/**
+ * Resets the default scroller state (useful for tests).
+ */
+export function resetDefaultScroller(): void {
+  defaultScroller.destroy();
+  defaultScroller = createScroller();
 }

@@ -2,7 +2,19 @@ import https from 'node:https';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { getOrCreateLocalCaAndCert } from './ca.js';
-import { createMoveCoalescer, handleClick, handleButton, handleScroll } from './input.js';
+import {
+  createMoveCoalescer,
+  createScroller,
+  handleClick,
+  handleButton,
+  handleScroll,
+} from './input.js';
+import {
+  validateClientMessage,
+  ConnectionRateLimiter,
+  WS_MAX_PAYLOAD_BYTES,
+  WS_CLOSE_POLICY_VIOLATION,
+} from './protocol.js';
 import { MediaManager, NowPlayingData, MediaSessionItem } from './media-manager.js';
 
 export interface ServerConfig {
@@ -219,16 +231,27 @@ export function startServer(config: ServerConfig): {
     app
   );
 
-  const wss = new WebSocketServer({ server: httpsServer });
+  const wss = new WebSocketServer({
+    server: httpsServer,
+    maxPayload: WS_MAX_PAYLOAD_BYTES,
+  });
 
   wss.on('connection', (ws: WebSocket, req) => {
     let coalescer: ReturnType<typeof createMoveCoalescer> | null = null;
+    let scroller: ReturnType<typeof createScroller> | null = null;
+    const rateLimiter = new ConnectionRateLimiter();
+    let lastMoveLogTime = 0;
+    let invalidMessageCount = 0;
 
     const cleanup = () => {
       activeSockets.delete(ws);
       if (coalescer) {
         coalescer.destroy();
         coalescer = null;
+      }
+      if (scroller) {
+        scroller.destroy();
+        scroller = null;
       }
       recordEvent('disconnect', 'Client disconnected');
     };
@@ -251,6 +274,8 @@ export function startServer(config: ServerConfig): {
 
       // Initialize per-connection move coalescer (~8ms flush loop, float remainder carry)
       coalescer = createMoveCoalescer(8);
+      // Initialize per-connection scroller (float carry, unit conversion, per-conn remainder)
+      scroller = createScroller();
 
       // Send greeting upon authorized connection
       ws.send(JSON.stringify({ type: 'hello', ok: true }));
@@ -270,9 +295,35 @@ export function startServer(config: ServerConfig): {
       ws.on('message', async (data: Buffer | string) => {
         try {
           const raw = typeof data === 'string' ? data : data.toString('utf8');
-          const msg = JSON.parse(raw);
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            invalidMessageCount++;
+            if (invalidMessageCount > 50) {
+              ws.close(WS_CLOSE_POLICY_VIOLATION, 'Too many malformed messages');
+            }
+            return;
+          }
 
-          if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
+          const msg = validateClientMessage(parsed);
+          if (!msg) {
+            invalidMessageCount++;
+            if (invalidMessageCount > 50) {
+              ws.close(WS_CLOSE_POLICY_VIOLATION, 'Too many invalid messages');
+            }
+            return;
+          }
+
+          // Per-connection token bucket rate limit check
+          const rateResult = rateLimiter.check(msg.type);
+          if (!rateResult.ok) {
+            if (rateResult.closeConnection) {
+              ws.close(
+                WS_CLOSE_POLICY_VIOLATION,
+                rateResult.reason || 'Rate limit exceeded: sustained flood'
+              );
+            }
             return;
           }
 
@@ -280,16 +331,18 @@ export function startServer(config: ServerConfig): {
             case 'ping':
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'pong', t: msg.t }));
-                if (typeof msg.t === 'number') {
-                  lastLatency = Math.max(1, Math.round(Date.now() - msg.t));
-                }
+                lastLatency = Math.max(1, Math.round(Date.now() - msg.t));
               }
               break;
 
             case 'move':
               // Coalesced per connection (~8ms flush, float carry, capped +/-200)
               coalescer?.addMove(msg.dx, msg.dy);
-              recordEvent('move', `dx: ${msg.dx}, dy: ${msg.dy}`);
+              const now = Date.now();
+              if (now - lastMoveLogTime >= 250) {
+                lastMoveLogTime = now;
+                recordEvent('move', `dx: ${msg.dx.toFixed(1)}, dy: ${msg.dy.toFixed(1)}`);
+              }
               break;
 
             case 'click':
@@ -305,13 +358,16 @@ export function startServer(config: ServerConfig): {
               break;
 
             case 'scroll':
-              // Immediate scroll execution (float dy/dx supported)
-              await handleScroll(msg.dy, msg.dx);
-              recordEvent('scroll', `dy: ${msg.dy}${msg.dx ? ` dx: ${msg.dx}` : ''}`);
+              // Scrolled per connection with float carry and unit scaling
+              await scroller?.scroll(msg.dy, msg.dx);
+              recordEvent(
+                'scroll',
+                `dy: ${msg.dy.toFixed(1)}${msg.dx !== 0 ? ` dx: ${msg.dx.toFixed(1)}` : ''}`
+              );
               break;
 
             case 'media':
-              // Universal Media Action (playpause, next, prev, stop, volup, voldown, mute, fullscreen, seekfwd, seekback)
+              // Universal Media Action
               const mediaRes = await mediaManager.handleMediaCommand(msg.action);
               recordEvent('media', `${msg.action} (Tier ${mediaRes.tier}, ${mediaRes.latencyMs}ms)`);
               break;
@@ -319,13 +375,19 @@ export function startServer(config: ServerConfig): {
             case 'seekby':
               // Seek relative seconds (positive or negative)
               const seekByRes = await mediaManager.handleMediaCommand('seekby', msg.seconds);
-              recordEvent('media', `seekby ${msg.seconds}s (Tier ${seekByRes.tier}, ${seekByRes.latencyMs}ms)`);
+              recordEvent(
+                'media',
+                `seekby ${msg.seconds}s (Tier ${seekByRes.tier}, ${seekByRes.latencyMs}ms)`
+              );
               break;
 
             case 'seekto':
               // Seek absolute position
               const seekToRes = await mediaManager.handleMediaCommand('seekto', msg.position);
-              recordEvent('media', `seekto ${msg.position}s (Tier ${seekToRes.tier}, ${seekToRes.latencyMs}ms)`);
+              recordEvent(
+                'media',
+                `seekto ${msg.position}s (Tier ${seekToRes.tier}, ${seekToRes.latencyMs}ms)`
+              );
               break;
 
             case 'session':
@@ -346,12 +408,9 @@ export function startServer(config: ServerConfig): {
                 ws.send(JSON.stringify({ type: 'volume', volume: volRes.detail }));
               }
               break;
-
-            default:
-              break;
           }
         } catch {
-          // Ignore JSON parse errors or bad payloads; never crash
+          // Ignore parse errors or handler rejections; never crash
         }
       });
 
