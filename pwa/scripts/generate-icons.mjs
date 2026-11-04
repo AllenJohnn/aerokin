@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
+
+let sharp;
+try {
+  const mod = await import('sharp');
+  sharp = mod.default;
+} catch {
+  console.log('[Notice] sharp not available; using pre-generated icons in public/');
+  process.exit(0);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

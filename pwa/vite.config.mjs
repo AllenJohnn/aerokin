@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const targetOutDir = process.env.AEROKIN_OUT_DIR
+  ? path.resolve(__dirname, process.env.AEROKIN_OUT_DIR)
+  : path.resolve(__dirname, '../server/public');
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -14,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, '../server/public'),
+    outDir: targetOutDir,
     emptyOutDir: true,
     rollupOptions: {
       output: {
