@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: ['main', 'feat/*']
+  pull_request:
+    branches: ['main']
+
+jobs:
+  verify:
+    name: Typecheck, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck Design System
+        run: pnpm --filter @aerokin/design-system exec tsc --noEmit
+
+      - name: Typecheck Server
+        run: pnpm --filter aerokin-server exec tsc --noEmit
+
+      - name: Typecheck PWA
+        run: pnpm --filter aerokin-pwa exec tsc --noEmit
+
+      - name: Run Server Tests
+        run: pnpm --filter aerokin-server test
+
+      - name: Run PWA Tests
+        run: pnpm --filter aerokin-pwa test
+
+      - name: Build Server
+        run: pnpm --filter aerokin-server run build
+
+      - name: Build Hosted Static PWA
+        run: pnpm --filter aerokin-pwa run build:hosted
