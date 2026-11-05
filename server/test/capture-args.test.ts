@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   buildFfmpegArgs,
   mapMonitorToDdagrabIndex,
   CaptureOptions,
+  WindowsFfmpegCaptureAdapter,
 } from '../src/desktop/CaptureAdapter.js';
 import { MonitorInfo, QUALITY_PRESETS, QualityPresetName } from '../src/desktop/types.js';
 
@@ -225,5 +226,28 @@ describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
         expect(hDda).toBe(hGdi);
       });
     }
+  });
+
+  describe('Session Memory for Working Capture Backend', () => {
+    beforeEach(() => {
+      WindowsFfmpegCaptureAdapter.resetRememberedBackend();
+    });
+
+    it('initializes with null remembered backend', () => {
+      expect(WindowsFfmpegCaptureAdapter.getRememberedBackend()).toBeNull();
+    });
+
+    it('remembers gdigrab backend once set and resets cleanly', () => {
+      WindowsFfmpegCaptureAdapter.setRememberedBackend('gdigrab');
+      expect(WindowsFfmpegCaptureAdapter.getRememberedBackend()).toBe('gdigrab');
+
+      WindowsFfmpegCaptureAdapter.resetRememberedBackend();
+      expect(WindowsFfmpegCaptureAdapter.getRememberedBackend()).toBeNull();
+    });
+
+    it('remembers ddagrab backend once set', () => {
+      WindowsFfmpegCaptureAdapter.setRememberedBackend('ddagrab');
+      expect(WindowsFfmpegCaptureAdapter.getRememberedBackend()).toBe('ddagrab');
+    });
   });
 });

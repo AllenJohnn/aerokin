@@ -35,6 +35,7 @@ export interface CaptureAdapter {
   onExit(callback: ExitCallback): void;
   onBackendChange?(callback: BackendChangeCallback): void;
   getActiveBackend(): CaptureBackend;
+  getPid?(): number | null;
   isAvailable(): boolean;
   getFfmpegPath(): string | null;
 }
@@ -186,6 +187,20 @@ export function findFfmpegPath(): string | null {
 }
 
 export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
+  private static rememberedWorkingBackend: CaptureBackend | null = null;
+
+  public static getRememberedBackend(): CaptureBackend | null {
+    return WindowsFfmpegCaptureAdapter.rememberedWorkingBackend;
+  }
+
+  public static setRememberedBackend(backend: CaptureBackend | null): void {
+    WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = backend;
+  }
+
+  public static resetRememberedBackend(): void {
+    WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = null;
+  }
+
   private ffmpegProc: ChildProcess | null = null;
   private isRunning = false;
   private currentOptions: CaptureOptions | null = null;
@@ -219,6 +234,10 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
 
   public getActiveBackend(): CaptureBackend {
     return this.activeBackend;
+  }
+
+  public getPid(): number | null {
+    return this.ffmpegProc?.pid ?? null;
   }
 
   public onBackendChange(callback: BackendChangeCallback): void {
@@ -255,14 +274,22 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     this.currentOptions = options;
     this.restartAttempts = 0;
 
-    // Check if monitor can be mapped to ddagrab index
-    const ddaIndex = mapMonitorToDdagrabIndex(options.monitor);
-    const isFallbackGdi = ddaIndex === null;
-
-    if (isFallbackGdi) {
-      console.warn(
-        `[DesktopStream] Monitor "${options.monitor.name}" (${options.monitor.id}) cannot be mapped to ddagrab output_idx. Falling back to gdigrab directly.`
-      );
+    // Check remembered working backend for the session
+    let isFallbackGdi = false;
+    if (WindowsFfmpegCaptureAdapter.rememberedWorkingBackend === 'gdigrab') {
+      isFallbackGdi = true;
+      console.log('[DesktopStream] Using remembered session backend: gdigrab');
+    } else if (WindowsFfmpegCaptureAdapter.rememberedWorkingBackend === 'ddagrab') {
+      isFallbackGdi = false;
+    } else {
+      // Check if monitor can be mapped to ddagrab index
+      const ddaIndex = mapMonitorToDdagrabIndex(options.monitor);
+      if (ddaIndex === null) {
+        isFallbackGdi = true;
+        console.warn(
+          `[DesktopStream] Monitor "${options.monitor.name}" (${options.monitor.id}) cannot be mapped to ddagrab output_idx. Falling back to gdigrab directly.`
+        );
+      }
     }
 
     await this.spawnCapture(ffmpegPath, options, isFallbackGdi);
@@ -277,6 +304,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
 
   private switchToGdiFallback(ffmpegPath: string, options: CaptureOptions): void {
     this.clearNoFrameTimer();
+    WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = 'gdigrab';
 
     if (this.ffmpegProc) {
       const proc = this.ffmpegProc;
@@ -400,6 +428,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
           if (!this.hasReceivedFrame) {
             this.hasReceivedFrame = true;
             this.clearNoFrameTimer();
+            WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = this.activeBackend;
           }
 
           const seq = ++this.frameSequence;

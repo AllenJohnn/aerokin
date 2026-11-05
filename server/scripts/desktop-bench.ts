@@ -10,9 +10,24 @@
  * 6. End-to-end frame demuxing and pipeline overhead
  */
 
+import os from 'node:os';
+import { execSync } from 'node:child_process';
 import { MonitorService } from '../src/desktop/MonitorService.js';
 import { WindowsFfmpegCaptureAdapter } from '../src/desktop/CaptureAdapter.js';
 import { QUALITY_PRESETS, QualityPresetName } from '../src/desktop/types.js';
+
+function getProcessCpuSeconds(pid: number): number | null {
+  try {
+    const out = execSync(
+      `powershell -NoProfile -Command "(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).TotalProcessorTime.TotalSeconds"`,
+      { timeout: 2000, encoding: 'utf8' }
+    ).trim();
+    const val = parseFloat(out);
+    return isNaN(val) ? null : val;
+  } catch {
+    return null;
+  }
+}
 
 async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec = 3) {
   console.log(`\n======================================================`);
@@ -40,6 +55,10 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
 
   const startTime = Date.now();
   let firstFrameTime = 0;
+  let cpuStart: number | null = null;
+  let cpuStartTime = 0;
+  let cpuEnd: number | null = null;
+  let cpuEndTime = 0;
 
   adapter.onFrame((packet, width, height, seq) => {
     const now = Date.now();
@@ -59,27 +78,46 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
       quality: preset.jpegQuality,
     });
 
-    
+    const pid = adapter.getPid();
+    if (pid) {
+      cpuStart = getProcessCpuSeconds(pid);
+      cpuStartTime = Date.now();
+    }
 
+    console.log(`[Stream Started] Active backend: ${adapter.getActiveBackend()}`);
     console.log(`[Stream Started] Collecting frames for ${durationSec} seconds...`);
     await new Promise((resolve) => setTimeout(resolve, durationSec * 1000));
+
+    if (pid) {
+      cpuEnd = getProcessCpuSeconds(pid);
+      cpuEndTime = Date.now();
+    }
   } catch (err: any) {
     errorEncountered = err;
   } finally {
     await adapter.stop();
   }
 
+  const activeBackend = adapter.getActiveBackend();
+
   if (errorEncountered) {
-    console.warn(`\n[BENCHMARK RESULT: UNVERIFIED in background subshell]`);
+    const isSessionIssue =
+      isSecureScreen ||
+      errorEncountered.message.includes('Access is denied') ||
+      errorEncountered.message.includes('Desktop duplication access denied') ||
+      errorEncountered.message.includes('error 5');
+
+    console.warn(`\n[BENCHMARK RESULT: ${isSessionIssue ? 'UNVERIFIED (Session issue)' : 'FAILED'}]`);
     console.warn(`Reason: ${errorEncountered.message}`);
-    if (isSecureScreen || errorEncountered.message.includes('Access is denied') || errorEncountered.message.includes('Desktop duplication access denied')) {
+    if (isSessionIssue) {
       console.warn(`Notice: Background service subshells lack interactive Windows station access (WinSta0\\Default).`);
       console.warn(`Run this directly in an interactive PowerShell terminal:`);
       console.warn(`  cd "D:\\Personal Project\\aerokin\\server" && pnpm run bench:desktop\n`);
     }
     return {
       preset: presetName,
-      status: 'UNVERIFIED (Access Denied / Non-interactive session)',
+      backend: activeBackend,
+      status: isSessionIssue ? 'UNVERIFIED (Access Denied / Non-interactive session)' : `ERROR: ${errorEncountered.message}`,
       error: errorEncountered.message,
     };
   }
@@ -92,14 +130,27 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
   const maxFrameKb = frameSizes.length > 0 ? Math.round((Math.max(...frameSizes) / 1024) * 10) / 10 : 0;
   const bitrateMbps = testDurationSec > 0 ? Math.round(((totalBytes * 8) / testDurationSec / (1024 * 1024)) * 100) / 100 : 0;
 
+  let cpuPercent: number | null = null;
+  if (cpuStart !== null && cpuEnd !== null) {
+    const elapsedWallSec = (cpuEndTime - cpuStartTime) / 1000;
+    if (elapsedWallSec > 0) {
+      const totalCpuSec = cpuEnd - cpuStart;
+      const numCores = os.cpus().length || 1;
+      cpuPercent = Math.round((totalCpuSec / elapsedWallSec / numCores) * 1000) / 10;
+    }
+  }
+
   console.log(`\nResults for "${presetName}":`);
+  console.log(`• Active Backend:  ${activeBackend}`);
   console.log(`• Captured Frames: ${frameCount}`);
   console.log(`• Measured FPS:    ${measuredFps} fps`);
   console.log(`• Frame Size:      avg ${avgFrameKb} KB (min ${minFrameKb} KB, max ${maxFrameKb} KB)`);
   console.log(`• Throughput:      ${bitrateMbps} Mbps (~${Math.round(bitrateMbps * 128)} KB/s)`);
+  console.log(`• FFmpeg CPU:      ${cpuPercent !== null ? `${cpuPercent}% total (${Math.round(cpuPercent * (os.cpus().length || 1))} % single-core)` : 'N/A'}`);
 
   return {
     preset: presetName,
+    backend: activeBackend,
     status: 'MEASURED',
     frames: frameCount,
     fps: measuredFps,
@@ -107,6 +158,7 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
     minFrameKb,
     maxFrameKb,
     bitrateMbps,
+    cpuPercent: cpuPercent !== null ? `${cpuPercent}%` : 'N/A',
   };
 }
 
