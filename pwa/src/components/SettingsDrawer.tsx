@@ -2,10 +2,19 @@ import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { AirPointerConfig, CalibrationData } from '../engine/airPointer';
 import { TrackpadConfig } from '../engine/trackpadGestures';
+import { DeviceInfo } from '../hooks/useAerokinSocket';
 import { triggerHaptic } from '../utils/haptics';
 import { Slider } from './ui/Slider';
 import { Switch } from './ui/Switch';
-import { Copy, Check, ArrowClockwise } from '@phosphor-icons/react';
+import {
+  ArrowClockwise,
+  DeviceMobile,
+  PencilSimple,
+  Trash,
+  SignOut,
+  Shield,
+  Check,
+} from '@phosphor-icons/react';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -21,6 +30,14 @@ interface SettingsDrawerProps {
   seekMethod: 'auto' | 'keys';
   onSeekMethodChange: (method: 'auto' | 'keys') => void;
   token?: string | null;
+  deviceId?: string | null;
+  deviceName?: string | null;
+  devices?: DeviceInfo[];
+  onRenameDevice?: (deviceId: string, name: string) => void;
+  onRevokeDevice?: (deviceId: string) => void;
+  onRevokeAllDevices?: (exceptCurrent?: boolean) => void;
+  onLogout?: () => void;
+  onUnpairThisDevice?: () => void;
   onOpenAuthModal?: () => void;
 }
 
@@ -37,23 +54,39 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onResetTrackpadConfig,
   seekMethod,
   onSeekMethodChange,
-  token,
+  deviceId,
+  deviceName,
+  devices = [],
+  onRenameDevice,
+  onRevokeDevice,
+  onRevokeAllDevices,
+  onLogout,
+  onUnpairThisDevice,
   onOpenAuthModal,
 }) => {
-  const [copiedToken, setCopiedToken] = useState(false);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editNameVal, setEditNameVal] = useState('');
 
-  const handleCopyToken = () => {
-    if (token) {
-      navigator.clipboard.writeText(token);
-      setCopiedToken(true);
-      triggerHaptic('light');
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
+  const startRename = (id: string, currentName: string) => {
+    setEditingDeviceId(id);
+    setEditNameVal(currentName);
   };
+
+  const saveRename = (id: string) => {
+    const trimmed = editNameVal.trim();
+    if (trimmed && onRenameDevice) {
+      onRenameDevice(id, trimmed);
+      triggerHaptic('light');
+    }
+    setEditingDeviceId(null);
+  };
+
+  const currentDevice = devices.find((d) => d.deviceId === deviceId);
+  const otherDevices = devices.filter((d) => d.deviceId !== deviceId);
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="pb-safe">
+      <SheetContent className="pb-safe max-w-full overflow-x-hidden">
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
         </SheetHeader>
@@ -351,43 +384,228 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           <div className="h-[1px] bg-border" />
 
-          {/* Section 3: Connection */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-medium text-muted-foreground">
-              Connection
-            </h3>
-
-            {/* Token row */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm text-foreground">Token</p>
-                <p className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {token || 'None'}
-                </p>
+          {/* Section 4: Devices & Security */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Shield size={16} className="text-accent" />
+                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                  Devices & Security
+                </h3>
               </div>
-              <div className="flex items-center gap-2">
-                {token && (
-                  <button
-                    onClick={handleCopyToken}
-                    className="p-2 rounded-lg border border-border bg-raised hover:bg-border text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    title="Copy token"
-                    aria-label="Copy token"
-                  >
-                    {copiedToken ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                  </button>
+              {onOpenAuthModal && (
+                <button
+                  onClick={() => {
+                    onOpenChange(false);
+                    onOpenAuthModal();
+                  }}
+                  className="text-xs text-accent hover:underline font-medium"
+                >
+                  + Pair New
+                </button>
+              )}
+            </div>
+
+            {/* This Device Card */}
+            <div className="rounded-2xl bg-surface border border-border p-4 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DeviceMobile size={18} className="text-accent" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-accent">
+                    This Device
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-success" />
+                  <span className="text-[11px] text-muted-foreground">Authenticated</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                {editingDeviceId === deviceId ? (
+                  <div className="flex items-center gap-2 flex-1 mr-2">
+                    <input
+                      type="text"
+                      value={editNameVal}
+                      onChange={(e) => setEditNameVal(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveRename(deviceId!);
+                        if (e.key === 'Escape') setEditingDeviceId(null);
+                      }}
+                      autoFocus
+                      maxLength={32}
+                      className="px-2 py-1 text-xs rounded bg-raised border border-border text-foreground w-full focus:outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={() => saveRename(deviceId!)}
+                      className="p-1 rounded text-accent hover:bg-raised"
+                      title="Save"
+                    >
+                      <Check size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-sm font-medium text-foreground truncate">
+                      {currentDevice?.name || deviceName || "Allen's iPhone"}
+                    </span>
+                    <button
+                      onClick={() =>
+                        startRename(
+                          deviceId || 'this_device',
+                          currentDevice?.name || deviceName || "Allen's iPhone"
+                        )
+                      }
+                      className="text-muted-foreground hover:text-foreground p-1"
+                      title="Rename this device"
+                    >
+                      <PencilSimple size={13} />
+                    </button>
+                  </div>
                 )}
-                {onOpenAuthModal && (
+                <span className="font-mono text-[11px] text-muted-foreground/60 shrink-0">
+                  {deviceId ? `${deviceId.slice(0, 8)}...` : ''}
+                </span>
+              </div>
+
+              {/* Action Buttons for This Device */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+                <button
+                  onClick={() => {
+                    triggerHaptic('light');
+                    onLogout?.();
+                    onOpenChange(false);
+                  }}
+                  className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <SignOut size={14} />
+                  <span>Logout</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Unpair this device? You will need to enter a new 8-digit pairing code to reconnect.'
+                      )
+                    ) {
+                      triggerHaptic('medium');
+                      onUnpairThisDevice?.();
+                      onOpenChange(false);
+                    }
+                  }}
+                  className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl border border-optic-red/20 bg-optic-red/10 hover:bg-optic-red/20 text-xs text-optic-red font-medium transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Trash size={14} />
+                  <span>Unpair</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Other Paired Devices List */}
+            {otherDevices.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Other Paired Devices ({otherDevices.length})</span>
                   <button
                     onClick={() => {
-                      onOpenChange(false);
-                      onOpenAuthModal();
+                      if (window.confirm('Revoke all other paired devices?')) {
+                        triggerHaptic('medium');
+                        onRevokeAllDevices?.(true);
+                      }
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors min-h-[44px] flex items-center justify-center"
+                    className="text-[11px] text-optic-red hover:underline font-medium"
                   >
-                    Re-pair
+                    Revoke Other
                   </button>
-                )}
+                </div>
+
+                <div className="space-y-2">
+                  {otherDevices.map((dev) => (
+                    <div
+                      key={dev.deviceId}
+                      className="rounded-xl bg-surface border border-border p-3 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        {editingDeviceId === dev.deviceId ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editNameVal}
+                              onChange={(e) => setEditNameVal(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveRename(dev.deviceId);
+                                if (e.key === 'Escape') setEditingDeviceId(null);
+                              }}
+                              autoFocus
+                              maxLength={32}
+                              className="px-2 py-0.5 text-xs rounded bg-raised border border-border text-foreground w-36 focus:outline-none focus:border-accent"
+                            />
+                            <button
+                              onClick={() => saveRename(dev.deviceId)}
+                              className="p-1 rounded text-accent hover:bg-raised"
+                              title="Save"
+                            >
+                              <Check size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="font-medium text-foreground truncate">
+                              {dev.name}
+                            </span>
+                            <button
+                              onClick={() => startRename(dev.deviceId, dev.name)}
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Rename device"
+                            >
+                              <PencilSimple size={12} />
+                            </button>
+                          </div>
+                        )}
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          {dev.platform} • Seen:{' '}
+                          {dev.lastSeen ? new Date(dev.lastSeen).toLocaleTimeString() : 'Never'}
+                          {dev.revoked && ' • [Revoked]'}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Revoke access for "${dev.name}"?`)) {
+                            triggerHaptic('medium');
+                            onRevokeDevice?.(dev.deviceId);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-border bg-raised hover:bg-optic-red/10 hover:border-optic-red/30 hover:text-optic-red text-[11px] text-muted-foreground transition-colors shrink-0"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+
+            {/* Emergency Disconnect / Revoke All */}
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Emergency Disconnect: Revoke ALL paired devices immediately? All clients will be disconnected.'
+                    )
+                  ) {
+                    triggerHaptic('heavy');
+                    onRevokeAllDevices?.(false);
+                    onOpenChange(false);
+                  }
+                }}
+                className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-optic-red/20 bg-optic-red/5 hover:bg-optic-red/15 text-xs text-optic-red font-semibold transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Trash size={14} />
+                <span>Revoke All Devices</span>
+              </button>
             </div>
           </div>
         </div>

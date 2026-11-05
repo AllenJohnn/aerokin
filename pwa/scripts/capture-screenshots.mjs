@@ -114,6 +114,33 @@ try {
     await page.screenshot({ path: momentumScreenshotPath });
     console.log(`Saved momentum screenshot: ${momentumScreenshotPath}`);
 
+    // Locate Devices & Security section header
+    const securityHeader = page.locator('h3:has-text("Devices & Security")');
+    if (await securityHeader.isVisible()) {
+      await securityHeader.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(200);
+
+      const securityOverflowCheck = await page.evaluate(() => {
+        const el = document.querySelector('[role="dialog"] .overflow-y-auto');
+        if (!el) return { hasOverflow: false, clientWidth: 0, scrollWidth: 0 };
+        return {
+          hasOverflow: el.scrollWidth > el.clientWidth,
+          clientWidth: el.clientWidth,
+          scrollWidth: el.scrollWidth,
+        };
+      });
+
+      console.log(`[${vp.label}] Security section overflow check:`, securityOverflowCheck);
+
+      const suffix = vp.scale === 3 ? '@3x' : '';
+      const secScreenshotPath = path.join(
+        outDir,
+        `settings-devices-security-${vp.name}${suffix}.png`
+      );
+      await page.screenshot({ path: secScreenshotPath });
+      console.log(`Saved security screenshot: ${secScreenshotPath}`);
+    }
+
     await context.close();
   }
 

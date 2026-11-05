@@ -4,6 +4,54 @@
 
 export const STORAGE_HOST_KEY = 'aerokin_server_host';
 export const STORAGE_TOKEN_KEY = 'aerokin_auth_token';
+export const STORAGE_DEVICE_ID_KEY = 'aerokin_device_id';
+export const STORAGE_CREDENTIAL_KEY = 'aerokin_device_credential';
+export const STORAGE_DEVICE_NAME_KEY = 'aerokin_device_name';
+
+/**
+ * Returns stored cryptographic device credentials from localStorage.
+ */
+export function getStoredDeviceCredentials(): {
+  deviceId: string | null;
+  credential: string | null;
+  name: string | null;
+} {
+  if (typeof window === 'undefined') {
+    return { deviceId: null, credential: null, name: null };
+  }
+  return {
+    deviceId: localStorage.getItem(STORAGE_DEVICE_ID_KEY),
+    credential: localStorage.getItem(STORAGE_CREDENTIAL_KEY),
+    name: localStorage.getItem(STORAGE_DEVICE_NAME_KEY),
+  };
+}
+
+/**
+ * Saves per-device cryptographic credentials to localStorage.
+ */
+export function saveStoredDeviceCredentials(
+  deviceId: string,
+  credential: string,
+  name?: string
+): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_DEVICE_ID_KEY, deviceId);
+  localStorage.setItem(STORAGE_CREDENTIAL_KEY, credential);
+  if (name) {
+    localStorage.setItem(STORAGE_DEVICE_NAME_KEY, name);
+  }
+}
+
+/**
+ * Clears stored device credentials and pairing tokens from localStorage.
+ */
+export function clearStoredDeviceCredentials(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_DEVICE_ID_KEY);
+  localStorage.removeItem(STORAGE_CREDENTIAL_KEY);
+  localStorage.removeItem(STORAGE_DEVICE_NAME_KEY);
+  localStorage.removeItem(STORAGE_TOKEN_KEY);
+}
 
 /**
  * Returns true if the PWA is built in hosted mode (e.g. for Vercel, Netlify, custom static host),

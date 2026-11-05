@@ -10,7 +10,9 @@ import {
 
 interface PairData {
   url: string;
-  token: string;
+  code?: string;
+  token?: string;
+  expiresInSeconds?: number;
   lanIp: string;
   port: number;
 }
@@ -234,19 +236,19 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({
               </div>
             </div>
 
-            {/* Token + Copy row */}
+            {/* Code + Copy row */}
             {pairData && (
               <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Token:</span>
+                  <span className="text-muted-foreground">Pairing Code:</span>
                   <span className="font-mono text-sm font-semibold tabular-nums text-foreground tracking-wider">
-                    {pairData.token}
+                    {pairData.code || pairData.token}
                   </span>
                   <button
-                    onClick={() => handleCopy(pairData.token)}
+                    onClick={() => handleCopy(pairData.code || pairData.token || '')}
                     className="p-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground transition-colors"
-                    title="Copy token"
-                    aria-label="Copy token"
+                    title="Copy pairing code"
+                    aria-label="Copy pairing code"
                   >
                     {copiedToken ? (
                       <Check size={14} className="text-success" />

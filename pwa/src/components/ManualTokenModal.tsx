@@ -4,9 +4,18 @@ import { validateHost } from '../utils/hosting';
 
 export interface ManualTokenModalProps {
   initialToken?: string | null;
+  initialCode?: string | null;
   initialHost?: string | null;
+  initialDeviceName?: string | null;
   onSave?: (token: string, host?: string) => void;
   onSaveToken?: (token: string) => void;
+  onPair?: (
+    code: string,
+    name?: string,
+    platform?: string,
+    host?: string
+  ) => Promise<{ ok: boolean; error?: string } | void>;
+  isAwaitingApproval?: boolean;
   isRejected?: boolean;
   isHosted?: boolean;
   errorMessage?: string | null;
@@ -16,24 +25,36 @@ export interface ManualTokenModalProps {
 
 export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
   initialToken,
+  initialCode,
   initialHost,
+  initialDeviceName,
   onSave,
   onSaveToken,
+  onPair,
+  isAwaitingApproval = false,
   isRejected = false,
   isHosted = false,
   errorMessage,
   onClose,
 }) => {
-  const [tokenVal, setTokenVal] = useState(initialToken || '');
+  const [codeVal, setCodeVal] = useState(initialCode || initialToken || '');
   const [hostVal, setHostVal] = useState(initialHost || '');
-
-  const [hostError, setHostError] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(
-    isRejected ? 'Invalid token. Please check your PC terminal.' : null
+  const isApple =
+    typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const [deviceName, setDeviceName] = useState(
+    initialDeviceName || (isApple ? "Allen's iPhone" : 'Mobile Device')
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [hostError, setHostError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(
+    isRejected ? 'Invalid or expired pairing code. Please check your PC terminal.' : null
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || isAwaitingApproval) return;
+
     let hasError = false;
 
     // Validate Host in hosted mode
@@ -49,13 +70,13 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
       }
     }
 
-    // Validate 6-character token
-    const cleanedToken = tokenVal.trim().toUpperCase();
-    if (cleanedToken.length !== 6) {
-      setTokenError('Pairing code must be 6 characters');
+    // Validate pairing code (8 digits, or 6 hex characters fallback)
+    const cleanedCode = codeVal.trim();
+    if (cleanedCode.length !== 8 && cleanedCode.length !== 6) {
+      setCodeError('Pairing code must be 8 digits (displayed on PC terminal)');
       hasError = true;
     } else {
-      setTokenError(null);
+      setCodeError(null);
     }
 
     if (hasError) {
@@ -64,11 +85,28 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
     }
 
     triggerHaptic('light');
+
+    if (onPair) {
+      setSubmitting(true);
+      const platform = isApple ? 'iOS' : 'Web';
+      const res = await onPair(cleanedCode, deviceName.trim(), platform, normalizedHost);
+      setSubmitting(false);
+      if (res && !res.ok) {
+        setCodeError(res.error || 'Pairing failed');
+        triggerHaptic('medium');
+        return;
+      }
+      if (onClose) {
+        onClose();
+      }
+      return;
+    }
+
     if (onSave) {
-      onSave(cleanedToken, normalizedHost);
+      onSave(cleanedCode, normalizedHost);
     }
     if (onSaveToken) {
-      onSaveToken(cleanedToken);
+      onSaveToken(cleanedCode);
     }
     if (onClose) {
       onClose();
@@ -76,13 +114,13 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none">
-      <div className="w-full max-w-sm rounded-2xl bg-surface border border-border p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none">
+      <div className="w-full max-w-sm rounded-2xl bg-surface border border-border p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-base font-semibold text-foreground">
-            {isHosted ? 'Connect to PC Agent' : 'Enter pairing token'}
+            {isHosted ? 'Connect to PC Agent' : 'Pair with PC'}
           </h2>
-          {onClose && (
+          {onClose && !isAwaitingApproval && (
             <button
               type="button"
               onClick={onClose}
@@ -96,80 +134,116 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
 
         <p className="text-xs text-muted-foreground mb-4">
           {isHosted
-            ? 'Enter your PC local IP or hostname and the 6-character pairing code.'
-            : 'Enter the 6-character token from your PC dashboard'}
+            ? 'Enter PC host address and the short-lived 8-digit pairing code from your PC terminal.'
+            : 'Enter the 8-digit code shown on your PC terminal.'}
         </p>
 
-        {errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-optic-red/10 border border-optic-red/20 text-optic-red text-xs">
-            <p className="font-semibold mb-1">Connection Issue</p>
-            <p>{errorMessage}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {isHosted && (
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                PC Host Address
-              </label>
-              <input
-                type="text"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck="false"
-                value={hostVal}
-                onChange={(e) => {
-                  setHostVal(e.target.value);
-                  if (hostError) setHostError(null);
-                }}
-                placeholder="e.g. 192.168.1.50:8443 or aerokin.local"
-                className="w-full h-11 px-3 rounded-xl bg-raised border border-border font-mono text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
-              />
-              {hostError && (
-                <p className="text-[11px] text-optic-red mt-0.5">{hostError}</p>
-              )}
+        {isAwaitingApproval ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <div className="w-10 h-10 rounded-full border-2 border-accent border-t-transparent animate-spin mb-4" />
+            <h3 className="text-sm font-semibold text-foreground mb-1">Awaiting PC Approval...</h3>
+            <p className="text-xs text-muted-foreground max-w-xs mb-3">
+              Look at your PC terminal and press <strong className="text-accent">"y"</strong> to
+              approve this device.
+            </p>
+            <div className="text-[11px] font-mono text-muted-foreground/60">
+              30s timeout • default deny
             </div>
-          )}
-
-          <div className="flex flex-col gap-1 text-left">
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Pairing Code
-            </label>
-            <input
-              type="text"
-              maxLength={6}
-              autoFocus={!isHosted || !hostVal}
-              value={tokenVal}
-              onChange={(e) => {
-                setTokenVal(e.target.value.toUpperCase());
-                if (tokenError) setTokenError(null);
-              }}
-              placeholder="e.g. 4EA378"
-              className="w-full h-12 rounded-xl bg-raised border border-border text-center font-mono text-xl tracking-[0.2em] text-foreground uppercase focus:outline-none focus:border-accent transition-colors"
-            />
-            {tokenError && (
-              <p className="text-[11px] text-optic-red text-center mt-0.5">{tokenError}</p>
+          </div>
+        ) : (
+          <>
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-optic-red/10 border border-optic-red/20 text-optic-red text-xs">
+                <p className="font-semibold mb-1">Pairing Issue</p>
+                <p>{errorMessage}</p>
+              </div>
             )}
-          </div>
 
-          <button
-            type="submit"
-            className="w-full h-12 min-h-[48px] mt-2 rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-xs font-semibold transition-transform active:scale-[0.97]"
-          >
-            Connect
-          </button>
-        </form>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              {isHosted && (
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    PC Host Address
+                  </label>
+                  <input
+                    type="text"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    value={hostVal}
+                    onChange={(e) => {
+                      setHostVal(e.target.value);
+                      if (hostError) setHostError(null);
+                    }}
+                    placeholder="e.g. 192.168.1.50:8443 or aerokin.local"
+                    className="w-full h-11 px-3 rounded-xl bg-raised border border-border font-mono text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
+                  />
+                  {hostError && (
+                    <p className="text-[11px] text-optic-red mt-0.5">{hostError}</p>
+                  )}
+                </div>
+              )}
 
-        {isHosted && (
-          <div className="mt-5 pt-4 border-t border-border text-left">
-            <p className="text-[11px] font-medium text-muted-foreground mb-2">Requirements:</p>
-            <ul className="text-[11px] text-muted-foreground space-y-1 list-disc list-inside">
-              <li>Same Wi-Fi network as the PC</li>
-              <li>AeroKin CA certificate installed & trusted</li>
-              <li>Local Network permission allowed on mobile</li>
-            </ul>
-          </div>
+              <div className="flex flex-col gap-1 text-left">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                  Device Name
+                </label>
+                <input
+                  type="text"
+                  maxLength={32}
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  placeholder="e.g. Allen's iPhone"
+                  className="w-full h-11 px-3 rounded-xl bg-raised border border-border text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    8-Digit Pairing Code
+                  </label>
+                  <span className="text-[10px] text-muted-foreground font-mono">valid 2m</span>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={8}
+                  autoFocus={!isHosted || !hostVal}
+                  value={codeVal}
+                  onChange={(e) => {
+                    setCodeVal(e.target.value.replace(/[^0-9a-fA-F]/g, ''));
+                    if (codeError) setCodeError(null);
+                  }}
+                  placeholder="e.g. 84920153"
+                  className="w-full h-12 rounded-xl bg-raised border border-border text-center font-mono text-xl tracking-[0.25em] text-foreground focus:outline-none focus:border-accent transition-colors"
+                />
+                {codeError && (
+                  <p className="text-[11px] text-optic-red text-center mt-0.5">{codeError}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full h-12 min-h-[48px] mt-2 rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-xs font-semibold transition-transform active:scale-[0.97] disabled:opacity-50"
+              >
+                {submitting ? 'Requesting Approval...' : 'Pair Device'}
+              </button>
+            </form>
+
+            {isHosted && (
+              <div className="mt-5 pt-4 border-t border-border text-left">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">Requirements:</p>
+                <ul className="text-[11px] text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>Same Wi-Fi network as the PC</li>
+                  <li>AeroKin CA certificate installed & trusted</li>
+                  <li>Local Network permission allowed on mobile</li>
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

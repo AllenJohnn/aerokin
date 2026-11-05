@@ -141,9 +141,21 @@ export const App: React.FC = () => {
     host,
     isHosted,
     connectionError,
+    deviceId,
+    deviceName,
+    devices,
+    pairingCode,
+    pairingAwaitingApproval,
     setToken,
     setHost,
+    setPairingCode,
     connectManually,
+    pairDevice,
+    renameDevice,
+    revokeDevice,
+    revokeAllDevices,
+    logout,
+    unpairThisDevice,
     sendMove,
     sendClick,
     sendButton,
@@ -303,9 +315,13 @@ export const App: React.FC = () => {
         {showAuthModal && (
           <ManualTokenModal
             initialToken={token}
+            initialCode={pairingCode}
             initialHost={host}
+            initialDeviceName={deviceName}
             isHosted={true}
             errorMessage={connectionError}
+            isAwaitingApproval={pairingAwaitingApproval}
+            onPair={pairDevice}
             onSave={(newToken, newHost) => {
               setToken(newToken);
               if (newHost) setHost(newHost);
@@ -330,7 +346,15 @@ export const App: React.FC = () => {
           onResetTrackpadConfig={handleResetTrackpadConfig}
           seekMethod={seekMethod}
           onSeekMethodChange={handleSeekMethodChange}
-          token={token}
+          token={pairingCode || token}
+          deviceId={deviceId}
+          deviceName={deviceName}
+          devices={devices}
+          onRenameDevice={renameDevice}
+          onRevokeDevice={revokeDevice}
+          onRevokeAllDevices={revokeAllDevices}
+          onLogout={logout}
+          onUnpairThisDevice={unpairThisDevice}
           onOpenAuthModal={() => setShowAuthModal(true)}
         />
       </div>
@@ -550,7 +574,15 @@ export const App: React.FC = () => {
         onResetTrackpadConfig={handleResetTrackpadConfig}
         seekMethod={seekMethod}
         onSeekMethodChange={handleSeekMethodChange}
-        token={token}
+        token={pairingCode || token}
+        deviceId={deviceId}
+        deviceName={deviceName}
+        devices={devices}
+        onRenameDevice={renameDevice}
+        onRevokeDevice={revokeDevice}
+        onRevokeAllDevices={revokeAllDevices}
+        onLogout={logout}
+        onUnpairThisDevice={unpairThisDevice}
         onOpenAuthModal={() => setShowAuthModal(true)}
       />
 
@@ -565,9 +597,13 @@ export const App: React.FC = () => {
       {(status === 'unauthorized' || showAuthModal) && (
         <ManualTokenModal
           initialToken={token}
+          initialCode={pairingCode}
           initialHost={host}
+          initialDeviceName={deviceName}
           isHosted={isHosted}
           errorMessage={connectionError}
+          isAwaitingApproval={pairingAwaitingApproval}
+          onPair={pairDevice}
           onSave={(newToken, newHost) => {
             setToken(newToken);
             if (newHost) setHost(newHost);

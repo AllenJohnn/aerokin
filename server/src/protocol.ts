@@ -28,6 +28,12 @@ export type AllowedMediaAction = typeof ALLOWED_MEDIA_ACTIONS[number];
 
 export type ValidClientMessage =
   | { type: 'ping'; t: number }
+  | { type: 'auth'; deviceId: string; credential: string }
+  | { type: 'device_list' }
+  | { type: 'device_rename'; deviceId: string; name: string }
+  | { type: 'device_revoke'; deviceId: string }
+  | { type: 'device_revoke_all'; exceptCurrent?: boolean }
+  | { type: 'logout' }
   | { type: 'move'; dx: number; dy: number }
   | { type: 'click'; button: 'left' | 'right' | 'middle' }
   | { type: 'button'; button: 'left' | 'right' | 'middle'; state: 'down' | 'up' }
@@ -60,6 +66,71 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
         return null;
       }
       return { type: 'ping', t: msg.t };
+    }
+
+    case 'auth': {
+      if (
+        typeof msg.deviceId !== 'string' ||
+        msg.deviceId.trim().length === 0 ||
+        msg.deviceId.length > 64 ||
+        typeof msg.credential !== 'string' ||
+        msg.credential.trim().length === 0 ||
+        msg.credential.length > 128
+      ) {
+        return null;
+      }
+      return {
+        type: 'auth',
+        deviceId: msg.deviceId.trim(),
+        credential: msg.credential.trim(),
+      };
+    }
+
+    case 'device_list': {
+      return { type: 'device_list' };
+    }
+
+    case 'device_rename': {
+      if (
+        typeof msg.deviceId !== 'string' ||
+        msg.deviceId.trim().length === 0 ||
+        msg.deviceId.length > 64 ||
+        typeof msg.name !== 'string' ||
+        msg.name.trim().length === 0 ||
+        msg.name.length > 64
+      ) {
+        return null;
+      }
+      return {
+        type: 'device_rename',
+        deviceId: msg.deviceId.trim(),
+        name: msg.name.trim(),
+      };
+    }
+
+    case 'device_revoke': {
+      if (
+        typeof msg.deviceId !== 'string' ||
+        msg.deviceId.trim().length === 0 ||
+        msg.deviceId.length > 64
+      ) {
+        return null;
+      }
+      return {
+        type: 'device_revoke',
+        deviceId: msg.deviceId.trim(),
+      };
+    }
+
+    case 'device_revoke_all': {
+      return {
+        type: 'device_revoke_all',
+        exceptCurrent: Boolean(msg.exceptCurrent),
+      };
+    }
+
+    case 'logout': {
+      return { type: 'logout' };
     }
 
     case 'move': {
@@ -215,6 +286,8 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitCategoryConfig> = {
   click: { capacity: 40, refillRate: 20 }, // Clicks and button down/up transitions
   media: { capacity: 40, refillRate: 20 }, // Media controls, seeking, volume
   ping: { capacity: 10, refillRate: 5 }, // Keepalive pings (phone sends ~0.5Hz)
+  device: { capacity: 20, refillRate: 5 }, // Device list, rename, revoke
+  auth: { capacity: 5, refillRate: 1 }, // Handshake auth message
 };
 
 export const MAX_CONSECUTIVE_RATE_LIMIT_VIOLATIONS = 50;
@@ -250,6 +323,14 @@ export class ConnectionRateLimiter {
         return 'media';
       case 'ping':
         return 'ping';
+      case 'auth':
+        return 'auth';
+      case 'device_list':
+      case 'device_rename':
+      case 'device_revoke':
+      case 'device_revoke_all':
+      case 'logout':
+        return 'device';
     }
   }
 

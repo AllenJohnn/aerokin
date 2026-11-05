@@ -6,6 +6,10 @@ import {
   validateHost,
   STORAGE_HOST_KEY,
   STORAGE_TOKEN_KEY,
+  STORAGE_DEVICE_NAME_KEY,
+  getStoredDeviceCredentials,
+  saveStoredDeviceCredentials,
+  clearStoredDeviceCredentials,
 } from '../utils/hosting';
 
 export type MediaAction =
@@ -39,16 +43,42 @@ export interface MediaSessionItem {
   current: boolean;
 }
 
+export interface DeviceInfo {
+  deviceId: string;
+  name: string;
+  platform: string;
+  createdAt: number;
+  lastSeen: number;
+  revoked: boolean;
+}
+
 export interface UseAerokinSocketReturn {
   status: ConnectionStatus;
   latency: number | null;
-  token: string | null;
   host: string | null;
   isHosted: boolean;
   connectionError: string | null;
+  deviceId: string | null;
+  deviceName: string | null;
+  devices: DeviceInfo[];
+  pairingCode: string | null;
+  pairingAwaitingApproval: boolean;
+  token: string | null; // Backwards compatibility for UI
   setToken: (token: string) => void;
   setHost: (host: string) => void;
+  setPairingCode: (code: string) => void;
   connectManually: () => void;
+  pairDevice: (
+    code: string,
+    name?: string,
+    platform?: string,
+    targetHost?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  renameDevice: (deviceId: string, name: string) => void;
+  revokeDevice: (deviceId: string) => void;
+  revokeAllDevices: (exceptCurrent?: boolean) => void;
+  logout: () => void;
+  unpairThisDevice: () => Promise<void>;
   sendMove: (dx: number, dy: number) => void;
   sendClick: (button: 'left' | 'right' | 'middle') => void;
   sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
@@ -68,37 +98,38 @@ export interface UseAerokinSocketReturn {
 export function useAerokinSocket(): UseAerokinSocketReturn {
   const isHosted = isHostedMode();
 
-  // Read initial connection credentials from URL fragment (hosted) or search params (agent-served) or localStorage
+  // Read initial connection credentials from localStorage or URL hash fragment
   const [host, setHostState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const fragment = consumeConnectionFragment();
-    return fragment.host;
+    return fragment.host || localStorage.getItem(STORAGE_HOST_KEY) || null;
   });
 
-  const [token, setTokenState] = useState<string | null>(() => {
+  const [pairingCode, setPairingCodeState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const fragment = consumeConnectionFragment();
     if (fragment.code) return fragment.code;
-
-    // Check ?token= for agent-served mode
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlToken = urlParams.get('token');
-    if (urlToken && urlToken.trim().length > 0) {
-      const clean = urlToken.trim().toUpperCase();
-      localStorage.setItem(STORAGE_TOKEN_KEY, clean);
-      return clean;
-    }
     return localStorage.getItem(STORAGE_TOKEN_KEY) || null;
   });
 
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const storedCreds = getStoredDeviceCredentials();
+  const [deviceId, setDeviceId] = useState<string | null>(storedCreds.deviceId);
+  const [credential, setCredential] = useState<string | null>(storedCreds.credential);
+  const [deviceName, setDeviceName] = useState<string | null>(storedCreds.name);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+
+  const [status, setStatus] = useState<ConnectionStatus>(() =>
+    storedCreds.credential && storedCreds.deviceId ? 'disconnected' : 'unauthorized'
+  );
   const [latency, setLatency] = useState<number | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [pairingAwaitingApproval, setPairingAwaitingApproval] = useState<boolean>(false);
 
   // In hosted mode, require a user gesture (Connect button) to initiate the connection
-  // to avoid triggering browser Local Network prompts without user interaction.
-  // In agent-served mode, connect automatically as before.
-  const [connectTrigger, setConnectTrigger] = useState<number>(() => (isHosted ? 0 : 1));
+  // in agent-served mode, connect automatically if we have credentials
+  const [connectTrigger, setConnectTrigger] = useState<number>(() =>
+    isHosted ? 0 : storedCreds.credential ? 1 : 0
+  );
 
   // Live media state from server
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData>({ status: 'none' });
@@ -110,12 +141,12 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const backoffDelayRef = useRef<number>(1000);
+  const isAuthenticatedRef = useRef<boolean>(false);
 
-  const setToken = useCallback((newToken: string) => {
-    const cleaned = newToken.trim().toUpperCase();
+  const setPairingCode = useCallback((newCode: string) => {
+    const cleaned = newCode.trim();
     localStorage.setItem(STORAGE_TOKEN_KEY, cleaned);
-    setTokenState(cleaned);
-    backoffDelayRef.current = 1000;
+    setPairingCodeState(cleaned);
   }, []);
 
   const setHost = useCallback((newHost: string) => {
@@ -140,10 +171,151 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   }, []);
 
   const sendRaw = useCallback((payload: object) => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+    if (
+      socketRef.current &&
+      socketRef.current.readyState === WebSocket.OPEN &&
+      (isAuthenticatedRef.current || (payload as any).type === 'auth')
+    ) {
       socketRef.current.send(JSON.stringify(payload));
     }
   }, []);
+
+  const pairDevice = useCallback(
+    async (
+      code: string,
+      name?: string,
+      platform?: string,
+      targetHost?: string
+    ): Promise<{ ok: boolean; error?: string }> => {
+      const activeHost =
+        targetHost ||
+        host ||
+        (typeof window !== 'undefined'
+          ? (window.location.port === '5173' || window.location.port === '5174'
+              ? `${window.location.hostname}:8443`
+              : window.location.host)
+          : '');
+
+      if (!activeHost) {
+        return { ok: false, error: 'Host address is not configured.' };
+      }
+
+      const isApple =
+        typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const devName = name || (isApple ? "Allen's iPhone" : 'Mobile Device');
+      const devPlatform = platform || (isApple ? 'iOS' : 'Web');
+
+      setPairingAwaitingApproval(true);
+      setConnectionError(null);
+
+      try {
+        const res = await fetch(`https://${activeHost}/api/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: code.trim(),
+            name: devName,
+            platform: devPlatform,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        setPairingAwaitingApproval(false);
+
+        if (!res.ok) {
+          const errorMsg =
+            data.error ||
+            (res.status === 429
+              ? 'Too many failed attempts. Locked out for 60 seconds.'
+              : res.status === 403
+              ? 'Pairing denied by PC operator or invalid code.'
+              : 'Pairing failed.');
+          setConnectionError(errorMsg);
+          return { ok: false, error: errorMsg };
+        }
+
+        if (data.ok && data.deviceId && data.credential) {
+          saveStoredDeviceCredentials(data.deviceId, data.credential, data.name || devName);
+          setDeviceId(data.deviceId);
+          setCredential(data.credential);
+          setDeviceName(data.name || devName);
+          setPairingCodeState(null);
+          localStorage.removeItem(STORAGE_TOKEN_KEY);
+          // Trigger immediate connect
+          setConnectTrigger((prev) => prev + 1);
+          return { ok: true };
+        }
+
+        return { ok: false, error: 'Invalid pairing response from server.' };
+      } catch (err: any) {
+        setPairingAwaitingApproval(false);
+        const msg =
+          err?.message ||
+          'Failed to reach server. Ensure CA certificate is trusted and you are on the same Wi-Fi.';
+        setConnectionError(msg);
+        return { ok: false, error: msg };
+      }
+    },
+    [host]
+  );
+
+  const logout = useCallback(() => {
+    sendRaw({ type: 'logout' });
+    clearStoredDeviceCredentials();
+    setDeviceId(null);
+    setCredential(null);
+    setDeviceName(null);
+    setStatus('unauthorized');
+    isAuthenticatedRef.current = false;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    if (socketRef.current) {
+      socketRef.current.close(1000, 'User logged out');
+      socketRef.current = null;
+    }
+  }, [sendRaw]);
+
+  const unpairThisDevice = useCallback(async () => {
+    if (deviceId) {
+      sendRaw({ type: 'device_revoke', deviceId });
+    }
+    logout();
+  }, [deviceId, sendRaw, logout]);
+
+  const renameDevice = useCallback(
+    (targetDeviceId: string, newName: string) => {
+      sendRaw({ type: 'device_rename', deviceId: targetDeviceId, name: newName });
+      if (targetDeviceId === deviceId) {
+        setDeviceName(newName);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_DEVICE_NAME_KEY, newName);
+        }
+      }
+    },
+    [sendRaw, deviceId]
+  );
+
+  const revokeDevice = useCallback(
+    (targetDeviceId: string) => {
+      sendRaw({ type: 'device_revoke', deviceId: targetDeviceId });
+      if (targetDeviceId === deviceId) {
+        logout();
+      }
+    },
+    [sendRaw, deviceId, logout]
+  );
+
+  const revokeAllDevices = useCallback(
+    (exceptCurrent = false) => {
+      sendRaw({ type: 'device_revoke_all', exceptCurrent });
+      if (!exceptCurrent) {
+        logout();
+      }
+    },
+    [sendRaw, logout]
+  );
 
   const sendMove = useCallback(
     (dx: number, dy: number) => {
@@ -210,7 +382,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   );
 
   useEffect(() => {
-    if (!token) {
+    if (!credential || !deviceId) {
       setStatus('unauthorized');
       return;
     }
@@ -228,7 +400,10 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     let isMounted = true;
 
     function connect() {
-      if (!token) return;
+      if (!credential || !deviceId) {
+        setStatus('unauthorized');
+        return;
+      }
 
       if (socketRef.current) {
         socketRef.current.close();
@@ -242,8 +417,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
           setConnectionError('PC host address not configured');
           return;
         }
-        // Hosted static PWA connects directly to the local PC agent via WSS
-        wsUrl = `wss://${host}/?token=${encodeURIComponent(token)}`;
+        // Hosted static PWA connects directly to the local PC agent via TLS WebSocket
+        // No secrets in the URL query!
+        wsUrl = `wss://${host}/`;
       } else {
         // Agent-served flow (same-origin local server)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -253,10 +429,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
           ? `${window.location.hostname}:${devServerPort}`
           : window.location.host;
 
-        wsUrl = `${protocol}//${targetHost}/?token=${encodeURIComponent(token)}`;
+        wsUrl = `${protocol}//${targetHost}/`;
       }
 
       setStatus((prev) => (prev === 'connected' ? 'connected' : 'reconnecting'));
+      isAuthenticatedRef.current = false;
 
       try {
         const ws = new WebSocket(wsUrl);
@@ -264,23 +441,39 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
         ws.onopen = () => {
           if (!isMounted) return;
-          setStatus('connected');
-          setConnectionError(null);
-          backoffDelayRef.current = 1000;
-          requestWakeLock();
-
-          if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-          pingIntervalRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
-            }
-          }, 2000);
+          // Authenticate with the per-device credential in the first WS message
+          ws.send(
+            JSON.stringify({
+              type: 'auth',
+              deviceId,
+              credential,
+            })
+          );
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'pong' && typeof data.t === 'number') {
+
+            if (data.type === 'auth_ok') {
+              isAuthenticatedRef.current = true;
+              setStatus('connected');
+              setConnectionError(null);
+              backoffDelayRef.current = 1000;
+              requestWakeLock();
+
+              if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+              pingIntervalRef.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
+                }
+              }, 2000);
+              return;
+            }
+
+            if (data.type === 'devices' && Array.isArray(data.list)) {
+              setDevices(data.list);
+            } else if (data.type === 'pong' && typeof data.t === 'number') {
               const rtt = Date.now() - data.t;
               setLatency(rtt);
             } else if (data.type === 'nowplaying') {
@@ -319,20 +512,34 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
         ws.onclose = (event) => {
           if (!isMounted) return;
           releaseWakeLock();
+          isAuthenticatedRef.current = false;
           if (pingIntervalRef.current) {
             clearInterval(pingIntervalRef.current);
             pingIntervalRef.current = null;
           }
 
+          // 4001: Invalid or revoked credential -> clear stored credentials and return to pairing
           if (event.code === 4001) {
+            clearStoredDeviceCredentials();
+            setDeviceId(null);
+            setCredential(null);
             setStatus('unauthorized');
-            setConnectionError('Invalid pairing code. Check PC terminal.');
+            setConnectionError(event.reason || 'Device revoked or invalid credential.');
             return;
           }
 
+          // 1008: Policy violation or disallowed origin -> do NOT reconnect-loop
           if (event.code === 1008) {
             setStatus('disconnected');
-            setConnectionError(event.reason || 'Connection rejected: Policy violation or disallowed Origin');
+            setConnectionError(
+              event.reason || 'Connection rejected: Policy violation or disallowed Origin'
+            );
+            return;
+          }
+
+          // 1000: Clean close / intentional logout -> do NOT reconnect
+          if (event.code === 1000) {
+            setStatus('disconnected');
             return;
           }
 
@@ -370,22 +577,35 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     return () => {
       isMounted = false;
       releaseWakeLock();
+      isAuthenticatedRef.current = false;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       if (socketRef.current) socketRef.current.close();
     };
-  }, [token, host, isHosted, connectTrigger]);
+  }, [credential, deviceId, host, isHosted, connectTrigger]);
 
   return {
     status,
     latency,
-    token,
     host,
     isHosted,
     connectionError,
-    setToken,
+    deviceId,
+    deviceName,
+    devices,
+    pairingCode,
+    pairingAwaitingApproval,
+    token: pairingCode || credential || null,
+    setToken: setPairingCode,
     setHost,
+    setPairingCode,
     connectManually,
+    pairDevice,
+    renameDevice,
+    revokeDevice,
+    revokeAllDevices,
+    logout,
+    unpairThisDevice,
     sendMove,
     sendClick,
     sendButton,
