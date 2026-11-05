@@ -6,41 +6,17 @@ export const STORAGE_HOST_KEY = 'aerokin_server_host';
 export const STORAGE_TOKEN_KEY = 'aerokin_auth_token';
 
 /**
- * Returns true if the PWA is running as a hosted static web app (e.g. Vercel, Netlify, custom domain),
- * and false if served directly by the local PC agent on same-LAN or loopback.
+ * Returns true if the PWA is built in hosted mode (e.g. for Vercel, Netlify, custom static host),
+ * and false when built to be served directly by the local PC agent.
+ *
+ * This is a BUILD-TIME decision controlled via Vite mode and env files:
+ * - pwa/.env.hosted sets VITE_HOSTED_MODE=true
+ * - pwa/.env.production sets VITE_HOSTED_MODE=false
+ *
+ * Dev and test environments default to false unless VITE_HOSTED_MODE is explicitly 'true'.
  */
 export function isHostedMode(): boolean {
-  if (import.meta.env.VITE_HOSTED_MODE === 'true') {
-    return true;
-  }
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  const hostname = window.location.hostname.toLowerCase();
-
-  // Loopback and local mDNS
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === 'aerokin.local' ||
-    hostname.endsWith('.local')
-  ) {
-    return false;
-  }
-
-  // IPv4 Private LAN ranges (RFC 1918) and Link-Local (RFC 3927)
-  // 10.0.0.0 - 10.255.255.255
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return false;
-  // 172.16.0.0 - 172.31.255.255
-  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return false;
-  // 192.168.0.0 - 192.168.255.255
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return false;
-  // 169.254.0.0 - 169.254.255.255
-  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)) return false;
-
-  return true;
+  return import.meta.env?.VITE_HOSTED_MODE === 'true';
 }
 
 export interface HostValidationResult {
@@ -189,4 +165,27 @@ export function consumeConnectionFragment(): UrlConnectionParams {
   }
 
   return { host, code };
+}
+
+/**
+ * Builds the plain-HTTP trust server URL for downloading CA certificates and profiles.
+ * The trust server operates on port 8080 (plain HTTP) while the agent runs on 8443 (HTTPS).
+ *
+ * Strips any port from host and points to trustPort (default 8080).
+ */
+export function buildTrustUrl(host: string, trustPort = 8080): string {
+  const trimmed = (host || '').trim();
+  if (!trimmed) return `http://localhost:${trustPort}/`;
+  const withoutProto = trimmed.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i, '');
+  const hostPart = withoutProto.split(/[/?#]/)[0];
+
+  let hostname = hostPart;
+  if (hostPart.startsWith('[') && hostPart.includes(']')) {
+    const endBracket = hostPart.indexOf(']');
+    hostname = hostPart.slice(0, endBracket + 1);
+  } else if (hostPart.includes(':')) {
+    hostname = hostPart.split(':')[0];
+  }
+
+  return `http://${hostname}:${trustPort}/`;
 }

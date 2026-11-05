@@ -8,7 +8,7 @@
     "test": "vitest run",
     "generate-icons": "node scripts/generate-icons.mjs",
     "build": "node scripts/generate-icons.mjs && tsc && vite build",
-    "build:hosted": "tsc && vite build --outDir dist"
+    "build:hosted": "tsc && vite build --mode hosted --outDir dist"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.1.0",

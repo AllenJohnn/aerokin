@@ -3,6 +3,7 @@ import {
   isHostedMode,
   validateHost,
   consumeConnectionFragment,
+  buildTrustUrl,
   STORAGE_HOST_KEY,
   STORAGE_TOKEN_KEY,
 } from '../src/utils/hosting';
@@ -48,53 +49,68 @@ describe('isHostedMode', () => {
     (import.meta.env as any).VITE_HOSTED_MODE = 'true';
     setHostname('localhost');
     expect(isHostedMode()).toBe(true);
-  });
 
-  it('returns false for localhost and loopback IPs', () => {
-    setHostname('localhost');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('127.0.0.1');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('::1');
-    expect(isHostedMode()).toBe(false);
-  });
-
-  it('returns false for mDNS .local hostnames', () => {
-    setHostname('aerokin.local');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('my-pc.local');
-    expect(isHostedMode()).toBe(false);
-  });
-
-  it('returns false for RFC 1918 private LAN IP ranges', () => {
-    setHostname('192.168.1.100');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('10.0.0.5');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('172.20.10.2');
-    expect(isHostedMode()).toBe(false);
-
-    setHostname('169.254.1.1');
-    expect(isHostedMode()).toBe(false);
-  });
-
-  it('returns true for public hostnames and cloud hosting domains', () => {
     setHostname('aerokin.vercel.app');
     expect(isHostedMode()).toBe(true);
 
-    setHostname('aerokin.netlify.app');
+    setHostname('192.168.1.100');
     expect(isHostedMode()).toBe(true);
+  });
 
-    setHostname('app.aerokin.com');
-    expect(isHostedMode()).toBe(true);
+  it('returns false when VITE_HOSTED_MODE is "false" or unset', () => {
+    (import.meta.env as any).VITE_HOSTED_MODE = 'false';
+    expect(isHostedMode()).toBe(false);
 
-    setHostname('8.8.8.8');
-    expect(isHostedMode()).toBe(true);
+    delete (import.meta.env as any).VITE_HOSTED_MODE;
+    expect(isHostedMode()).toBe(false);
+  });
+
+  it('preserves agent-served mode on Tailscale 100.x IPs and custom hostnames', () => {
+    // Agent-served production build sets VITE_HOSTED_MODE=false
+    (import.meta.env as any).VITE_HOSTED_MODE = 'false';
+
+    // Tailscale CGNAT 100.x IP range
+    setHostname('100.64.0.1');
+    expect(isHostedMode()).toBe(false);
+
+    setHostname('100.115.92.14');
+    expect(isHostedMode()).toBe(false);
+
+    // Custom internal domain or work VPN hostname
+    setHostname('desktop-pc.tailscale.net');
+    expect(isHostedMode()).toBe(false);
+
+    setHostname('workstation.corp.internal');
+    expect(isHostedMode()).toBe(false);
+
+    setHostname('my-custom-pc.local');
+    expect(isHostedMode()).toBe(false);
+  });
+});
+
+describe('buildTrustUrl', () => {
+  it('builds http URL pointing to port 8080 from IPv4 without port', () => {
+    expect(buildTrustUrl('192.168.1.50')).toBe('http://192.168.1.50:8080/');
+  });
+
+  it('strips existing agent port and replaces with trust port 8080', () => {
+    expect(buildTrustUrl('192.168.1.50:8443')).toBe('http://192.168.1.50:8080/');
+    expect(buildTrustUrl('10.0.0.12:9000')).toBe('http://10.0.0.12:8080/');
+  });
+
+  it('builds http URL from hostname with or without port', () => {
+    expect(buildTrustUrl('aerokin.local')).toBe('http://aerokin.local:8080/');
+    expect(buildTrustUrl('aerokin.local:8443')).toBe('http://aerokin.local:8080/');
+    expect(buildTrustUrl('my-pc.tailscale.net:8443')).toBe('http://my-pc.tailscale.net:8080/');
+  });
+
+  it('supports custom trust port parameter', () => {
+    expect(buildTrustUrl('192.168.1.50:8443', 8081)).toBe('http://192.168.1.50:8081/');
+  });
+
+  it('handles empty or blank host with localhost fallback', () => {
+    expect(buildTrustUrl('')).toBe('http://localhost:8080/');
+    expect(buildTrustUrl('   ')).toBe('http://localhost:8080/');
   });
 });
 

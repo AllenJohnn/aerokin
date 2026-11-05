@@ -11,7 +11,7 @@ import { DesktopDashboard } from './components/DesktopDashboard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { CalibrationModal } from './components/CalibrationModal';
 import { triggerHaptic } from './utils/haptics';
-import { isHostedMode } from './utils/hosting';
+import { isHostedMode, buildTrustUrl } from './utils/hosting';
 import {
   AirPointerConfig,
   CalibrationData,
@@ -233,7 +233,7 @@ export const App: React.FC = () => {
               {host && (
                 <div className="mt-3">
                   <a
-                    href={`https://${host}/cert`}
+                    href={buildTrustUrl(host)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center text-xs font-semibold text-accent hover:underline"
