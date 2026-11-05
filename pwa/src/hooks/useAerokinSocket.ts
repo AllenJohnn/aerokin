@@ -607,6 +607,13 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               return;
             }
 
+            if (data.type === 'server_ping' && typeof data.t === 'number') {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'server_pong', t: data.t }));
+              }
+              return;
+            }
+
             if (data.type === 'devices' && Array.isArray(data.list)) {
               setDevices(data.list);
             } else if (data.type === 'pong' && typeof data.t === 'number') {

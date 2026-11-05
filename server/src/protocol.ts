@@ -75,6 +75,8 @@ export const ALLOWED_SPECIAL_KEYS = [
 
 export type ValidClientMessage =
   | { type: 'ping'; t: number }
+  | { type: 'server_pong'; t: number }
+  | { type: 'battery'; percent: number | null; charging?: boolean }
   | { type: 'auth'; deviceId: string; credential: string }
   | { type: 'device_list' }
   | { type: 'device_rename'; deviceId: string; name: string }
@@ -146,6 +148,22 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
         return null;
       }
       return { type: 'ping', t: msg.t };
+    }
+
+    case 'server_pong': {
+      if (typeof msg.t !== 'number' || !Number.isFinite(msg.t)) {
+        return null;
+      }
+      return { type: 'server_pong', t: msg.t };
+    }
+
+    case 'battery': {
+      const percent =
+        typeof msg.percent === 'number' && Number.isFinite(msg.percent)
+          ? Math.max(0, Math.min(100, Math.round(msg.percent)))
+          : null;
+      const charging = typeof msg.charging === 'boolean' ? msg.charging : undefined;
+      return { type: 'battery', percent, charging };
     }
 
     case 'auth': {
@@ -592,9 +610,11 @@ export class ConnectionRateLimiter {
       case 'getvolume':
         return 'media';
       case 'ping':
+      case 'server_pong':
         return 'ping';
       case 'auth':
         return 'auth';
+      case 'battery':
       case 'device_list':
       case 'device_rename':
       case 'device_revoke':

@@ -86,9 +86,11 @@ export const App: React.FC = () => {
   };
 
   // 4. Desktop Mode Detection (disabled in hosted mode to never call /api/pair)
+  const isDashboardRoute = typeof window !== 'undefined' && window.location.pathname === '/dashboard';
   const [isDesktopMode, setIsDesktopMode] = useState(() => {
     if (typeof window === 'undefined') return false;
     if (isHostedMode()) return false;
+    if (window.location.pathname === '/dashboard') return true;
     return window.matchMedia('(min-width: 768px) and (pointer: fine)').matches;
   });
 
@@ -158,11 +160,17 @@ export const App: React.FC = () => {
     setActiveTab(newTabId);
   };
 
-  // Render Desktop Dashboard if on PC desktop screen (agent-served only)
-  if (isDesktopMode && !isHosted) {
+  // Render Desktop Dashboard if on /dashboard route or on PC desktop screen (agent-served only)
+  if ((isDesktopMode || isDashboardRoute) && !isHosted) {
     return (
       <DesktopDashboard
-        onSwitchToPhoneView={() => setIsDesktopMode(false)}
+        onSwitchToPhoneView={() => {
+          if (isDashboardRoute) {
+            window.location.href = '/';
+          } else {
+            setIsDesktopMode(false);
+          }
+        }}
       />
     );
   }

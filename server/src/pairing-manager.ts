@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import readline from 'node:readline';
+import { EventEmitter } from 'node:events';
 
 export interface ActivePairingCode {
   code: string;
@@ -14,9 +15,17 @@ export interface PairingAttemptResult {
   remainingSeconds?: number;
 }
 
+export interface PendingApprovalRequest {
+  requestId: string;
+  name: string;
+  platform: string;
+  clientIp: string;
+  expiresInSeconds: number;
+}
+
 export type ApprovalHandler = (name: string, platform: string, clientIp: string) => Promise<boolean>;
 
-export class PairingManager {
+export class PairingManager extends EventEmitter {
   private activeCode: string | null = null;
   private codeExpiresAt = 0;
   private failedAttemptsGlobal = 0;
@@ -29,7 +38,18 @@ export class PairingManager {
   private customApprover: ApprovalHandler | null = null;
   private isPromptingApproval = false;
 
+  private currentPendingApproval: {
+    requestId: string;
+    name: string;
+    platform: string;
+    clientIp: string;
+    expiresAt: number;
+    timer: NodeJS.Timeout;
+    resolve: (approved: boolean) => void;
+  } | null = null;
+
   constructor() {
+    super();
     this.generateCode();
   }
 
@@ -137,73 +157,117 @@ export class PairingManager {
     }
   }
 
+  public getPendingApproval(): PendingApprovalRequest | null {
+    if (!this.currentPendingApproval) return null;
+    const remaining = Math.max(0, Math.round((this.currentPendingApproval.expiresAt - Date.now()) / 1000));
+    return {
+      requestId: this.currentPendingApproval.requestId,
+      name: this.currentPendingApproval.name,
+      platform: this.currentPendingApproval.platform,
+      clientIp: this.currentPendingApproval.clientIp,
+      expiresInSeconds: remaining,
+    };
+  }
+
+  public respondApproval(requestId: string, approved: boolean, by = 'dashboard'): boolean {
+    if (!this.currentPendingApproval || this.currentPendingApproval.requestId !== requestId) {
+      return false;
+    }
+
+    const pending = this.currentPendingApproval;
+    this.currentPendingApproval = null;
+    clearTimeout(pending.timer);
+    this.isPromptingApproval = false;
+
+    this.emit('approval_resolved', {
+      requestId,
+      approved,
+      by,
+      name: pending.name,
+    });
+
+    pending.resolve(approved);
+    return true;
+  }
+
   /**
-   * Set custom approval handler (used in tests or GUI).
+   * Set custom approval handler (used in tests or CLI).
    */
   public setApprover(handler: ApprovalHandler | null): void {
     this.customApprover = handler;
   }
 
   /**
-   * Prompts PC operator via terminal with 30s timeout and default deny.
+   * Prompts PC operator via terminal and/or dashboard with 30s timeout and default deny.
    */
   private async promptTerminalApproval(
     name: string,
     platform: string,
     clientIp: string
   ): Promise<boolean> {
-    if (this.customApprover) {
-      return this.customApprover(name, platform, clientIp);
-    }
-
-    if (this.isPromptingApproval) {
+    if (this.currentPendingApproval) {
       console.warn('[Security] Another pairing approval is currently in progress. Denying concurrent attempt.');
       return false;
     }
 
-    if (!process.stdin.isTTY) {
-      console.warn('[Security] Terminal is not interactive (non-TTY). Defaulting to deny.');
-      return false;
-    }
-
-    this.isPromptingApproval = true;
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
+    const requestId = `pair_req_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const expiresAt = Date.now() + 30_000;
 
     return new Promise<boolean>((resolve) => {
-      let resolved = false;
-
       const timer = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
+        if (this.currentPendingApproval?.requestId === requestId) {
+          this.currentPendingApproval = null;
           this.isPromptingApproval = false;
-          rl.close();
           console.log('\n[Security] Pairing request timed out (30s). Request denied.');
+          this.emit('approval_resolved', { requestId, approved: false, by: 'timeout', name });
           resolve(false);
         }
       }, 30_000);
 
-      rl.question(
-        `\n[PAIRING REQUEST] Approve "${name}" (${platform}, IP: ${clientIp})? (y/N): `,
-        (answer) => {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timer);
-            this.isPromptingApproval = false;
+      this.currentPendingApproval = {
+        requestId,
+        name,
+        platform,
+        clientIp,
+        expiresAt,
+        timer,
+        resolve,
+      };
+
+      this.emit('approval_requested', {
+        requestId,
+        name,
+        platform,
+        clientIp,
+        expiresInSeconds: 30,
+      });
+
+      // If custom approver is configured (e.g. terminal CLI in index.ts), trigger it
+      if (this.customApprover) {
+        this.customApprover(name, platform, clientIp).then((approved) => {
+          this.respondApproval(requestId, approved, 'terminal');
+        }).catch(() => {
+          this.respondApproval(requestId, false, 'terminal');
+        });
+      } else if (process.stdin.isTTY) {
+        this.isPromptingApproval = true;
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        rl.question(
+          `\n[PAIRING REQUEST] Approve "${name}" (${platform}, IP: ${clientIp})? (y/N) [30s]: `,
+          (answer) => {
             rl.close();
             const clean = answer.trim().toLowerCase();
             const approved = clean === 'y' || clean === 'yes';
-            if (approved) {
-              console.log(`[Pairing] Approved "${name}". Issuing device credentials.`);
-            } else {
-              console.log(`[Pairing] Denied pairing for "${name}".`);
-            }
-            resolve(approved);
+            this.respondApproval(requestId, approved, 'terminal');
           }
-        }
-      );
+        );
+      } else {
+        console.warn('[Security] Terminal is non-interactive. Awaiting dashboard approval or 30s timeout.');
+      }
     });
   }
 

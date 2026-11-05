@@ -132,11 +132,11 @@ async function run() {
 
   try {
     // =========================================================================
-    // 1. DESKTOP DASHBOARDS (1440x900 & 1280x720)
+    // 1. DESKTOP DASHBOARDS (1440x900 & 1024x768)
     // =========================================================================
     const desktopViewports = [
       { name: '1440x900', width: 1440, height: 900 },
-      { name: '1280x720', width: 1280, height: 720 },
+      { name: '1024x768', width: 1024, height: 768 },
     ];
 
     for (const dvp of desktopViewports) {
@@ -148,7 +148,7 @@ async function run() {
       });
 
       const page = await desktopContext.newPage();
-      await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
+      await page.goto(`https://127.0.0.1:8443/dashboard`, {
         waitUntil: 'networkidle',
       });
       await sleep(1000);

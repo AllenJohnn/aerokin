@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
+import { exec } from 'node:child_process';
 import qrcode from 'qrcode-terminal';
 import { getLocalIPv4 } from './network.js';
 import { getOrCreateToken } from './token.js';
@@ -10,6 +11,7 @@ import { startServer } from './server.js';
 import { startMdnsAdvertisement } from './mdns.js';
 import { DeviceStore } from './device-store.js';
 import { PairingManager } from './pairing-manager.js';
+import { serverLogger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,8 +23,15 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const CERTS_DIR = path.join(ROOT_DIR, '.certs');
 
 async function main() {
+  // Hook process console output into the in-memory redacted ring buffer
+  serverLogger.hookConsole();
+
   const lanIp = getLocalIPv4();
   const legacyToken = process.env.AEROKIN_LEGACY_TOKEN === '1' ? getOrCreateToken(CERTS_DIR) : undefined;
+  const noQr =
+    process.argv.includes('--no-qr') ||
+    process.env.AEROKIN_NO_QR === '1' ||
+    process.env.AEROKIN_NO_QR === 'true';
 
   // Initialize or verify AEROKIN Local CA & 365-day Leaf Cert
   const certs = getOrCreateLocalCaAndCert(CERTS_DIR, lanIp);
@@ -60,7 +69,7 @@ async function main() {
   const pairUrl = `https://${lanIp}:${HTTPS_PORT}/#code=${code}`;
   const mdnsPairUrl = `https://aerokin.local:${HTTPS_PORT}/#code=${code}`;
 
-  // Print startup banner and QR codes
+  // Print startup banner
   console.log('\n======================================================');
   console.log('              ✦ AEROKIN SERVER ✦                      ');
   console.log('         "Move the air. Move your PC."                ');
@@ -71,42 +80,55 @@ async function main() {
   console.log(`[Pairing] 8-digit Pairing Code: ${code} (valid for 2 minutes)`);
   console.log(`[mDNS]    Host alias: aerokin.local\n`);
 
-  console.log('------------------------------------------------------');
-  console.log('  QR #1: ONE-TIME IPHONE TRUST SETUP (60 SECONDS)');
-  console.log('  Scan to install AEROKIN Local CA (zero SSL warnings):');
-  console.log(`  URL: ${trustUrl}`);
-  console.log('------------------------------------------------------');
-  qrcode.generate(trustUrl, { small: true });
-
-  console.log('\n------------------------------------------------------');
-  console.log('  QR #2: CONNECT IPHONE REMOTE & TRACKPAD');
-  console.log('  Scan to launch AEROKIN directly on your iPhone:');
-  console.log(`  LAN URL:  ${pairUrl}`);
-  console.log(`  mDNS URL: ${mdnsPairUrl}`);
-  console.log('------------------------------------------------------');
-  qrcode.generate(pairUrl, { small: true });
+  console.log('===================================================================');
+  console.log(`>>> OPEN THE AEROKIN PC DASHBOARD:  https://localhost:${HTTPS_PORT}/dashboard  <<<`);
+  console.log(`>>> (or via mDNS:                  https://aerokin.local:${HTTPS_PORT}/dashboard) <<<`);
+  console.log('===================================================================\n');
 
   const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
   const hostedPairUrl = rawHosted
     ? `${rawHosted}/#host=${lanIp}:${HTTPS_PORT}&code=${code}`
     : undefined;
 
-  if (hostedPairUrl && rawHosted) {
-    console.log('\n------------------------------------------------------');
-    console.log('  QR #3: CONNECT VIA HOSTED STATIC PWA');
-    console.log(`  Hosted static app: ${rawHosted}`);
-    console.log(`  Pair URL:          ${hostedPairUrl}`);
+  if (!noQr) {
     console.log('------------------------------------------------------');
-    qrcode.generate(hostedPairUrl, { small: true });
+    console.log('  QR #1: ONE-TIME IPHONE TRUST SETUP (60 SECONDS)');
+    console.log('  Scan to install AEROKIN Local CA (zero SSL warnings):');
+    console.log(`  URL: ${trustUrl}`);
+    console.log('------------------------------------------------------');
+    qrcode.generate(trustUrl, { small: true });
+
+    console.log('\n------------------------------------------------------');
+    console.log('  QR #2: CONNECT IPHONE REMOTE & TRACKPAD');
+    console.log('  Scan to launch AEROKIN directly on your iPhone:');
+    console.log(`  LAN URL:  ${pairUrl}`);
+    console.log(`  mDNS URL: ${mdnsPairUrl}`);
+    console.log('------------------------------------------------------');
+    qrcode.generate(pairUrl, { small: true });
+
+    if (hostedPairUrl && rawHosted) {
+      console.log('\n------------------------------------------------------');
+      console.log('  QR #3: CONNECT VIA HOSTED STATIC PWA');
+      console.log(`  Hosted static app: ${rawHosted}`);
+      console.log(`  Pair URL:          ${hostedPairUrl}`);
+      console.log('------------------------------------------------------');
+      qrcode.generate(hostedPairUrl, { small: true });
+    }
+  } else {
+    console.log('[QR codes suppressed via --no-qr]');
+    console.log(`• Certificate Setup URL: ${trustUrl}`);
+    console.log(`• Phone Pair URL:        ${pairUrl}`);
+    if (hostedPairUrl) console.log(`• Hosted App URL:        ${hostedPairUrl}`);
   }
 
   console.log('\n------------------------------------------------------');
   console.log('TERMINAL COMMANDS:');
-  console.log('• type "devices"    - list all paired devices');
-  console.log('• type "pair"       - generate a new 8-digit pairing code & QR');
+  console.log('• type "dashboard"   - open PC Dashboard in default browser');
+  console.log('• type "devices"     - list all paired devices');
+  console.log('• type "pair"        - generate a new 8-digit pairing code & QR');
   console.log('• type "revoke <id>" - revoke and disconnect a device');
-  console.log('• type "revoke-all" - revoke all paired devices');
-  console.log('• type "help"       - show available commands');
+  console.log('• type "revoke-all"  - revoke all paired devices');
+  console.log('• type "help"        - show available commands');
   console.log('======================================================\n');
 
   // Terminal interactive CLI
@@ -117,32 +139,22 @@ async function main() {
       prompt: 'aerokin> ',
     });
 
-    let pendingApproval: ((approved: boolean) => void) | null = null;
-    let approvalTimeoutTimer: NodeJS.Timeout | null = null;
+    let activeRequestId: string | null = null;
 
-    pairingManager.setApprover(async (name, platform, clientIp) => {
-      return new Promise<boolean>((resolve) => {
-        if (pendingApproval) {
-          resolve(false);
-          return;
-        }
+    pairingManager.on('approval_requested', (req) => {
+      activeRequestId = req.requestId;
+      console.log('\n======================================================');
+      console.log(`[PAIRING REQUEST] Approve device "${req.name}"?`);
+      console.log(`Platform: ${req.platform} | Client IP: ${req.clientIp}`);
+      process.stdout.write(`Approve connection? (y/N) [30s timeout]: `);
+    });
 
-        console.log('\n======================================================');
-        console.log(`[PAIRING REQUEST] Approve device "${name}"?`);
-        console.log(`Platform: ${platform} | Client IP: ${clientIp}`);
-        process.stdout.write(`Approve connection? (y/N) [30s timeout]: `);
-
-        pendingApproval = resolve;
-        approvalTimeoutTimer = setTimeout(() => {
-          if (pendingApproval) {
-            const cb = pendingApproval;
-            pendingApproval = null;
-            console.log('\n[Pairing] Request timed out (30s). Request denied.');
-            rl.prompt();
-            cb(false);
-          }
-        }, 30_000);
-      });
+    pairingManager.on('approval_resolved', (ev) => {
+      if (activeRequestId === ev.requestId) {
+        activeRequestId = null;
+        console.log(`\n[Pairing] Request was ${ev.approved ? 'APPROVED' : 'DENIED'} by ${ev.by}.`);
+        rl.prompt();
+      }
     });
 
     rl.prompt();
@@ -150,20 +162,11 @@ async function main() {
     rl.on('line', async (line) => {
       const input = line.trim();
 
-      if (pendingApproval) {
-        if (approvalTimeoutTimer) {
-          clearTimeout(approvalTimeoutTimer);
-          approvalTimeoutTimer = null;
-        }
-        const cb = pendingApproval;
-        pendingApproval = null;
+      if (activeRequestId) {
+        const reqId = activeRequestId;
+        activeRequestId = null;
         const approved = input.toLowerCase() === 'y' || input.toLowerCase() === 'yes';
-        if (approved) {
-          console.log('[Pairing] Approved. Issuing device credential.');
-        } else {
-          console.log('[Pairing] Denied pairing request.');
-        }
-        cb(approved);
+        pairingManager.respondApproval(reqId, approved, 'terminal');
         rl.prompt();
         return;
       }
@@ -175,6 +178,15 @@ async function main() {
 
       const [cmd, ...args] = input.split(/\s+/);
       switch (cmd.toLowerCase()) {
+        case 'dashboard': {
+          const dashUrl = `https://localhost:${HTTPS_PORT}/dashboard`;
+          console.log(`\nOpening PC Dashboard: ${dashUrl}`);
+          if (process.platform === 'win32') {
+            exec(`start "" "${dashUrl}"`);
+          }
+          break;
+        }
+
         case 'devices': {
           const devs = server.deviceStore.listDevices();
           if (devs.length === 0) {
@@ -198,7 +210,9 @@ async function main() {
           const newPairUrl = `https://${lanIp}:${HTTPS_PORT}/#code=${newCode.code}`;
           console.log(`\nNew 8-digit Pairing Code: ${newCode.code} (valid for 2 minutes)`);
           console.log(`Pair URL: ${newPairUrl}`);
-          qrcode.generate(newPairUrl, { small: true });
+          if (!noQr) {
+            qrcode.generate(newPairUrl, { small: true });
+          }
           break;
         }
 
@@ -256,6 +270,7 @@ async function main() {
 
         case 'help': {
           console.log('\nCommands:');
+          console.log('  dashboard      - Open PC Dashboard in default browser');
           console.log('  devices        - List all paired devices');
           console.log('  pair           - Generate a new 8-digit pairing code & QR');
           console.log('  revoke <id>    - Revoke and disconnect a device by ID (or prefix)');

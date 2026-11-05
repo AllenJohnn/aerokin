@@ -1,7 +1,12 @@
+import os from 'node:os';
+import path from 'node:path';
 import https from 'node:https';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { getOrCreateLocalCaAndCert } from './ca.js';
+import { isLoopbackRequest, isLoopbackIp, normalizeIp } from './loopback.js';
+import { serverLogger, LogEntry } from './logger.js';
+import { getHostPowerStatus } from './power.js';
 import {
   createMoveCoalescer,
   createScroller,
@@ -49,15 +54,7 @@ export interface ActivityEvent {
 /**
  * Returns true if the HTTP request originated from the local machine (loopback).
  */
-function isLoopback(req: express.Request): boolean {
-  const ip = req.socket.remoteAddress || '';
-  return (
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip === '::ffff:127.0.0.1' ||
-    ip === 'localhost'
-  );
-}
+const isLoopback = isLoopbackRequest;
 
 export function startServer(config: ServerConfig): {
   httpsServer: https.Server;
@@ -82,9 +79,128 @@ export function startServer(config: ServerConfig): {
   const activeSockets = new Set<WebSocket>();
   const socketsByDeviceId = new Map<string, Set<WebSocket>>();
   const unauthConnectionsByIp = new Map<string, number>();
+  const latencyHistoryByDevice = new Map<string, number[]>();
+  const phoneBatteryByDevice = new Map<string, { percent: number | null; charging: boolean | null }>();
+  const sseClients = new Set<express.Response>();
 
   let lastLatency: number | null = null;
   const eventBuffer: ActivityEvent[] = [];
+
+  function broadcastDashboardEvent(event: string, data: any) {
+    if (sseClients.size === 0) return;
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
+
+  function recordDeviceLatency(deviceId: string, rtt: number) {
+    let hist = latencyHistoryByDevice.get(deviceId);
+    if (!hist) {
+      hist = [];
+      latencyHistoryByDevice.set(deviceId, hist);
+    }
+    hist.push(rtt);
+    if (hist.length > 60) {
+      hist.shift();
+    }
+    lastLatency = rtt;
+    broadcastDashboardEvent('latency_sample', {
+      deviceId,
+      rtt,
+      history: hist,
+    });
+  }
+
+  function getEnrichedDeviceList() {
+    const devs = deviceStore.listDevices();
+    return devs.map((d) => {
+      const devSockets = socketsByDeviceId.get(d.deviceId);
+      const isConnected = !!devSockets && devSockets.size > 0;
+      let clientIp = '';
+      if (isConnected && devSockets) {
+        for (const s of devSockets) {
+          const rawIp = (s as any)._socket?.remoteAddress || '';
+          if (rawIp) {
+            clientIp = normalizeIp(rawIp);
+            break;
+          }
+        }
+      }
+      const history = latencyHistoryByDevice.get(d.deviceId) || [];
+      const currentLatency = history.length > 0 ? history[history.length - 1] : null;
+      const battery = phoneBatteryByDevice.get(d.deviceId) || null;
+
+      return {
+        ...d,
+        isConnected,
+        clientIp: clientIp || undefined,
+        currentLatency,
+        latencyHistory: history,
+        battery,
+      };
+    });
+  }
+
+  function getFullDashboardStatus() {
+    const activeCode = pairingManager.getActiveCode();
+    const currentCode = activeCode ? activeCode.code : '';
+    const pairUrl = currentCode ? `https://${config.lanIp}:${config.port}/#code=${currentCode}` : '';
+    const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
+
+    return {
+      devices: getEnrichedDeviceList(),
+      pairing: {
+        code: currentCode,
+        expiresInSeconds: activeCode ? activeCode.validForSeconds : 0,
+        url: pairUrl,
+        mdnsUrl,
+        pendingApproval: pairingManager.getPendingApproval(),
+      },
+      desktop: streamService.getSessionInfo(),
+      media: mediaManager.getCurrentStatus(),
+      pc: {
+        hostname: os.hostname(),
+        lanIp: config.lanIp,
+        port: config.port,
+        uptime: Math.round(os.uptime()),
+        power: getHostPowerStatus(),
+      },
+      recentEvents: eventBuffer.slice(-25),
+    };
+  }
+
+  // 2s server-side ping to measure exact RTT per connected device
+  const serverPingInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [deviceId, sockets] of socketsByDeviceId.entries()) {
+      for (const ws of sockets) {
+        if (ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ type: 'server_ping', t: now }));
+          } catch {}
+        }
+      }
+    }
+  }, 2000);
+
+  // Hook serverLogger entries to real-time dashboard event stream
+  serverLogger.on('entry', (entry) => {
+    broadcastDashboardEvent('log_entry', entry);
+  });
+
+  // Hook pairing approvals to dashboard event stream
+  pairingManager.on('approval_requested', (req) => {
+    broadcastDashboardEvent('pairing_request', req);
+  });
+
+  pairingManager.on('approval_resolved', (ev) => {
+    broadcastDashboardEvent('approval_resolved', ev);
+  });
 
   function recordEvent(type: ActivityEvent['type'], summary: string) {
     const event: ActivityEvent = {
@@ -131,6 +247,7 @@ export function startServer(config: ServerConfig): {
 
   streamService.setOnStatusChange((state, error) => {
     broadcastDesktopStatus();
+    broadcastDashboardEvent('desktop_status', streamService.getSessionInfo());
     if (error) {
       recordEvent('disconnect', `Desktop stream error: ${error}`);
     }
@@ -138,10 +255,12 @@ export function startServer(config: ServerConfig): {
 
   streamService.setOnBackendChange(() => {
     broadcastDesktopStatus();
+    broadcastDashboardEvent('desktop_status', streamService.getSessionInfo());
   });
 
   streamService.setOnStatsUpdate((stats) => {
     broadcastDesktopStats(stats);
+    broadcastDashboardEvent('desktop_stats', stats);
   });
 
   function closeDeviceSockets(deviceId: string) {
@@ -169,6 +288,7 @@ export function startServer(config: ServerConfig): {
         ws.send(payload);
       }
     }
+    broadcastDashboardEvent('devices_update', getEnrichedDeviceList());
   }
 
   function revokeDevice(deviceId: string) {
@@ -207,6 +327,7 @@ export function startServer(config: ServerConfig): {
         ws.send(payloadSessions);
       }
     }
+    broadcastDashboardEvent('media_status', mediaManager.getCurrentStatus());
   });
 
   // Body parsing for JSON
@@ -337,6 +458,206 @@ export function startServer(config: ServerConfig): {
       mediaStatus: mediaManager.getCurrentStatus(),
       devices: deviceStore.listDevices(),
     });
+  });
+
+  // Dedicated PC Dashboard Route (Loopback only, serves index.html)
+  app.get('/dashboard', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).send('Forbidden: /dashboard is restricted to the local PC.');
+      return;
+    }
+    res.sendFile(path.join(config.publicDir, 'index.html'));
+  });
+
+  // REST API: Full Dashboard Status Snapshot - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/status', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    res.json(getFullDashboardStatus());
+  });
+
+  // REST API: Real-time Dashboard Server-Sent Events (SSE) Stream - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/events', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.flushHeaders?.();
+
+    // Send initial snapshot as 'init' event
+    res.write(`event: init\ndata: ${JSON.stringify(getFullDashboardStatus())}\n\n`);
+
+    sseClients.add(res);
+
+    // Keepalive comment ping every 15s to keep connection open through proxies
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        clearInterval(keepAlive);
+        sseClients.delete(res);
+      }
+    }, 15_000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    });
+  });
+
+  // REST API: Dashboard Pairing Approval - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/pair/approve', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const { requestId, approved } = req.body || {};
+    if (typeof requestId !== 'string') {
+      res.status(400).json({ error: 'requestId is required' });
+      return;
+    }
+
+    const ok = pairingManager.respondApproval(requestId, Boolean(approved), 'dashboard');
+    res.json({ ok });
+  });
+
+  // REST API: Regenerate 8-digit Pairing Code - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/pair/regenerate', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const newCode = pairingManager.generateCode();
+    broadcastDashboardEvent('pairing_update', {
+      code: newCode.code,
+      expiresInSeconds: newCode.validForSeconds,
+    });
+
+    res.json({
+      ok: true,
+      code: newCode.code,
+      expiresInSeconds: newCode.validForSeconds,
+    });
+  });
+
+  // REST API: Rename Device - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/devices/rename', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const { deviceId, name } = req.body || {};
+    if (typeof deviceId !== 'string' || typeof name !== 'string') {
+      res.status(400).json({ error: 'deviceId and name are required' });
+      return;
+    }
+
+    deviceStore.renameDevice(deviceId, name.trim().slice(0, 64));
+    broadcastDevices();
+    res.json({ ok: true });
+  });
+
+  // REST API: Disconnect Live Device Sockets - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/devices/disconnect', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string') {
+      res.status(400).json({ error: 'deviceId is required' });
+      return;
+    }
+
+    closeDeviceSockets(deviceId);
+    broadcastDevices();
+    res.json({ ok: true });
+  });
+
+  // REST API: Revoke Device - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/devices/revoke', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const { deviceId } = req.body || {};
+    if (typeof deviceId !== 'string') {
+      res.status(400).json({ error: 'deviceId is required' });
+      return;
+    }
+
+    revokeDevice(deviceId);
+    res.json({ ok: true });
+  });
+
+  // REST API: Revoke All Devices - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/devices/revoke-all', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    revokeAll();
+    res.json({ ok: true });
+  });
+
+  // REST API: Stop Desktop Remote Stream - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/desktop/stop', async (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    await streamService.stopSession('Terminated from PC Dashboard');
+    res.json({ ok: true });
+  });
+
+  // REST API: Fetch In-Memory Log Entries - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/logs', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const since = Number(req.query.since) || 0;
+    const limit = Math.min(1000, Number(req.query.limit) || 200);
+    res.json({ entries: serverLogger.getEntries(since, limit) });
+  });
+
+  // REST API: Download Redacted Log File (.txt) - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/logs/download', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const entries = serverLogger.getEntries(0, 1000);
+    const lines = entries.map(
+      (e) =>
+        `[${new Date(e.timestamp).toISOString()}] [${e.level.toUpperCase()}] [${e.category.toUpperCase()}] ${e.message}`
+    );
+    const text = lines.join('\r\n');
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="aerokin-logs-${Date.now()}.txt"`
+    );
+    res.send(text);
   });
 
   // REST API: Loopback-only Keyboard Debugger Page (/debug/keys)
@@ -765,10 +1086,33 @@ export function startServer(config: ServerConfig): {
             revokeAll(msg.exceptCurrent ? authenticatedDeviceId || undefined : undefined);
             break;
 
+          case 'server_pong':
+            if (authenticatedDeviceId && typeof msg.t === 'number') {
+              const rtt = Math.max(1, Math.round(Date.now() - msg.t));
+              recordDeviceLatency(authenticatedDeviceId, rtt);
+            }
+            break;
+
+          case 'battery':
+            if (authenticatedDeviceId) {
+              phoneBatteryByDevice.set(authenticatedDeviceId, {
+                percent: msg.percent,
+                charging: msg.charging ?? null,
+              });
+              broadcastDashboardEvent('devices_update', getEnrichedDeviceList());
+            }
+            break;
+
           case 'ping':
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'pong', t: msg.t }));
               lastLatency = Math.max(1, Math.round(Date.now() - msg.t));
+              if (authenticatedDeviceId) {
+                const hist = latencyHistoryByDevice.get(authenticatedDeviceId);
+                if (!hist || hist.length === 0) {
+                  recordDeviceLatency(authenticatedDeviceId, lastLatency);
+                }
+              }
             }
             break;
 
@@ -935,6 +1279,10 @@ export function startServer(config: ServerConfig): {
 
     ws.on('close', cleanup);
     ws.on('error', cleanup);
+  });
+
+  httpsServer.on('close', () => {
+    clearInterval(serverPingInterval);
   });
 
   httpsServer.listen(config.port, '0.0.0.0');
