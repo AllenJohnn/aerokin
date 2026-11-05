@@ -28,11 +28,11 @@ In the Vercel Project Settings:
 
 ### `vercel.json` Configuration
 The root `vercel.json` file configures:
-- **SPA Rewrites**: Redirects navigation requests to `/index.html` while preserving `/assets/*`, `manifest.json`, and static icons.
+- **SPA Rewrites**: Redirects navigation requests to `/index.html` via a catch-all rewrite rule (`/(.*)`). On Vercel, static filesystem files (assets, icons, manifest) take precedence before rewrites are evaluated.
 - **Cache Headers**: 1-year immutable caching for hashed `/assets/*`, and `no-cache, must-revalidate` for `index.html` and `manifest.json`.
 - **Security Headers**: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
 - **Permissions-Policy**: Explicitly enables `accelerometer=*`, `gyroscope=*`, and `magnetometer=*` so the Air Pointer gyroscopic engine functions when loaded from the hosted origin.
-- **Content Security Policy (CSP)**: Intentionally omitted from static headers. Because iOS Safari and WebKit enforce erratic restrictions on RFC 1918 private LAN IP connections when `connect-src` is defined, omitting CSP avoids connection blocks on mobile.
+- **Content Security Policy (CSP)**: Intentionally omitted for now (untested). If a CSP header is added in the future, it must explicitly allow `connect-src wss:` to local LAN hosts (e.g. `connect-src 'self' wss: https:;`).
 
 ---
 
@@ -94,20 +94,29 @@ Browsers require a trusted TLS certificate when connecting from an HTTPS website
 5. Go to **Settings > General > About > Certificate Trust Settings**.
 6. Under **Enable Full Trust for Root Certificates**, enable the switch for **AEROKIN Local CA**.
 
-### Android
-1. Download the CA certificate (`.crt`) from `http://<PC-LAN-IP>:8080/ca.crt` or `https://<PC-LAN-IP>:8443/cert`.
-2. Go to **Settings > Security & Privacy > More Security Settings > Encryption & Credentials > Install a Certificate > CA Certificate**.
-3. Select the downloaded certificate and confirm installation.
+### Android (UNTESTED)
+> [!NOTE]
+> Android client support is currently UNTESTED. AeroKin's only tested and supported mobile target is iPhone Safari / installed PWA.
+1. Download the CA certificate (`.crt`) from `http://<PC-LAN-IP>:8080/aerokin-ca.crt`.
+2. Install via Android Certificate Manager according to your device's security settings.
 
 ---
 
 ## 6. Browser-Specific Caveats
 
-### iOS Local Network Access Prompt
-- When a web app running in Safari attempts to communicate with a device on the local network, iOS displays a permission prompt: *"AeroKin would like to find and connect to devices on your local network"*.
-- In AeroKin, connections in hosted mode are triggered by a **direct user gesture** (tapping the "Connect to PC" button), ensuring the system prompt is displayed reliably.
-- If you accidentally tapped "Don't Allow", re-enable it under **iOS Settings > Safari > Local Network** (or Settings > AeroKin if installed to Home Screen).
+### iOS Local Network Access (UNVERIFIED)
+UNVERIFIED: iPhone Safari / installed-PWA behavior to be recorded after a device test.
 
-### Chrome & Edge Private Network Access (PNA)
-- Modern Chromium browsers require private network requests from public HTTPS origins to use secure transports (`wss://`) with valid, trusted certificates.
-- If developing locally without installing the CA certificate, you can temporarily allow the origin in `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+**Test Recording Template:**
+```text
+Device: iPhone 14 (iOS XX.X)
+Browser: Safari / Installed PWA
+Trigger: Tap "Connect to PC"
+Result: [Prompt shown / Not shown / Direct connect / Error]
+Settings Path: [Settings > Safari > Local Network / Other]
+Notes: 
+```
+
+### Chrome & Edge Private Network Access (PNA) (TO BE VERIFIED)
+- Modern Chromium specifications require private network requests initiated from public HTTPS origins to use secure transports (`wss://`) with valid, trusted certificates. This is a browser platform requirement to verify on target browsers, not an already tested result.
+- For local development without installing the CA certificate, Chromium provides `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
