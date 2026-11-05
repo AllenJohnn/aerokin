@@ -1,6 +1,7 @@
 import { Win32Input } from '../native/win32.js';
 import { SmtcAdapter } from './SmtcAdapter.js';
 import { AppProfiles } from './AppProfiles.js';
+import { mapSeekSecondsToVlcHotkey } from './ProcessMediaDetector.js';
 import {
   MediaCommandResult,
   NowPlayingData,
@@ -128,8 +129,25 @@ export class MediaCommandRouter {
         }
       }
 
-      // Tier 3: Keystroke fallback matching foreground application profile
+      // Tier 3: Keystroke fallback matching foreground application profile or targeted session
       const fg = this.getForegroundApp();
+      const isVlc =
+        targetSession?.app?.toLowerCase() === 'vlc' ||
+        targetSession?.id?.toLowerCase().includes('vlc') ||
+        fg?.processName?.toLowerCase()?.includes('vlc');
+
+      if (isVlc) {
+        const vlcSeek = mapSeekSecondsToVlcHotkey(seconds);
+        await Win32Input.keyCombo(vlcSeek.key);
+        return {
+          tier: 3,
+          action,
+          handled: true,
+          latencyMs: Math.round(performance.now() - start),
+          detail: `Keystroke "${vlcSeek.key}" (${vlcSeek.label}, verified: ${vlcSeek.verified})`,
+        };
+      }
+
       const profile = this.profiles.getProfile(fg?.processName, fg?.title);
       const isForward = seconds >= 0;
       const targetEntry = isForward ? profile.seekForward : profile.seekBackward;

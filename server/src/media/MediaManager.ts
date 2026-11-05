@@ -1,6 +1,7 @@
 import { SmtcAdapter } from './SmtcAdapter.js';
 import { AppProfiles } from './AppProfiles.js';
 import { MediaCommandRouter } from './MediaCommandRouter.js';
+import { synthesizeProcessSessions } from './ProcessMediaDetector.js';
 import {
   NowPlayingData,
   MediaSessionItem,
@@ -92,9 +93,35 @@ export class MediaManager {
   public async refreshStatus(): Promise<void> {
     const data = await this.smtcAdapter.getStatus();
     if (data) {
+      let sessions = data.sessions || [];
+      let nowPlaying = data.nowPlaying || { status: 'none' };
+
+      // Process-level fallback synthesis for VLC / MPC-HC / etc.
+      if (data.fallbackProcesses && data.fallbackProcesses.length > 0) {
+        const synthesized = synthesizeProcessSessions(data.fallbackProcesses, sessions);
+        if (synthesized.length > 0) {
+          sessions = [...sessions, ...synthesized];
+
+          if (nowPlaying.status === 'none') {
+            const primarySynth = synthesized[0];
+            nowPlaying = {
+              id: primarySynth.id,
+              app: primarySynth.app,
+              title: primarySynth.title,
+              artist: '',
+              status: 'playing',
+              capabilities: primarySynth.capabilities,
+              canSeek: true,
+              canNext: true,
+              canPrev: true,
+            };
+          }
+        }
+      }
+
       this.currentStatus = {
-        sessions: data.sessions,
-        nowPlaying: data.nowPlaying,
+        sessions,
+        nowPlaying,
         volume: data.volume,
         muted: data.muted,
       };

@@ -170,9 +170,23 @@ function Get-NowPlayingData {
         }
     }
 
+    $knownPlayers = @('vlc', 'mpc-hc64', 'mpc-hc', 'potplayermini64', 'potplayermini', 'potplayer')
+    $fallbackProcs = @()
+    foreach ($name in $knownPlayers) {
+        $found = Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -ne '' }
+        foreach ($p in $found) {
+            $fallbackProcs += @{
+                pid = $p.Id
+                processName = ($p.ProcessName + ".exe")
+                windowTitle = $p.MainWindowTitle
+            }
+        }
+    }
+
     if (-not $session) {
         return @{
             sessions = $allSessions
+            fallbackProcesses = $fallbackProcs
             nowPlaying = @{
                 status = "none"
             }
@@ -232,6 +246,7 @@ function Get-NowPlayingData {
 
     return @{
         sessions = $allSessions
+        fallbackProcesses = $fallbackProcs
         nowPlaying = $nowPlaying
         volume = [Math]::Round(([AerokinNative.MasterVolume]::GetVolume() * 100), 1)
         muted = [AerokinNative.MasterVolume]::GetMute()

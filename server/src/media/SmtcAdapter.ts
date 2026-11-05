@@ -8,6 +8,7 @@ import {
   MediaSessionItem,
   DEFAULT_CAPABILITIES,
 } from './types.js';
+import { RunningProcessMediaInfo } from './ProcessMediaDetector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,7 @@ export interface SmtcStatusResponse {
   nowPlaying: NowPlayingData;
   volume: number;
   muted: boolean;
+  fallbackProcesses?: RunningProcessMediaInfo[];
 }
 
 export interface SmtcAdapterOptions {
