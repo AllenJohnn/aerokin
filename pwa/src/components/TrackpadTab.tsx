@@ -3,6 +3,7 @@ import { triggerHaptic } from '../utils/haptics';
 import {
   TrackpadGestureEngine,
   TrackpadIntent,
+  TrackpadConfig,
   loadTrackpadConfig,
 } from '../engine/trackpadGestures';
 
@@ -13,6 +14,7 @@ interface TrackpadTabProps {
   sendScroll: (dy: number, dx?: number) => void;
   isConnected: boolean;
   onOpenSettings: () => void;
+  trackpadConfig?: TrackpadConfig;
 }
 
 const STORAGE_HINT_SEEN = 'aerokin_trackpad_hint_seen';
@@ -23,13 +25,20 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   sendButton,
   sendScroll,
   isConnected,
+  trackpadConfig,
 }) => {
   const padRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<TrackpadGestureEngine | null>(null);
 
   if (!engineRef.current) {
-    engineRef.current = new TrackpadGestureEngine(loadTrackpadConfig());
+    engineRef.current = new TrackpadGestureEngine(trackpadConfig || loadTrackpadConfig());
   }
+
+  useEffect(() => {
+    if (trackpadConfig && engineRef.current) {
+      engineRef.current.updateConfig(trackpadConfig);
+    }
+  }, [trackpadConfig]);
 
   const [isDragging, setIsDragging] = useState(false);
   const momentumAnimRef = useRef<number | null>(null);

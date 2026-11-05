@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { AirPointerConfig, CalibrationData } from '../engine/airPointer';
+import { TrackpadConfig } from '../engine/trackpadGestures';
 import { triggerHaptic } from '../utils/haptics';
 import { Slider } from './ui/Slider';
+import { Switch } from './ui/Switch';
 import { Copy, Check, ArrowClockwise } from '@phosphor-icons/react';
 
 interface SettingsDrawerProps {
@@ -13,6 +15,9 @@ interface SettingsDrawerProps {
   calibration: CalibrationData;
   onResetCalibration: () => void;
   onOpenCalibrationWizard: () => void;
+  trackpadConfig: TrackpadConfig;
+  onTrackpadConfigChange: (newConfig: Partial<TrackpadConfig>) => void;
+  onResetTrackpadConfig: () => void;
   seekMethod: 'auto' | 'keys';
   onSeekMethodChange: (method: 'auto' | 'keys') => void;
   token?: string | null;
@@ -27,6 +32,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   calibration,
   onResetCalibration,
   onOpenCalibrationWizard,
+  trackpadConfig,
+  onTrackpadConfigChange,
+  onResetTrackpadConfig,
   seekMethod,
   onSeekMethodChange,
   token,
@@ -145,7 +153,163 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
 
           <div className="h-[1px] bg-border" />
 
-          {/* Section 2: Media */}
+          {/* Section 2: Trackpad */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-medium text-muted-foreground">
+                Trackpad
+              </h3>
+              <button
+                onClick={() => {
+                  onResetTrackpadConfig();
+                  triggerHaptic('medium');
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-raised active:scale-[0.97]"
+                title="Reset trackpad to defaults"
+                aria-label="Reset trackpad to defaults"
+              >
+                <ArrowClockwise size={13} />
+                <span>Reset</span>
+              </button>
+            </div>
+
+            {/* Pointer Speed Slider */}
+            <div className="flex flex-col gap-2 py-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">Pointer speed</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {trackpadConfig.pointerSpeed.toFixed(2)}x
+                </span>
+              </div>
+              <Slider
+                value={[trackpadConfig.pointerSpeed]}
+                min={0.5}
+                max={3.0}
+                step={0.05}
+                onValueChange={([val]) =>
+                  onTrackpadConfigChange({ pointerSpeed: Math.round(val * 100) / 100 })
+                }
+                aria-label="Trackpad pointer speed"
+              />
+            </div>
+
+            {/* Natural Scrolling Toggle */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <span className="text-sm text-foreground">Natural scrolling</span>
+                <p className="text-xs text-muted-foreground">Fingers up scrolls page down</p>
+              </div>
+              <Switch
+                checked={trackpadConfig.naturalScroll}
+                onCheckedChange={(checked) => {
+                  onTrackpadConfigChange({ naturalScroll: checked });
+                  triggerHaptic('light');
+                }}
+                aria-label="Natural scrolling"
+              />
+            </div>
+
+            {/* Vertical Scroll Speed Slider */}
+            <div className="flex flex-col gap-2 py-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">Vertical scroll speed</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {trackpadConfig.scrollSensitivityY.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[trackpadConfig.scrollSensitivityY]}
+                min={0.05}
+                max={1.5}
+                step={0.05}
+                onValueChange={([val]) =>
+                  onTrackpadConfigChange({ scrollSensitivityY: Math.round(val * 100) / 100 })
+                }
+                aria-label="Vertical scroll speed"
+              />
+            </div>
+
+            {/* Horizontal Scroll Speed Slider */}
+            <div className="flex flex-col gap-2 py-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">Horizontal scroll speed</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {trackpadConfig.scrollSensitivityX.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[trackpadConfig.scrollSensitivityX]}
+                min={0.05}
+                max={1.5}
+                step={0.05}
+                onValueChange={([val]) =>
+                  onTrackpadConfigChange({ scrollSensitivityX: Math.round(val * 100) / 100 })
+                }
+                aria-label="Horizontal scroll speed"
+              />
+            </div>
+
+            {/* Momentum Toggle */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <span className="text-sm text-foreground">Momentum</span>
+                <p className="text-xs text-muted-foreground">Inertial glide on flick</p>
+              </div>
+              <Switch
+                checked={trackpadConfig.momentum}
+                onCheckedChange={(checked) => {
+                  onTrackpadConfigChange({ momentum: checked });
+                  triggerHaptic('light');
+                }}
+                aria-label="Momentum scrolling"
+              />
+            </div>
+
+            {/* Momentum Decay Slider (Shown only when momentum is ON) */}
+            {trackpadConfig.momentum && (
+              <div className="flex flex-col gap-2 py-1 pl-3 border-l-2 border-border/80 ml-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm text-foreground">Momentum decay</span>
+                    <p className="text-xs text-muted-foreground">Glide friction rate</p>
+                  </div>
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {trackpadConfig.momentumDecay.toFixed(2)}
+                  </span>
+                </div>
+                <Slider
+                  value={[trackpadConfig.momentumDecay]}
+                  min={0.8}
+                  max={0.98}
+                  step={0.01}
+                  onValueChange={([val]) =>
+                    onTrackpadConfigChange({ momentumDecay: Math.round(val * 100) / 100 })
+                  }
+                  aria-label="Momentum decay"
+                />
+              </div>
+            )}
+
+            {/* Scroll Haptics Toggle */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <span className="text-sm text-foreground">Scroll haptics</span>
+                <p className="text-xs text-muted-foreground">Detent feedback when scrolling</p>
+              </div>
+              <Switch
+                checked={trackpadConfig.scrollHaptics}
+                onCheckedChange={(checked) => {
+                  onTrackpadConfigChange({ scrollHaptics: checked });
+                  triggerHaptic('light');
+                }}
+                aria-label="Scroll haptics"
+              />
+            </div>
+          </div>
+
+          <div className="h-[1px] bg-border" />
+
+          {/* Section 3: Media */}
           <div className="space-y-3">
             <h3 className="text-xs font-medium text-muted-foreground">
               Media

@@ -2,8 +2,29 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   TrackpadGestureEngine,
   TrackpadIntent,
+  TrackpadConfig,
   DEFAULT_TRACKPAD_CONFIG,
+  DEFAULT_SCROLL_SENSITIVITY,
+  DEFAULT_POINTER_SPEED,
+  DEFAULT_MOMENTUM_DECAY,
+  SCROLL_HAPTIC_THROTTLE_MS,
+  STORAGE_TRACKPAD_CONFIG_KEY,
+  validateTrackpadConfig,
+  migrateTrackpadConfig,
+  validateAndMigrateTrackpadConfig,
+  loadTrackpadConfig,
+  saveTrackpadConfig,
 } from '../src/engine/trackpadGestures';
+
+const storage = new Map<string, string>();
+const localStorageMock = {
+  getItem: (key: string) => storage.get(key) || null,
+  setItem: (key: string, value: string) => storage.set(key, String(value)),
+  removeItem: (key: string) => storage.delete(key),
+  clear: () => storage.clear(),
+};
+(globalThis as any).localStorage = localStorageMock;
+(globalThis as any).window = {};
 
 describe('AEROKIN TrackpadGestureEngine', () => {
   let engine: TrackpadGestureEngine;
@@ -306,6 +327,242 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       engine.processEvent({ type: 'down', id: 3, x: 200, y: 200, time: 1050 });
       expect(engine.isMomentumActive()).toBe(false);
       expect(engine.stepMomentum(16)).toEqual([]);
+    });
+  });
+
+  describe('Trackpad Configuration & Migration', () => {
+    beforeEach(() => {
+      storage.clear();
+    });
+
+    it('has correct default constants and values', () => {
+      expect(DEFAULT_SCROLL_SENSITIVITY).toBe(0.25);
+      expect(DEFAULT_POINTER_SPEED).toBe(1.0);
+      expect(DEFAULT_MOMENTUM_DECAY).toBe(0.92);
+      expect(SCROLL_HAPTIC_THROTTLE_MS).toBe(60);
+
+      expect(DEFAULT_TRACKPAD_CONFIG).toEqual({
+        naturalScroll: true,
+        scrollSensitivityX: 0.25,
+        scrollSensitivityY: 0.25,
+        pointerSpeed: 1.0,
+        momentum: false,
+        momentumDecay: 0.92,
+        scrollHaptics: true,
+      });
+    });
+
+    it('migrates legacy stored config with old default 1.0 to new default 0.25', () => {
+      const legacyConfig = {
+        naturalScroll: true,
+        scrollSensitivityX: 1.0,
+        scrollSensitivityY: 1.0,
+        momentum: false,
+      };
+
+      const migrated = migrateTrackpadConfig(legacyConfig);
+      expect(migrated.scrollSensitivityX).toBe(0.25);
+      expect(migrated.scrollSensitivityY).toBe(0.25);
+
+      // Preserves custom sensitivity if user intentionally customized it away from 1.0
+      const customConfig = {
+        scrollSensitivityX: 0.75,
+        scrollSensitivityY: 0.45,
+      };
+      const customMigrated = migrateTrackpadConfig(customConfig);
+      expect(customMigrated.scrollSensitivityX).toBe(0.75);
+      expect(customMigrated.scrollSensitivityY).toBe(0.45);
+    });
+
+    it('validates and clamps values to safe bounds', () => {
+      const clamped = validateTrackpadConfig({
+        naturalScroll: 'not-a-bool',
+        scrollSensitivityX: 99.9, // exceeds 1.5 max
+        scrollSensitivityY: 0.001, // below 0.05 min
+        pointerSpeed: 10.0, // exceeds 3.0 max
+        momentum: 123,
+        momentumDecay: 0.5, // below 0.80 min
+        scrollHaptics: null,
+      });
+
+      expect(clamped.naturalScroll).toBe(true);
+      expect(clamped.scrollSensitivityX).toBe(1.5);
+      expect(clamped.scrollSensitivityY).toBe(0.05);
+      expect(clamped.pointerSpeed).toBe(3.0);
+      expect(clamped.momentum).toBe(false);
+      expect(clamped.momentumDecay).toBe(0.80);
+      expect(clamped.scrollHaptics).toBe(true);
+    });
+
+    it('saves to and loads from localStorage with automatic migration and validation', () => {
+      // 1. Simulate legacy storage with 1.0 sensitivities
+      localStorageMock.setItem(
+        STORAGE_TRACKPAD_CONFIG_KEY,
+        JSON.stringify({
+          naturalScroll: false,
+          scrollSensitivityX: 1.0,
+          scrollSensitivityY: 1.0,
+        })
+      );
+
+      const loadedLegacy = loadTrackpadConfig();
+      expect(loadedLegacy.naturalScroll).toBe(false);
+      expect(loadedLegacy.scrollSensitivityX).toBe(0.25);
+      expect(loadedLegacy.scrollSensitivityY).toBe(0.25);
+
+      // 2. Save new customized config and reload
+      const customized: TrackpadConfig = {
+        naturalScroll: true,
+        scrollSensitivityX: 0.4,
+        scrollSensitivityY: 0.6,
+        pointerSpeed: 1.5,
+        momentum: true,
+        momentumDecay: 0.95,
+        scrollHaptics: false,
+      };
+      saveTrackpadConfig(customized);
+
+      const reloaded = loadTrackpadConfig();
+      expect(reloaded).toEqual(customized);
+    });
+
+    it('recovers gracefully from corrupt localStorage data', () => {
+      localStorageMock.setItem(STORAGE_TRACKPAD_CONFIG_KEY, '{invalid-json:::');
+      const fallback = loadTrackpadConfig();
+      expect(fallback).toEqual(DEFAULT_TRACKPAD_CONFIG);
+    });
+  });
+
+  describe('Live Configuration Updates', () => {
+    it('applies scroll sensitivity updates live without recreating engine', () => {
+      const liveEngine = new TrackpadGestureEngine({
+        naturalScroll: true,
+        scrollSensitivityY: 0.25,
+      });
+
+      // Two-finger move with sensitivity 0.25: dcy = -20px
+      // rawScrollDy = -(-20) * 0.25 = 5.0
+      liveEngine.processEvent({ type: 'down', id: 1, x: 100, y: 200, time: 1000 });
+      liveEngine.processEvent({ type: 'down', id: 2, x: 150, y: 200, time: 1010 });
+      let intents = liveEngine.processEvent({ type: 'move', id: 1, x: 100, y: 180, time: 1050 });
+      intents = intents.concat(
+        liveEngine.processEvent({ type: 'move', id: 2, x: 150, y: 180, time: 1050 })
+      );
+
+      const totalDy1 = intents
+        .filter((i): i is { type: 'scroll'; dy: number; dx: number } => i.type === 'scroll')
+        .reduce((acc, cur) => acc + cur.dy, 0);
+      expect(totalDy1).toBe(5);
+
+      // Live update sensitivity to 0.50 (double the speed!)
+      liveEngine.updateConfig({ scrollSensitivityY: 0.5 });
+
+      // Move another 20px up (from y=180 to y=160)
+      // rawScrollDy = -(-20) * 0.50 = 10.0
+      intents = liveEngine.processEvent({ type: 'move', id: 1, x: 100, y: 160, time: 1100 });
+      intents = intents.concat(
+        liveEngine.processEvent({ type: 'move', id: 2, x: 150, y: 160, time: 1100 })
+      );
+
+      const totalDy2 = intents
+        .filter((i): i is { type: 'scroll'; dy: number; dx: number } => i.type === 'scroll')
+        .reduce((acc, cur) => acc + cur.dy, 0);
+      expect(totalDy2).toBe(10);
+    });
+
+    it('scales pointer speed via multiplier without altering the acceleration curve', () => {
+      const normalEngine = new TrackpadGestureEngine({ pointerSpeed: 1.0 });
+      const fastEngine = new TrackpadGestureEngine({ pointerSpeed: 2.0 });
+
+      // Slow move: 10px in 50ms (speed 0.2 px/ms)
+      normalEngine.processEvent({ type: 'down', id: 1, x: 100, y: 100, time: 1000 });
+      const normalIntents = normalEngine.processEvent({ type: 'move', id: 1, x: 110, y: 100, time: 1050 });
+
+      fastEngine.processEvent({ type: 'down', id: 1, x: 100, y: 100, time: 1000 });
+      const fastIntents = fastEngine.processEvent({ type: 'move', id: 1, x: 110, y: 100, time: 1050 });
+
+      const normalMove = normalIntents.find((i): i is { type: 'move'; dx: number; dy: number } => i.type === 'move');
+      const fastMove = fastIntents.find((i): i is { type: 'move'; dx: number; dy: number } => i.type === 'move');
+
+      expect(normalMove).toBeDefined();
+      expect(fastMove).toBeDefined();
+      // Fast move should be approximately 2x normal move
+      expect(fastMove!.dx).toBeCloseTo(normalMove!.dx * 2, 0);
+    });
+
+    it('restores all default values on reset', () => {
+      const customEngine = new TrackpadGestureEngine({
+        naturalScroll: false,
+        scrollSensitivityX: 1.2,
+        scrollSensitivityY: 1.2,
+        pointerSpeed: 2.5,
+        momentum: true,
+        momentumDecay: 0.85,
+        scrollHaptics: false,
+      });
+
+      customEngine.updateConfig(DEFAULT_TRACKPAD_CONFIG);
+      expect(customEngine.getConfig()).toEqual(DEFAULT_TRACKPAD_CONFIG);
+    });
+  });
+
+  describe('Scroll Haptics Throttling & Detents', () => {
+    it('throttles detent haptics to at most one per 60ms', () => {
+      const hapticEngine = new TrackpadGestureEngine({
+        naturalScroll: true,
+        scrollSensitivityY: 0.5,
+        scrollHaptics: true,
+      });
+
+      hapticEngine.processEvent({ type: 'down', id: 1, x: 100, y: 200, time: 1000 });
+      hapticEngine.processEvent({ type: 'down', id: 2, x: 150, y: 200, time: 1000 });
+
+      // Move 40px up at t = 1010 -> sendDy = 20 (>= 12 detent distance) -> detent haptic emitted
+      let intents1 = hapticEngine.processEvent({ type: 'move', id: 1, x: 100, y: 160, time: 1010 });
+      intents1 = intents1.concat(
+        hapticEngine.processEvent({ type: 'move', id: 2, x: 150, y: 160, time: 1010 })
+      );
+      expect(intents1.some((i) => i.type === 'haptic' && i.style === 'detent')).toBe(true);
+
+      // Move another 40px up at t = 1030 (only 20ms later, < 60ms throttle) -> detent haptic suppressed!
+      let intents2 = hapticEngine.processEvent({ type: 'move', id: 1, x: 100, y: 120, time: 1030 });
+      intents2 = intents2.concat(
+        hapticEngine.processEvent({ type: 'move', id: 2, x: 150, y: 120, time: 1030 })
+      );
+      expect(intents2.some((i) => i.type === 'haptic' && i.style === 'detent')).toBe(false);
+
+      // Move another 40px up at t = 1080 (70ms after first haptic, >= 60ms) -> detent haptic emitted!
+      let intents3 = hapticEngine.processEvent({ type: 'move', id: 1, x: 100, y: 80, time: 1080 });
+      intents3 = intents3.concat(
+        hapticEngine.processEvent({ type: 'move', id: 2, x: 150, y: 80, time: 1080 })
+      );
+      expect(intents3.some((i) => i.type === 'haptic' && i.style === 'detent')).toBe(true);
+    });
+
+    it('suppresses all scroll detent haptics when scrollHaptics is false', () => {
+      const silentEngine = new TrackpadGestureEngine({
+        naturalScroll: true,
+        scrollSensitivityY: 0.5,
+        scrollHaptics: false,
+      });
+
+      silentEngine.processEvent({ type: 'down', id: 1, x: 100, y: 200, time: 1000 });
+      silentEngine.processEvent({ type: 'down', id: 2, x: 150, y: 200, time: 1000 });
+
+      // Move fingers up in 20px increments so span is preserved
+      let intents: TrackpadIntent[] = [];
+      for (let y = 180; y >= 100; y -= 20) {
+        intents = intents.concat(
+          silentEngine.processEvent({ type: 'move', id: 1, x: 100, y, time: 1010 + (200 - y) })
+        );
+        intents = intents.concat(
+          silentEngine.processEvent({ type: 'move', id: 2, x: 150, y, time: 1010 + (200 - y) })
+        );
+      }
+
+      // Scroll intent is present, but NO haptic
+      expect(intents.some((i) => i.type === 'scroll')).toBe(true);
+      expect(intents.some((i) => i.type === 'haptic')).toBe(false);
     });
   });
 });

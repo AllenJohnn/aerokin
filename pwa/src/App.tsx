@@ -13,6 +13,13 @@ import { CalibrationModal } from './components/CalibrationModal';
 import { triggerHaptic } from './utils/haptics';
 import { isHostedMode, buildTrustUrl } from './utils/hosting';
 import {
+  TrackpadConfig,
+  loadTrackpadConfig,
+  saveTrackpadConfig,
+  DEFAULT_TRACKPAD_CONFIG,
+  validateAndMigrateTrackpadConfig,
+} from './engine/trackpadGestures';
+import {
   AirPointerConfig,
   CalibrationData,
   DEFAULT_CONFIG,
@@ -53,6 +60,22 @@ export const App: React.FC = () => {
       localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(updated));
       return updated;
     });
+  };
+
+  // 2b. Trackpad Engine Config
+  const [trackpadConfig, setTrackpadConfig] = useState<TrackpadConfig>(() => loadTrackpadConfig());
+
+  const handleTrackpadConfigChange = (newConfig: Partial<TrackpadConfig>) => {
+    setTrackpadConfig((prev) => {
+      const updated = validateAndMigrateTrackpadConfig({ ...prev, ...newConfig });
+      saveTrackpadConfig(updated);
+      return updated;
+    });
+  };
+
+  const handleResetTrackpadConfig = () => {
+    setTrackpadConfig(DEFAULT_TRACKPAD_CONFIG);
+    saveTrackpadConfig(DEFAULT_TRACKPAD_CONFIG);
   };
 
   // 3. Gyroscopic Calibration Data
@@ -302,6 +325,9 @@ export const App: React.FC = () => {
           calibration={calibration}
           onResetCalibration={handleResetCalibration}
           onOpenCalibrationWizard={() => setShowCalibrationModal(true)}
+          trackpadConfig={trackpadConfig}
+          onTrackpadConfigChange={handleTrackpadConfigChange}
+          onResetTrackpadConfig={handleResetTrackpadConfig}
           seekMethod={seekMethod}
           onSeekMethodChange={handleSeekMethodChange}
           token={token}
@@ -440,6 +466,7 @@ export const App: React.FC = () => {
                 sendScroll={sendScroll}
                 isConnected={status === 'connected'}
                 onOpenSettings={() => setShowSettingsDrawer(true)}
+                trackpadConfig={trackpadConfig}
               />
             </motion.div>
           )}
@@ -518,6 +545,9 @@ export const App: React.FC = () => {
         calibration={calibration}
         onResetCalibration={handleResetCalibration}
         onOpenCalibrationWizard={() => setShowCalibrationModal(true)}
+        trackpadConfig={trackpadConfig}
+        onTrackpadConfigChange={handleTrackpadConfigChange}
+        onResetTrackpadConfig={handleResetTrackpadConfig}
         seekMethod={seekMethod}
         onSeekMethodChange={handleSeekMethodChange}
         token={token}

@@ -23,36 +23,131 @@ export type TrackpadIntent =
 
 export interface TrackpadConfig {
   naturalScroll: boolean; // default true (finger up -> page down)
-  scrollSensitivityX: number; // default 1.0
-  scrollSensitivityY: number; // default 1.0
+  scrollSensitivityX: number; // default 0.25 (range 0.05 - 1.5)
+  scrollSensitivityY: number; // default 0.25 (range 0.05 - 1.5)
+  pointerSpeed: number; // default 1.0 (multiplier 0.5 - 3.0)
   momentum: boolean; // default false
-  momentumDecay: number; // default 0.92 per ~16ms frame
+  momentumDecay: number; // default 0.92 per ~16ms frame (range 0.80 - 0.98)
+  scrollHaptics: boolean; // default true
 }
+
+/**
+ * Windows wheel scroll mapping constants & sensitivity derivation:
+ * - 1 standard Windows mouse wheel notch = 120 units (WHEEL_DELTA).
+ * - AeroKin protocol maps 12 protocol units = 1 notch (1 unit = 10 Windows wheel units).
+ * - Standard Windows browsers scroll ~100 page px per 120-unit notch (~8.33 page px / protocol unit).
+ * - At sensitivity 1.0, 1 finger px -> 1 protocol unit -> ~8.33 page px (too fast).
+ * - Setting sensitivity to 0.25 yields ~2.08 page px per finger px (target feel: 1.5x - 2.5x).
+ */
+export const DEFAULT_SCROLL_SENSITIVITY = 0.25;
+export const DEFAULT_POINTER_SPEED = 1.0;
+export const DEFAULT_MOMENTUM_DECAY = 0.92;
+export const SCROLL_HAPTIC_THROTTLE_MS = 60;
+export const SCROLL_DETENT_DISTANCE = 12;
 
 export const DEFAULT_TRACKPAD_CONFIG: TrackpadConfig = {
   naturalScroll: true,
-  scrollSensitivityX: 1.0,
-  scrollSensitivityY: 1.0,
+  scrollSensitivityX: DEFAULT_SCROLL_SENSITIVITY,
+  scrollSensitivityY: DEFAULT_SCROLL_SENSITIVITY,
+  pointerSpeed: DEFAULT_POINTER_SPEED,
   momentum: false,
-  momentumDecay: 0.92,
+  momentumDecay: DEFAULT_MOMENTUM_DECAY,
+  scrollHaptics: true,
 };
 
 export const STORAGE_TRACKPAD_CONFIG_KEY = 'aerokin_trackpad_config';
 
+/**
+ * Migrates legacy stored trackpad configs.
+ * If a stored sensitivity value equals the old default 1.0, it resets it to DEFAULT_SCROLL_SENSITIVITY (0.25).
+ */
+export function migrateTrackpadConfig(raw: Record<string, unknown>): Record<string, unknown> {
+  const migrated = { ...raw };
+  if (migrated.scrollSensitivityX === 1.0 || migrated.scrollSensitivityX === 1) {
+    migrated.scrollSensitivityX = DEFAULT_SCROLL_SENSITIVITY;
+  }
+  if (migrated.scrollSensitivityY === 1.0 || migrated.scrollSensitivityY === 1) {
+    migrated.scrollSensitivityY = DEFAULT_SCROLL_SENSITIVITY;
+  }
+  return migrated;
+}
+
+/**
+ * Validates and clamps trackpad configuration fields.
+ * Discards or clamps corrupt/out-of-range values to safe boundaries.
+ */
+export function validateTrackpadConfig(raw: unknown): TrackpadConfig {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_TRACKPAD_CONFIG };
+  }
+
+  const obj = raw as Record<string, unknown>;
+
+  const naturalScroll =
+    typeof obj.naturalScroll === 'boolean' ? obj.naturalScroll : DEFAULT_TRACKPAD_CONFIG.naturalScroll;
+
+  let scrollSensitivityY = DEFAULT_TRACKPAD_CONFIG.scrollSensitivityY;
+  if (typeof obj.scrollSensitivityY === 'number' && Number.isFinite(obj.scrollSensitivityY)) {
+    scrollSensitivityY = Math.min(1.5, Math.max(0.05, Math.round(obj.scrollSensitivityY * 100) / 100));
+  }
+
+  let scrollSensitivityX = DEFAULT_TRACKPAD_CONFIG.scrollSensitivityX;
+  if (typeof obj.scrollSensitivityX === 'number' && Number.isFinite(obj.scrollSensitivityX)) {
+    scrollSensitivityX = Math.min(1.5, Math.max(0.05, Math.round(obj.scrollSensitivityX * 100) / 100));
+  }
+
+  let pointerSpeed = DEFAULT_POINTER_SPEED;
+  if (typeof obj.pointerSpeed === 'number' && Number.isFinite(obj.pointerSpeed)) {
+    pointerSpeed = Math.min(3.0, Math.max(0.5, Math.round(obj.pointerSpeed * 100) / 100));
+  }
+
+  const momentum = typeof obj.momentum === 'boolean' ? obj.momentum : false;
+
+  let momentumDecay = DEFAULT_MOMENTUM_DECAY;
+  if (typeof obj.momentumDecay === 'number' && Number.isFinite(obj.momentumDecay)) {
+    momentumDecay = Math.min(0.98, Math.max(0.8, Math.round(obj.momentumDecay * 100) / 100));
+  }
+
+  const scrollHaptics = typeof obj.scrollHaptics === 'boolean' ? obj.scrollHaptics : true;
+
+  return {
+    naturalScroll,
+    scrollSensitivityX,
+    scrollSensitivityY,
+    pointerSpeed,
+    momentum,
+    momentumDecay,
+    scrollHaptics,
+  };
+}
+
+/**
+ * Validates, clamps, and migrates raw trackpad config from localStorage.
+ */
+export function validateAndMigrateTrackpadConfig(raw: unknown): TrackpadConfig {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_TRACKPAD_CONFIG };
+  }
+  return validateTrackpadConfig(migrateTrackpadConfig(raw as Record<string, unknown>));
+}
+
 export function loadTrackpadConfig(): TrackpadConfig {
-  if (typeof window === 'undefined') return DEFAULT_TRACKPAD_CONFIG;
+  if (typeof window === 'undefined') return { ...DEFAULT_TRACKPAD_CONFIG };
   try {
     const raw = localStorage.getItem(STORAGE_TRACKPAD_CONFIG_KEY);
-    return raw ? { ...DEFAULT_TRACKPAD_CONFIG, ...JSON.parse(raw) } : DEFAULT_TRACKPAD_CONFIG;
+    if (!raw) return { ...DEFAULT_TRACKPAD_CONFIG };
+    const parsed = JSON.parse(raw);
+    return validateAndMigrateTrackpadConfig(parsed);
   } catch {
-    return DEFAULT_TRACKPAD_CONFIG;
+    return { ...DEFAULT_TRACKPAD_CONFIG };
   }
 }
 
 export function saveTrackpadConfig(config: TrackpadConfig): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_TRACKPAD_CONFIG_KEY, JSON.stringify(config));
+    const validated = validateTrackpadConfig(config);
+    localStorage.setItem(STORAGE_TRACKPAD_CONFIG_KEY, JSON.stringify(validated));
   } catch {}
 }
 
@@ -109,6 +204,7 @@ export class TrackpadGestureEngine {
   private scrollRemainderX = 0;
   private scrollRemainderY = 0;
   private detentAccumulator = 0;
+  private lastScrollHapticTime = 0;
   private firstFingerLiftTime = 0;
 
   // Momentum state
@@ -119,7 +215,7 @@ export class TrackpadGestureEngine {
   private momentumVy = 0;
 
   constructor(config: Partial<TrackpadConfig> = {}) {
-    this.config = { ...DEFAULT_TRACKPAD_CONFIG, ...config };
+    this.config = validateTrackpadConfig({ ...DEFAULT_TRACKPAD_CONFIG, ...config });
   }
 
   public getConfig(): TrackpadConfig {
@@ -127,7 +223,7 @@ export class TrackpadGestureEngine {
   }
 
   public updateConfig(newConfig: Partial<TrackpadConfig>): void {
-    this.config = { ...this.config, ...newConfig };
+    this.config = validateTrackpadConfig({ ...this.config, ...newConfig });
   }
 
   public getState(): TrackpadState {
@@ -258,6 +354,7 @@ export class TrackpadGestureEngine {
           this.centroidVx = 0;
           this.centroidVy = 0;
           this.detentAccumulator = 0;
+          this.lastScrollHapticTime = 0;
           this.firstFingerLiftTime = 0;
         } else if (count > 2) {
           if (this.state === 'ONE_FINGER_DRAGGING') {
@@ -292,9 +389,10 @@ export class TrackpadGestureEngine {
         if (this.state === 'ONE_FINGER_TRACKING' || this.state === 'ONE_FINGER_DRAGGING') {
           const speed = dt > 0 ? Math.hypot(dx, dy) / dt : 0;
           const accel = 1.0 + Math.min(2.5, speed * 1.25);
+          const mult = this.config.pointerSpeed ?? 1.0;
 
-          const totalX = dx * accel + this.moveRemainderX;
-          const totalY = dy * accel + this.moveRemainderY;
+          const totalX = dx * accel * mult + this.moveRemainderX;
+          const totalY = dy * accel * mult + this.moveRemainderY;
 
           const sendX = Math.round(totalX * 100) / 100;
           const sendY = Math.round(totalY * 100) / 100;
@@ -367,9 +465,15 @@ export class TrackpadGestureEngine {
               intents.push({ type: 'scroll', dy: sendDy, dx: sendDx });
 
               this.detentAccumulator += Math.hypot(sendDy, sendDx);
-              if (this.detentAccumulator >= 12) {
+              if (this.detentAccumulator >= SCROLL_DETENT_DISTANCE) {
                 this.detentAccumulator = 0;
-                intents.push({ type: 'haptic', style: 'detent' });
+                if (this.config.scrollHaptics) {
+                  const now = event.time;
+                  if (now - this.lastScrollHapticTime >= SCROLL_HAPTIC_THROTTLE_MS) {
+                    this.lastScrollHapticTime = now;
+                    intents.push({ type: 'haptic', style: 'detent' });
+                  }
+                }
               }
             } else {
               this.scrollRemainderY = totalScrollDy;
