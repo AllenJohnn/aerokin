@@ -25,7 +25,22 @@ export type MediaAction =
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'unauthorized' | 'disconnected';
 
+export interface MediaSessionCapabilities {
+  canPlay?: boolean;
+  canPause?: boolean;
+  canTogglePlayPause?: boolean;
+  canNext?: boolean;
+  canPrev?: boolean;
+  canStop?: boolean;
+  canSeek?: boolean;
+  canSetPosition?: boolean;
+  canShuffle?: boolean;
+  canRepeat?: boolean;
+  canRate?: boolean;
+}
+
 export interface NowPlayingData {
+  id?: string;
   app?: string;
   title?: string;
   artist?: string;
@@ -34,6 +49,9 @@ export interface NowPlayingData {
   position?: number;
   duration?: number;
   canSeek?: boolean;
+  canNext?: boolean;
+  canPrev?: boolean;
+  capabilities?: MediaSessionCapabilities;
 }
 
 export interface MediaSessionItem {
@@ -41,6 +59,7 @@ export interface MediaSessionItem {
   app: string;
   title: string;
   current: boolean;
+  capabilities?: MediaSessionCapabilities;
 }
 
 export interface DeviceInfo {
@@ -478,6 +497,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               setLatency(rtt);
             } else if (data.type === 'nowplaying') {
               setNowPlaying({
+                id: data.id,
                 app: data.app,
                 title: data.title,
                 artist: data.artist,
@@ -486,6 +506,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
                 position: data.position,
                 duration: data.duration,
                 canSeek: data.canSeek ?? false,
+                canNext: data.canNext ?? true,
+                canPrev: data.canPrev ?? true,
+                capabilities: data.capabilities,
               });
               if (typeof data.volume === 'number') {
                 const norm =

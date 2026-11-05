@@ -644,14 +644,14 @@ export function startServer(config: ServerConfig): {
             break;
 
           case 'media':
-            // Universal Media Action
-            const mediaRes = await mediaManager.handleMediaCommand(msg.action);
+            // Universal Media Action (scoped to session if provided)
+            const mediaRes = await mediaManager.handleMediaCommand(msg.action, undefined, (msg as any).sessionId);
             recordEvent('media', `${msg.action} (Tier ${mediaRes.tier}, ${mediaRes.latencyMs}ms)`);
             break;
 
           case 'seekby':
             // Seek relative seconds (positive or negative)
-            const seekByRes = await mediaManager.handleMediaCommand('seekby', msg.seconds);
+            const seekByRes = await mediaManager.handleMediaCommand('seekby', msg.seconds, (msg as any).sessionId);
             recordEvent(
               'media',
               `seekby ${msg.seconds}s (Tier ${seekByRes.tier}, ${seekByRes.latencyMs}ms)`
@@ -660,7 +660,7 @@ export function startServer(config: ServerConfig): {
 
           case 'seekto':
             // Seek absolute position
-            const seekToRes = await mediaManager.handleMediaCommand('seekto', msg.position);
+            const seekToRes = await mediaManager.handleMediaCommand('seekto', msg.position, (msg as any).sessionId);
             recordEvent(
               'media',
               `seekto ${msg.position}s (Tier ${seekToRes.tier}, ${seekToRes.latencyMs}ms)`

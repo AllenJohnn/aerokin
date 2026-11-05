@@ -1,4 +1,4 @@
-# AEROKIN Universal Windows Media Sidecar
+# AEROKIN Universal Windows Media Sidecar (Media 2.0)
 # Communicates via JSON-lines over stdin/stdout
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -125,16 +125,48 @@ function Get-ActiveSession {
     return $manager.GetCurrentSession()
 }
 
+function Extract-Capabilities {
+    param ($playbackInfo)
+    $ctrl = if ($playbackInfo) { $playbackInfo.Controls } else { $null }
+    return @{
+        canPlay = if ($ctrl) { [bool]$ctrl.IsPlayEnabled } else { $true }
+        canPause = if ($ctrl) { [bool]$ctrl.IsPauseEnabled } else { $true }
+        canTogglePlayPause = $true
+        canNext = if ($ctrl) { [bool]$ctrl.IsNextEnabled } else { $true }
+        canPrev = if ($ctrl) { [bool]$ctrl.IsPreviousEnabled } else { $true }
+        canStop = if ($ctrl) { [bool]$ctrl.IsStopEnabled } else { $false }
+        canSeek = if ($ctrl) { [bool]$ctrl.IsPlaybackPositionEnabled } else { $false }
+        canSetPosition = if ($ctrl) { [bool]$ctrl.IsPlaybackPositionEnabled } else { $false }
+        canShuffle = if ($ctrl) { [bool]$ctrl.IsShuffleEnabled } else { $false }
+        canRepeat = if ($ctrl) { [bool]$ctrl.IsRepeatEnabled } else { $false }
+        canRate = $false
+    }
+}
+
 function Get-NowPlayingData {
     param ($manager, $preferredId)
     $session = Get-ActiveSession $manager $preferredId
     $allSessions = @()
+
     foreach ($s in $manager.GetSessions()) {
+        $sId = $s.SourceAppUserModelId
+        $sTitle = ""
+        $sPb = $null
+        try { $sPb = $s.GetPlaybackInfo() } catch {}
+        try {
+            $sPropOp = $s.TryGetMediaPropertiesAsync()
+            $sProps = $propsGeneric.Invoke($null, @($sPropOp)).GetAwaiter().GetResult()
+            if ($sProps) { $sTitle = $sProps.Title }
+        } catch {}
+
+        $caps = Extract-Capabilities $sPb
+
         $allSessions += @{
-            id = $s.SourceAppUserModelId
-            app = $s.SourceAppUserModelId
-            title = ""
-            current = ($session -ne $null -and $s.SourceAppUserModelId -eq $session.SourceAppUserModelId)
+            id = $sId
+            app = $sId
+            title = $sTitle
+            current = ($session -ne $null -and $sId -eq $session.SourceAppUserModelId)
+            capabilities = $caps
         }
     }
 
@@ -144,7 +176,7 @@ function Get-NowPlayingData {
             nowPlaying = @{
                 status = "none"
             }
-            volume = [AerokinNative.MasterVolume]::GetVolume()
+            volume = [Math]::Round(([AerokinNative.MasterVolume]::GetVolume() * 100), 1)
             muted = [AerokinNative.MasterVolume]::GetMute()
         }
     }
@@ -182,9 +214,7 @@ function Get-NowPlayingData {
         $durSec = [Math]::Round($timeline.EndTime.TotalSeconds, 2)
     }
 
-    $canSeek = if ($pb -and $pb.Controls) { [bool]$pb.Controls.IsPlaybackPositionEnabled } else { $false }
-    $canNext = if ($pb -and $pb.Controls) { [bool]$pb.Controls.IsNextEnabled } else { $false }
-    $canPrev = if ($pb -and $pb.Controls) { [bool]$pb.Controls.IsPreviousEnabled } else { $false }
+    $sessionCaps = Extract-Capabilities $pb
 
     $nowPlaying = @{
         id = $session.SourceAppUserModelId
@@ -194,9 +224,10 @@ function Get-NowPlayingData {
         status = $statusStr
         position = $posSec
         duration = $durSec
-        canSeek = $canSeek
-        canNext = $canNext
-        canPrev = $canPrev
+        canSeek = $sessionCaps.canSeek
+        canNext = $sessionCaps.canNext
+        canPrev = $sessionCaps.canPrev
+        capabilities = $sessionCaps
     }
 
     return @{
@@ -219,7 +250,8 @@ while ($line = [Console]::ReadLine()) {
     try {
         $cmdObj = ConvertFrom-Json $line
         $cmd = $cmdObj.cmd
-        $session = Get-ActiveSession $mgr $selectedSessionId
+        $targetId = if ($cmdObj.targetSessionId) { $cmdObj.targetSessionId } else { $selectedSessionId }
+        $session = Get-ActiveSession $mgr $targetId
 
         $res = @{ ok = $true }
 
@@ -227,6 +259,22 @@ while ($line = [Console]::ReadLine()) {
             "status" {
                 $data = Get-NowPlayingData $mgr $selectedSessionId
                 $res.data = $data
+            }
+            "play" {
+                if ($session) {
+                    $op = $session.TryPlayAsync()
+                    $res.handled = $boolGeneric.Invoke($null, @($op)).GetAwaiter().GetResult()
+                } else {
+                    $res.handled = $false
+                }
+            }
+            "pause" {
+                if ($session) {
+                    $op = $session.TryPauseAsync()
+                    $res.handled = $boolGeneric.Invoke($null, @($op)).GetAwaiter().GetResult()
+                } else {
+                    $res.handled = $false
+                }
             }
             "playpause" {
                 if ($session) {

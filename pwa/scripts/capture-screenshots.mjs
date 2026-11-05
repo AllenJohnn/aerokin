@@ -62,11 +62,142 @@ try {
       viewport: { width: vp.width, height: vp.height },
       deviceScaleFactor: vp.scale,
     });
+
+    // Provide mock authenticated device and media session
+    await context.addInitScript(() => {
+      localStorage.setItem('aerokin_server_host', '127.0.0.1:8080');
+      localStorage.setItem('aerokin_auth_token', '12345678');
+      localStorage.setItem('aerokin_device_id', 'dev-mock-iphone');
+      localStorage.setItem('aerokin_device_credential', 'mock_credential_123');
+      localStorage.setItem('aerokin_device_name', "Allen's iPhone 14");
+
+      window.DeviceMotionEvent = {
+        requestPermission: async () => 'granted',
+      };
+
+      class MockWebSocket extends EventTarget {
+        constructor(url) {
+          super();
+          this.url = url;
+          this.readyState = 1;
+          setTimeout(() => {
+            if (this.onopen) this.onopen(new Event('open'));
+            this.dispatchEvent(new Event('open'));
+
+            // Send auth confirmation
+            const authOkMsg = new MessageEvent('message', {
+              data: JSON.stringify({
+                type: 'auth_ok',
+                deviceId: 'dev-mock-iphone',
+                deviceName: "Allen's iPhone 14",
+                devices: [
+                  {
+                    id: 'dev-mock-iphone',
+                    name: "Allen's iPhone 14",
+                    platform: 'iOS (Safari PWA)',
+                    createdAt: Date.now() - 3600000,
+                    lastSeen: Date.now(),
+                    isCurrent: true,
+                  },
+                ],
+              }),
+            });
+            if (this.onmessage) this.onmessage(authOkMsg);
+            this.dispatchEvent(authOkMsg);
+
+            // Send active media status
+            const mediaMsg = new MessageEvent('message', {
+              data: JSON.stringify({
+                type: 'media_status',
+                status: 'playing',
+                app: 'Spotify',
+                title: 'Midnight City',
+                artist: 'M83',
+                position: 134,
+                duration: 243,
+                canSeek: true,
+                canNext: true,
+                canPrev: true,
+                capabilities: {
+                  canPlay: true,
+                  canPause: true,
+                  canTogglePlayPause: true,
+                  canNext: true,
+                  canPrev: true,
+                  canStop: true,
+                  canSeek: true,
+                  canSetPosition: true,
+                },
+                sessions: [
+                  { id: 'spotify-1', app: 'Spotify', title: 'Midnight City - M83', isActive: true },
+                  { id: 'youtube-1', app: 'YouTube', title: 'Synthwave Radio 24/7', isActive: false },
+                ],
+                volume: 72,
+                muted: false,
+              }),
+            });
+            if (this.onmessage) this.onmessage(mediaMsg);
+            this.dispatchEvent(mediaMsg);
+          }, 60);
+        }
+        send() {}
+        close() {
+          this.readyState = 3;
+          if (this.onclose) this.onclose(new CloseEvent('close'));
+          this.dispatchEvent(new CloseEvent('close'));
+        }
+      }
+      window.WebSocket = MockWebSocket;
+    });
+
     const page = await context.newPage();
 
     await page.goto('http://127.0.0.1:5199/', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(500);
 
-    // Open settings drawer
+    // If hosted connect button appears, tap it to initiate connection
+    const connectBtn = page.locator('button:has-text("Connect to PC")');
+    if (await connectBtn.isVisible()) {
+      await connectBtn.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Dismiss motion permission screen if shown on iOS
+    const motionBtn = page.locator('button:has-text("Enable motion")');
+    try {
+      await motionBtn.waitFor({ state: 'visible', timeout: 2000 });
+      await motionBtn.click();
+      await page.waitForTimeout(400);
+    } catch {
+      // Not shown or already granted
+    }
+
+    // 1. Navigate to Media Tab first
+    const mediaTabBtn = page.locator('button:has-text("Media")');
+    await mediaTabBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await mediaTabBtn.click();
+    await page.waitForTimeout(400);
+
+    // Verify horizontal overflow on Media tab
+    const mediaOverflowCheck = await page.evaluate(() => {
+      const body = document.body;
+      const main = document.querySelector('main');
+      return {
+        bodyHasOverflow: body.scrollWidth > body.clientWidth,
+        bodyScrollWidth: body.scrollWidth,
+        bodyClientWidth: body.clientWidth,
+        mainHasOverflow: main ? main.scrollWidth > main.clientWidth : false,
+      };
+    });
+
+    console.log(`[${vp.label}] Media tab overflow check:`, mediaOverflowCheck);
+
+    const suffix = vp.scale === 3 ? '@3x' : '';
+    const mediaScreenshotPath = path.join(outDir, `media-tab-${vp.name}${suffix}.png`);
+    await page.screenshot({ path: mediaScreenshotPath });
+    console.log(`Saved Media tab screenshot: ${mediaScreenshotPath}`);
+
+    // 2. Open settings drawer
     const settingsBtn = page.locator('button[aria-label="Settings"]');
     await settingsBtn.waitFor({ state: 'visible', timeout: 5000 });
     await settingsBtn.click();
@@ -132,7 +263,6 @@ try {
 
       console.log(`[${vp.label}] Security section overflow check:`, securityOverflowCheck);
 
-      const suffix = vp.scale === 3 ? '@3x' : '';
       const secScreenshotPath = path.join(
         outDir,
         `settings-devices-security-${vp.name}${suffix}.png`

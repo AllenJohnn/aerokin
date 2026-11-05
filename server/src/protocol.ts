@@ -38,9 +38,9 @@ export type ValidClientMessage =
   | { type: 'click'; button: 'left' | 'right' | 'middle' }
   | { type: 'button'; button: 'left' | 'right' | 'middle'; state: 'down' | 'up' }
   | { type: 'scroll'; dy: number; dx: number }
-  | { type: 'media'; action: AllowedMediaAction }
-  | { type: 'seekby'; seconds: number }
-  | { type: 'seekto'; position: number }
+  | { type: 'media'; action: AllowedMediaAction; sessionId?: string }
+  | { type: 'seekby'; seconds: number; sessionId?: string }
+  | { type: 'seekto'; position: number; sessionId?: string }
   | { type: 'session'; id: string }
   | { type: 'setvolume'; level: number }
   | { type: 'getvolume' };
@@ -188,7 +188,16 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       ) {
         return null;
       }
-      return { type: 'media', action: msg.action as AllowedMediaAction };
+      return {
+        type: 'media',
+        action: msg.action as AllowedMediaAction,
+        sessionId:
+          typeof msg.sessionId === 'string'
+            ? msg.sessionId.trim().slice(0, 128)
+            : typeof msg.targetSessionId === 'string'
+            ? msg.targetSessionId.trim().slice(0, 128)
+            : undefined,
+      };
     }
 
     case 'seekby': {
@@ -198,6 +207,12 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       return {
         type: 'seekby',
         seconds: Math.max(-MAX_SEEKBY_SECONDS, Math.min(MAX_SEEKBY_SECONDS, msg.seconds)),
+        sessionId:
+          typeof msg.sessionId === 'string'
+            ? msg.sessionId.trim().slice(0, 128)
+            : typeof msg.targetSessionId === 'string'
+            ? msg.targetSessionId.trim().slice(0, 128)
+            : undefined,
       };
     }
 
@@ -208,6 +223,12 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       return {
         type: 'seekto',
         position: Math.min(MAX_SEEKTO_SECONDS, msg.position),
+        sessionId:
+          typeof msg.sessionId === 'string'
+            ? msg.sessionId.trim().slice(0, 128)
+            : typeof msg.targetSessionId === 'string'
+            ? msg.targetSessionId.trim().slice(0, 128)
+            : undefined,
       };
     }
 
