@@ -100,6 +100,12 @@ While the server is running, the interactive terminal accepts the following oper
   ```
   Benchmarks capture throughput and frame sizes across all quality presets.
 
+- **H.264 WebCodecs Spike Server**:
+  ```powershell
+  pnpm run spike:h264
+  ```
+  Runs the isolated H.264 streaming experiment on port 8444 for testing in Chrome and iPhone Safari.
+
 - **Unit Test Suite**:
   ```powershell
   pnpm test

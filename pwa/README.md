@@ -23,7 +23,8 @@ The AEROKIN PWA is a responsive, hardware-grade web application built with **Rea
     - Two-Finger Drag: Vertical / Horizontal Scroll.
   - **Trackpad Mode**: Relative mouse navigation over the live screen using the Trackpad gesture engine.
 - **Local Zoom & Pan**: Pinch-to-zoom (1x to 4x) and two-finger pan without altering host PC resolution. Includes inverse coordinate transformation ensuring clicks map accurately regardless of zoom or pan.
-- **Floating Auto-Hiding Toolbar**: Disconnect, Input Mode switch, Quick-Key Bar toggle, Monitor picker (when >1 display), Quality preset selector (`ultra`, `high`, `balanced`, `fast`, `low`), Fullscreen toggle, and live stats overlay.
+- **Floating Auto-Hiding Toolbar**: Disconnect, Input Mode switch, Quick-Key Bar toggle, Monitor picker (when >1 display), Quality preset selector (`ultra`, `high`, `balanced`, `fast` [default], `tiny` [low-bandwidth]), Fullscreen toggle, and live stats overlay.
+- **Bandwidth Optimization**: Automatic client keepalive handling with consecutive identical frame skipping and dynamic backpressure adaptation.
 - **Quick-Key Bar**:
   - Sticky Latched Modifiers: `CTRL`, `ALT`, `SHIFT`, `WIN` (toggle on/off).
   - Action Keys: `Esc`, `Tab`, `Enter`, `Backspace`, `Del`, `Space`, and Arrow keys.
