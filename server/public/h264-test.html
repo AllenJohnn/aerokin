@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AeroKin H.264 WebCodecs Spike</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: #000000;
+      color: #EDEDED;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #222;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #1A1A1A;
+      border: 1px solid #333;
+    }
+    .badge.supported {
+      color: #00D26A;
+      border-color: rgba(0, 210, 106, 0.3);
+    }
+    .badge.unsupported {
+      color: #FF3B30;
+      border-color: rgba(255, 59, 48, 0.3);
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      background: #0D0D0D;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+    }
+    .hud-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .hud-label {
+      color: #888;
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+    .hud-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #FFF;
+    }
+    .hud-value.highlight {
+      color: #FF5A1F;
+    }
+    .hud-value.good {
+      color: #00D26A;
+    }
+    .hud-value.error {
+      color: #FF3B30;
+    }
+    .viewport {
+      position: relative;
+      flex: 1;
+      min-height: 260px;
+      background: #050505;
+      border: 1px solid #222;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .status-msg {
+      position: absolute;
+      text-align: center;
+      padding: 16px;
+      font-size: 13px;
+      color: #888;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    input {
+      flex: 1;
+      background: #111;
+      border: 1px solid #333;
+      color: #FFF;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+    }
+    button {
+      background: #FF5A1F;
+      color: #000;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:active {
+      opacity: 0.8;
+    }
+    button.stop {
+      background: #222;
+      color: #FFF;
+      border: 1px solid #444;
+    }
+    .log-box {
+      background: #080808;
+      border: 1px solid #1C1C1C;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      color: #777;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AEROKIN H.264 WebCodecs Spike</h1>
+    <span id="supportBadge" class="badge">Checking WebCodecs...</span>
+  </header>
+
+  <div class="container">
+    <div class="hud">
+      <div class="hud-item">
+        <span class="hud-label">VideoDecoder API</span>
+        <span id="hudWebcodecs" class="hud-value">Detecting...</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">Server Encoder</span>
+        <span id="hudEncoder" class="hud-value highlight">-</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">Decoded FPS</span>
+        <span id="hudFps" class="hud-value good">0.0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">Bitrate</span>
+        <span id="hudBitrate" class="hud-value">0 kbps</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">Keyframe Interval</span>
+        <span id="hudKeyframe" class="hud-value">-</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">Decode Errors</span>
+        <span id="hudErrors" class="hud-value">0</span>
+      </div>
+    </div>
+
+    <div class="viewport">
+      <canvas id="viewCanvas"></canvas>
+      <div id="statusMsg" class="status-msg">Click "Connect Stream" to begin H.264 stream.</div>
+    </div>
+
+    <div class="controls">
+      <input id="wsUrlInput" type="text" value="ws://localhost:8444">
+      <button id="toggleBtn" onclick="toggleStream()">Connect Stream</button>
+    </div>
+
+    <div id="logBox" class="log-box">Log initialized.</div>
+  </div>
+
+  <script>
+    const supportBadge = document.getElementById('supportBadge');
+    const hudWebcodecs = document.getElementById('hudWebcodecs');
+    const hudEncoder = document.getElementById('hudEncoder');
+    const hudFps = document.getElementById('hudFps');
+    const hudBitrate = document.getElementById('hudBitrate');
+    const hudKeyframe = document.getElementById('hudKeyframe');
+    const hudErrors = document.getElementById('hudErrors');
+    const statusMsg = document.getElementById('statusMsg');
+    const canvas = document.getElementById('viewCanvas');
+    const ctx = canvas.getContext('2d');
+    const wsUrlInput = document.getElementById('wsUrlInput');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const logBox = document.getElementById('logBox');
+
+    // Auto-detect host IP if served from browser
+    if (window.location.hostname) {
+      wsUrlInput.value = `ws://${window.location.hostname}:8444`;
+    }
+
+    function log(msg) {
+      const time = new Date().toISOString().substring(11, 19);
+      const line = `[${time}] ${msg}`;
+      logBox.innerText = line + '\n' + logBox.innerText.slice(0, 500);
+    }
+
+    // 1. Feature Detection (WebCodecs VideoDecoder)
+    const hasWebCodecs = typeof window.VideoDecoder !== 'undefined';
+    if (hasWebCodecs) {
+      supportBadge.innerText = 'WebCodecs Supported';
+      supportBadge.className = 'badge supported';
+      hudWebcodecs.innerText = 'Supported';
+      hudWebcodecs.className = 'hud-value good';
+      log('VideoDecoder API is natively supported on this browser.');
+    } else {
+      supportBadge.innerText = 'WebCodecs NOT Supported';
+      supportBadge.className = 'badge unsupported';
+      hudWebcodecs.innerText = 'UNSUPPORTED';
+      hudWebcodecs.className = 'hud-value error';
+      log('VideoDecoder API is NOT available on this browser.');
+    }
+
+    let ws = null;
+    let decoder = null;
+    let isConnected = false;
+
+    // Telemetry accumulators
+    let decodedFrameCount = 0;
+    let receivedBytes = 0;
+    let decodeErrorCount = 0;
+    let lastStatsTime = performance.now();
+    let lastKeyframeTime = 0;
+    let keyframeIntervalMs = 0;
+    let statsTimer = null;
+
+    function initDecoder() {
+      if (!hasWebCodecs) {
+        log('Cannot initialize VideoDecoder: API missing.');
+        return null;
+      }
+
+      try {
+        const dec = new VideoDecoder({
+          output: (videoFrame) => {
+            decodedFrameCount++;
+            if (canvas.width !== videoFrame.displayWidth || canvas.height !== videoFrame.displayHeight) {
+              canvas.width = videoFrame.displayWidth;
+              canvas.height = videoFrame.displayHeight;
+            }
+            ctx.drawImage(videoFrame, 0, 0);
+            videoFrame.close();
+            if (statusMsg.style.display !== 'none') {
+              statusMsg.style.display = 'none';
+            }
+          },
+          error: (err) => {
+            decodeErrorCount++;
+            hudErrors.innerText = String(decodeErrorCount);
+            log(`Decode error: ${err.message}`);
+          }
+        });
+
+        dec.configure({
+          codec: 'avc1.42E01E', // Baseline profile level 3.0
+          optimizeForLatency: true,
+        });
+
+        log('VideoDecoder configured (avc1.42E01E, optimizeForLatency: true)');
+        return dec;
+      } catch (err) {
+        log(`Failed to create VideoDecoder: ${err.message}`);
+        return null;
+      }
+    }
+
+    function startStats() {
+      decodedFrameCount = 0;
+      receivedBytes = 0;
+      lastStatsTime = performance.now();
+
+      statsTimer = setInterval(() => {
+        const now = performance.now();
+        const elapsedSec = (now - lastStatsTime) / 1000;
+        if (elapsedSec > 0.5) {
+          const fps = Math.round((decodedFrameCount / elapsedSec) * 10) / 10;
+          const kbps = Math.round((receivedBytes * 8) / elapsedSec / 1024);
+
+          hudFps.innerText = `${fps} fps`;
+          hudBitrate.innerText = `${kbps} kbps`;
+
+          decodedFrameCount = 0;
+          receivedBytes = 0;
+          lastStatsTime = now;
+        }
+      }, 1000);
+    }
+
+    function stopStats() {
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
+      hudFps.innerText = '0.0';
+      hudBitrate.innerText = '0 kbps';
+    }
+
+    function toggleStream() {
+      if (isConnected) {
+        disconnectStream();
+      } else {
+        connectStream();
+      }
+    }
+
+    function connectStream() {
+      const url = wsUrlInput.value.trim();
+      log(`Connecting to ${url}...`);
+      statusMsg.innerText = 'Connecting to H.264 stream...';
+      statusMsg.style.display = 'block';
+
+      if (hasWebCodecs) {
+        decoder = initDecoder();
+      }
+
+      ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        isConnected = true;
+        toggleBtn.innerText = 'Disconnect';
+        toggleBtn.className = 'stop';
+        log('WebSocket connected. Receiving stream...');
+        startStats();
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const meta = JSON.parse(event.data);
+            if (meta.type === 'h264_init') {
+              hudEncoder.innerText = meta.encoder || 'H.264';
+              log(`Server initialized encoder: ${meta.encoder}`);
+            }
+          } catch {}
+          return;
+        }
+
+        const buffer = event.data;
+        receivedBytes += buffer.byteLength;
+
+        if (!decoder || decoder.state !== 'configured') return;
+
+        // Parse 5-byte spike header
+        const view = new DataView(buffer);
+        const isKey = view.getUint8(0) === 1;
+        const tsMs = view.getUint32(1, true);
+
+        if (isKey) {
+          const now = performance.now();
+          if (lastKeyframeTime > 0) {
+            keyframeIntervalMs = Math.round(now - lastKeyframeTime);
+            hudKeyframe.innerText = `${keyframeIntervalMs} ms`;
+          }
+          lastKeyframeTime = now;
+        }
+
+        // Slice raw NAL unit (offset 5 onwards)
+        const nalData = new Uint8Array(buffer, 5);
+
+        try {
+          const chunk = new EncodedVideoChunk({
+            type: isKey ? 'key' : 'delta',
+            timestamp: tsMs * 1000, // microsecond timestamp
+            data: nalData,
+          });
+          decoder.decode(chunk);
+        } catch (err) {
+          decodeErrorCount++;
+          hudErrors.innerText = String(decodeErrorCount);
+          log(`Chunk feed error: ${err.message}`);
+        }
+      };
+
+      ws.onclose = () => {
+        log('WebSocket connection closed.');
+        disconnectStream();
+      };
+
+      ws.onerror = (e) => {
+        log('WebSocket error occurred.');
+        disconnectStream();
+      };
+    }
+
+    function disconnectStream() {
+      isConnected = false;
+      toggleBtn.innerText = 'Connect Stream';
+      toggleBtn.className = '';
+      statusMsg.innerText = 'Stream disconnected.';
+      statusMsg.style.display = 'block';
+
+      stopStats();
+
+      if (ws) {
+        try { ws.close(); } catch {}
+        ws = null;
+      }
+      if (decoder) {
+        try { decoder.close(); } catch {}
+        decoder = null;
+      }
+    }
+  </script>
+</body>
+</html>
