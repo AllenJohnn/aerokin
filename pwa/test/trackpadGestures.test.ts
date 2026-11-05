@@ -342,6 +342,7 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       expect(SCROLL_HAPTIC_THROTTLE_MS).toBe(60);
 
       expect(DEFAULT_TRACKPAD_CONFIG).toEqual({
+        configVersion: 2,
         naturalScroll: true,
         scrollSensitivityX: 0.25,
         scrollSensitivityY: 0.25,
@@ -363,6 +364,7 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       const migrated = migrateTrackpadConfig(legacyConfig);
       expect(migrated.scrollSensitivityX).toBe(0.25);
       expect(migrated.scrollSensitivityY).toBe(0.25);
+      expect(migrated.configVersion).toBe(2);
 
       // Preserves custom sensitivity if user intentionally customized it away from 1.0
       const customConfig = {
@@ -372,6 +374,27 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       const customMigrated = migrateTrackpadConfig(customConfig);
       expect(customMigrated.scrollSensitivityX).toBe(0.75);
       expect(customMigrated.scrollSensitivityY).toBe(0.45);
+      expect(customMigrated.configVersion).toBe(2);
+    });
+
+    it('v2 config with 1.0 stays 1.0 across save and load', () => {
+      // User deliberately set scroll sensitivity to 1.0 in version 2
+      const userChoiceV2: TrackpadConfig = {
+        configVersion: 2,
+        naturalScroll: true,
+        scrollSensitivityX: 1.0,
+        scrollSensitivityY: 1.0,
+        pointerSpeed: 1.0,
+        momentum: false,
+        momentumDecay: 0.92,
+        scrollHaptics: true,
+      };
+      saveTrackpadConfig(userChoiceV2);
+
+      const loaded = loadTrackpadConfig();
+      expect(loaded.configVersion).toBe(2);
+      expect(loaded.scrollSensitivityX).toBe(1.0);
+      expect(loaded.scrollSensitivityY).toBe(1.0);
     });
 
     it('validates and clamps values to safe bounds', () => {
@@ -385,6 +408,7 @@ describe('AEROKIN TrackpadGestureEngine', () => {
         scrollHaptics: null,
       });
 
+      expect(clamped.configVersion).toBe(2);
       expect(clamped.naturalScroll).toBe(true);
       expect(clamped.scrollSensitivityX).toBe(1.5);
       expect(clamped.scrollSensitivityY).toBe(0.05);
@@ -395,7 +419,7 @@ describe('AEROKIN TrackpadGestureEngine', () => {
     });
 
     it('saves to and loads from localStorage with automatic migration and validation', () => {
-      // 1. Simulate legacy storage with 1.0 sensitivities
+      // 1. Simulate legacy storage with 1.0 sensitivities without version
       localStorageMock.setItem(
         STORAGE_TRACKPAD_CONFIG_KEY,
         JSON.stringify({
@@ -406,12 +430,14 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       );
 
       const loadedLegacy = loadTrackpadConfig();
+      expect(loadedLegacy.configVersion).toBe(2);
       expect(loadedLegacy.naturalScroll).toBe(false);
       expect(loadedLegacy.scrollSensitivityX).toBe(0.25);
       expect(loadedLegacy.scrollSensitivityY).toBe(0.25);
 
       // 2. Save new customized config and reload
       const customized: TrackpadConfig = {
+        configVersion: 2,
         naturalScroll: true,
         scrollSensitivityX: 0.4,
         scrollSensitivityY: 0.6,
@@ -426,10 +452,17 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       expect(reloaded).toEqual(customized);
     });
 
-    it('recovers gracefully from corrupt localStorage data', () => {
+    it('recovers gracefully from corrupt localStorage data and reset writes v2', () => {
       localStorageMock.setItem(STORAGE_TRACKPAD_CONFIG_KEY, '{invalid-json:::');
       const fallback = loadTrackpadConfig();
       expect(fallback).toEqual(DEFAULT_TRACKPAD_CONFIG);
+      expect(fallback.configVersion).toBe(2);
+
+      // Reset writes v2
+      saveTrackpadConfig(DEFAULT_TRACKPAD_CONFIG);
+      const afterReset = loadTrackpadConfig();
+      expect(afterReset).toEqual(DEFAULT_TRACKPAD_CONFIG);
+      expect(afterReset.configVersion).toBe(2);
     });
   });
 

@@ -22,6 +22,7 @@ export type TrackpadIntent =
   | { type: 'drag_status'; isDragging: boolean };
 
 export interface TrackpadConfig {
+  configVersion?: number; // schema version (v2 introduced default 0.25 sensitivity)
   naturalScroll: boolean; // default true (finger up -> page down)
   scrollSensitivityX: number; // default 0.25 (range 0.05 - 1.5)
   scrollSensitivityY: number; // default 0.25 (range 0.05 - 1.5)
@@ -30,6 +31,8 @@ export interface TrackpadConfig {
   momentumDecay: number; // default 0.92 per ~16ms frame (range 0.80 - 0.98)
   scrollHaptics: boolean; // default true
 }
+
+export const CURRENT_TRACKPAD_CONFIG_VERSION = 2;
 
 /**
  * Windows wheel scroll mapping constants & sensitivity derivation:
@@ -46,6 +49,7 @@ export const SCROLL_HAPTIC_THROTTLE_MS = 60;
 export const SCROLL_DETENT_DISTANCE = 12;
 
 export const DEFAULT_TRACKPAD_CONFIG: TrackpadConfig = {
+  configVersion: CURRENT_TRACKPAD_CONFIG_VERSION,
   naturalScroll: true,
   scrollSensitivityX: DEFAULT_SCROLL_SENSITIVITY,
   scrollSensitivityY: DEFAULT_SCROLL_SENSITIVITY,
@@ -59,16 +63,24 @@ export const STORAGE_TRACKPAD_CONFIG_KEY = 'aerokin_trackpad_config';
 
 /**
  * Migrates legacy stored trackpad configs.
- * If a stored sensitivity value equals the old default 1.0, it resets it to DEFAULT_SCROLL_SENSITIVITY (0.25).
+ * If configVersion is missing or < 2, any sensitivity value of 1.0 (the old default)
+ * is migrated to DEFAULT_SCROLL_SENSITIVITY (0.25), and configVersion is set to 2.
+ * If configVersion >= 2, sensitivity 1.0 is treated as an intentional user choice and preserved.
  */
 export function migrateTrackpadConfig(raw: Record<string, unknown>): Record<string, unknown> {
   const migrated = { ...raw };
-  if (migrated.scrollSensitivityX === 1.0 || migrated.scrollSensitivityX === 1) {
-    migrated.scrollSensitivityX = DEFAULT_SCROLL_SENSITIVITY;
+  const version = typeof raw.configVersion === 'number' ? raw.configVersion : 1;
+
+  if (version < 2) {
+    if (migrated.scrollSensitivityX === 1.0 || migrated.scrollSensitivityX === 1) {
+      migrated.scrollSensitivityX = DEFAULT_SCROLL_SENSITIVITY;
+    }
+    if (migrated.scrollSensitivityY === 1.0 || migrated.scrollSensitivityY === 1) {
+      migrated.scrollSensitivityY = DEFAULT_SCROLL_SENSITIVITY;
+    }
+    migrated.configVersion = CURRENT_TRACKPAD_CONFIG_VERSION;
   }
-  if (migrated.scrollSensitivityY === 1.0 || migrated.scrollSensitivityY === 1) {
-    migrated.scrollSensitivityY = DEFAULT_SCROLL_SENSITIVITY;
-  }
+
   return migrated;
 }
 
@@ -82,6 +94,8 @@ export function validateTrackpadConfig(raw: unknown): TrackpadConfig {
   }
 
   const obj = raw as Record<string, unknown>;
+
+  const configVersion = CURRENT_TRACKPAD_CONFIG_VERSION;
 
   const naturalScroll =
     typeof obj.naturalScroll === 'boolean' ? obj.naturalScroll : DEFAULT_TRACKPAD_CONFIG.naturalScroll;
@@ -111,6 +125,7 @@ export function validateTrackpadConfig(raw: unknown): TrackpadConfig {
   const scrollHaptics = typeof obj.scrollHaptics === 'boolean' ? obj.scrollHaptics : true;
 
   return {
+    configVersion,
     naturalScroll,
     scrollSensitivityX,
     scrollSensitivityY,
