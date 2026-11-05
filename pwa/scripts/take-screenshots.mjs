@@ -141,47 +141,15 @@ async function run() {
 
       const page = await mobileContext.newPage();
 
-      // Emulate iOS permission prompt for Start Screen
-      await page.addInitScript(() => {
-        window.DeviceMotionEvent = {
-          requestPermission: async () => 'granted',
-        };
-      });
-
-      // 2A. Start Screen (Permission prompt)
+      // 2A. Trackpad Tab (Default)
       await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
         waitUntil: 'networkidle',
       });
       await sleep(600);
-      await checkNoOverflow(page, `Start Screen ${vp.name}`);
-
-      const startShot = path.join(SCREENSHOTS_DIR, `start-${vp.name}.png`);
-      await page.screenshot({ path: startShot });
-      console.log(`✓ Saved: ${startShot}`);
-
-      // Click "Enable motion" to proceed to main app
-      const enableBtn = page.getByRole('button', { name: /Enable motion/i });
-      if (await enableBtn.isVisible()) {
-        await enableBtn.click();
-        await sleep(600);
-      }
-
-      // 2B. Pointer Tab
-      await checkNoOverflow(page, `Pointer Tab ${vp.name}`);
-      const pointerShot = path.join(SCREENSHOTS_DIR, `pointer-${vp.name}.png`);
-      await page.screenshot({ path: pointerShot });
-      console.log(`✓ Saved: ${pointerShot}`);
-
-      // 2C. Trackpad Tab
-      const trackpadTabBtn = page.getByRole('tab', { name: /Trackpad/i });
-      if (await trackpadTabBtn.isVisible()) {
-        await trackpadTabBtn.click();
-        await sleep(600);
-        await checkNoOverflow(page, `Trackpad Tab ${vp.name}`);
-        const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}.png`);
-        await page.screenshot({ path: trackpadShot });
-        console.log(`✓ Saved: ${trackpadShot}`);
-      }
+      await checkNoOverflow(page, `Trackpad Tab ${vp.name}`);
+      const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}.png`);
+      await page.screenshot({ path: trackpadShot });
+      console.log(`✓ Saved: ${trackpadShot}`);
 
       // 2D. Media Tab
       const mediaTabBtn = page.getByRole('tab', { name: /Media/i });

@@ -235,12 +235,12 @@ const ogImageSvg = `
     <text x="0" y="145" font-family="'Geist', -apple-system, sans-serif" font-size="32" font-weight="400" fill="#F5F5F7">Move the air. <tspan fill="#22D3EE">Move your PC.</tspan></text>
 
     <!-- Sub-description -->
-    <text x="0" y="185" font-family="'Geist', -apple-system, sans-serif" font-size="18" fill="#8A8A96">iPhone 6DOF Air Mouse · Precision Trackpad · Low-Latency Media Remote</text>
+    <text x="0" y="185" font-family="'Geist', -apple-system, sans-serif" font-size="18" fill="#8A8A96">Live Desktop Remote · Precision Trackpad · Low-Latency Media Remote</text>
 
     <!-- Feature Pillars -->
     <g transform="translate(0, 220)">
       <rect x="0" y="0" width="165" height="36" rx="8" fill="rgba(124, 92, 255, 0.12)" stroke="rgba(124, 92, 255, 0.3)" />
-      <text x="82.5" y="22" text-anchor="middle" font-family="'Geist Mono', monospace" font-size="12" font-weight="500" fill="#F5F5F7">60Hz Gyroscope</text>
+      <text x="82.5" y="22" text-anchor="middle" font-family="'Geist Mono', monospace" font-size="12" font-weight="500" fill="#F5F5F7">Precision Trackpad</text>
 
       <rect x="180" y="0" width="165" height="36" rx="8" fill="rgba(34, 211, 238, 0.12)" stroke="rgba(34, 211, 238, 0.3)" />
       <text x="262.5" y="22" text-anchor="middle" font-family="'Geist Mono', monospace" font-size="12" font-weight="500" fill="#F5F5F7">Zero Install PWA</text>

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
-import { AirPointerConfig, CalibrationData } from '../engine/airPointer';
 import { TrackpadConfig } from '../engine/trackpadGestures';
 import { DeviceInfo } from '../hooks/useAerokinSocket';
 import { triggerHaptic } from '../utils/haptics';
@@ -19,11 +18,6 @@ import {
 interface SettingsDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  config: AirPointerConfig;
-  onConfigChange: (newConfig: Partial<AirPointerConfig>) => void;
-  calibration: CalibrationData;
-  onResetCalibration: () => void;
-  onOpenCalibrationWizard: () => void;
   trackpadConfig: TrackpadConfig;
   onTrackpadConfigChange: (newConfig: Partial<TrackpadConfig>) => void;
   onResetTrackpadConfig: () => void;
@@ -44,11 +38,6 @@ interface SettingsDrawerProps {
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   isOpen,
   onOpenChange,
-  config,
-  onConfigChange,
-  calibration,
-  onResetCalibration,
-  onOpenCalibrationWizard,
   trackpadConfig,
   onTrackpadConfigChange,
   onResetTrackpadConfig,
@@ -92,101 +81,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 text-sm">
-          {/* Section 1: Pointer */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-medium text-muted-foreground">
-              Pointer
-            </h3>
-
-            {/* Speed slider row */}
-            <div className="flex flex-col gap-2 py-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-foreground">Speed</span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {config.fineSensitivity.toFixed(2)}x
-                </span>
-              </div>
-              <Slider
-                value={[config.fineSensitivity]}
-                min={0.5}
-                max={2.5}
-                step={0.05}
-                onValueChange={([val]) => onConfigChange({ fineSensitivity: val })}
-                aria-label="Pointer speed"
-              />
-            </div>
-
-            {/* Mode segmented control */}
-            <div className="flex items-center justify-between py-1">
-              <span className="text-sm text-foreground">Mode</span>
-              <div className="inline-flex rounded-xl bg-raised p-1 border border-border">
-                <button
-                  onClick={() => {
-                    onConfigChange({ mode: 'magic' });
-                    triggerHaptic('light');
-                  }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                    config.mode === 'magic'
-                      ? 'bg-accent text-black font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Magic
-                </button>
-                <button
-                  onClick={() => {
-                    onConfigChange({ mode: 'hold' });
-                    triggerHaptic('light');
-                  }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                    config.mode === 'hold'
-                      ? 'bg-accent text-black font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Hold
-                </button>
-              </div>
-            </div>
-
-            {/* Calibrate row */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm text-foreground">Calibration</p>
-                <p className="text-xs text-muted-foreground">
-                  {calibration.calibrated ? 'Calibrated' : 'Default'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {calibration.calibrated && (
-                  <button
-                    onClick={() => {
-                      onResetCalibration();
-                      triggerHaptic('medium');
-                    }}
-                    className="p-2 rounded-lg border border-border bg-raised text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    title="Reset calibration"
-                    aria-label="Reset calibration"
-                  >
-                    <ArrowClockwise size={16} />
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    onOpenChange(false);
-                    onOpenCalibrationWizard();
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-border bg-raised hover:bg-border text-foreground text-xs font-medium transition-colors min-h-[44px] flex items-center justify-center"
-                >
-                  Calibrate
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-[1px] bg-border" />
-
-          {/* Section 2: Trackpad */}
+          {/* Section 1: Trackpad */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-medium text-muted-foreground">

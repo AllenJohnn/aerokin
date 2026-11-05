@@ -13,11 +13,10 @@ import {
 
 export const DesignShowcase: React.FC = () => {
   // Interactive state for playground
-  const [activeTab, setActiveTab] = useState('air-mouse');
+  const [activeTab, setActiveTab] = useState('trackpad');
   const [cursorEnabled, setCursorEnabled] = useState(true);
   const [trailLength, setTrailLength] = useState(26);
-  const [airSensitivity, setAirSensitivity] = useState(1400);
-  const [gyroSmoothing, setGyroSmoothing] = useState(85);
+  const [trackpadSensitivity, setTrackpadSensitivity] = useState(100);
   const [volume, setVolume] = useState(72);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [batterySaving, setBatterySaving] = useState(false);
@@ -31,9 +30,8 @@ export const DesignShowcase: React.FC = () => {
   };
 
   const navTabs = [
-    { id: 'air-mouse', label: 'Air Mouse' },
+    { id: 'trackpad', label: 'Trackpad' },
     { id: 'media-remote', label: 'Media Remote' },
-    { id: 'touchpad', label: 'Precision Pad' },
     { id: 'settings', label: 'Device Settings' },
   ];
 
@@ -58,7 +56,7 @@ export const DesignShowcase: React.FC = () => {
             </Pill>
             <div className="hidden sm:block">
               <Pill status="active" size="sm">
-                GYRO · 120Hz
+                TRACKPAD · 120Hz
               </Pill>
             </div>
             <a
@@ -407,7 +405,7 @@ export const DesignShowcase: React.FC = () => {
                   <span className="font-mono text-xs text-aerokin-muted">Headline 2</span>
                 </div>
                 <p className="font-sans text-2xl sm:text-3xl font-bold tracking-tighter text-white">
-                  6-Axis Gyroscope Spatial Fusion for Windows PC
+                  Ultra-Low Latency Input Automation for Windows PC
                 </p>
               </div>
 
@@ -487,10 +485,10 @@ export const DesignShowcase: React.FC = () => {
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <GlowButton variant="primary" size="md">
-                    Connect Air Mouse
+                    Connect Trackpad
                   </GlowButton>
                   <GlowButton variant="secondary" size="md">
-                    Calibrate Gyro
+                    Reset Defaults
                   </GlowButton>
                   <GlowButton variant="ghost" size="md">
                     Disconnect
@@ -574,21 +572,12 @@ export const DesignShowcase: React.FC = () => {
 
               <div className="flex flex-col gap-6">
                 <Slider
-                  label="Air Mouse Sensitivity (DPI)"
-                  value={airSensitivity}
-                  onChange={setAirSensitivity}
-                  min={400}
-                  max={3200}
-                  step={50}
-                  unit="DPI"
-                />
-
-                <Slider
-                  label="Gyro Smoothing Filter"
-                  value={gyroSmoothing}
-                  onChange={setGyroSmoothing}
-                  min={0}
-                  max={100}
+                  label="Trackpad Pointer Speed"
+                  value={trackpadSensitivity}
+                  onChange={setTrackpadSensitivity}
+                  min={50}
+                  max={250}
+                  step={5}
                   unit="%"
                 />
 
@@ -747,22 +736,22 @@ export const DesignShowcase: React.FC = () => {
                   />
 
                   {/* Mode Display Area */}
-                  {activeTab === 'air-mouse' && (
+                  {activeTab === 'trackpad' && (
                     <div className="flex flex-col gap-3">
-                      {/* Gyro Air Pad */}
+                      {/* Trackpad Surface */}
                       <div className="relative h-44 rounded-2xl bg-white/[0.03] border border-white/[0.08] overflow-hidden flex flex-col items-center justify-center p-4 text-center group cursor-grab active:cursor-grabbing">
                         <div className="absolute inset-0 aerokin-radial-glow opacity-50" />
                         
-                        {/* Dynamic Crosshair */}
+                        {/* Dynamic Indicator */}
                         <div className="relative flex flex-col items-center gap-2 z-10">
-                          <div className="h-10 w-10 rounded-full border border-dashed border-aerokin-cyan/40 flex items-center justify-center animate-spin" style={{ animationDuration: '12s' }}>
+                          <div className="h-10 w-10 rounded-full border border-dashed border-aerokin-cyan/40 flex items-center justify-center">
                             <div className="h-2 w-2 rounded-full bg-aerokin-cyan shadow-glow-cyan" />
                           </div>
                           <span className="font-mono text-xs text-white font-medium">
-                            HOLD & MOVE AIR
+                            TOUCH & DRAG
                           </span>
                           <span className="font-mono text-[10px] text-aerokin-muted">
-                            GYRO ACTIVE · 120HZ
+                            TRACKPAD ACTIVE
                           </span>
                         </div>
 
@@ -867,11 +856,11 @@ export const DesignShowcase: React.FC = () => {
                       />
                       <Slider
                         label="Cursor Speed"
-                        value={airSensitivity}
-                        onChange={setAirSensitivity}
-                        min={400}
-                        max={3200}
-                        step={100}
+                        value={trackpadSensitivity}
+                        onChange={setTrackpadSensitivity}
+                        min={50}
+                        max={250}
+                        step={5}
                       />
                     </div>
                   )}

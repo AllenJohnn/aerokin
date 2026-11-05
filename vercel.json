@@ -33,10 +33,6 @@
         {
           "key": "Referrer-Policy",
           "value": "no-referrer"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "accelerometer=*, gyroscope=*, magnetometer=*"
         }
       ]
     }

@@ -302,7 +302,7 @@ export interface RateLimitCategoryConfig {
 }
 
 export const RATE_LIMIT_CONFIGS: Record<string, RateLimitCategoryConfig> = {
-  move: { capacity: 250, refillRate: 200 }, // Phone gyro / trackpad sends up to 120-200Hz
+  move: { capacity: 250, refillRate: 200 }, // Trackpad sends up to 120-200Hz
   scroll: { capacity: 150, refillRate: 100 }, // Multi-touch scroll updates
   click: { capacity: 40, refillRate: 20 }, // Clicks and button down/up transitions
   media: { capacity: 40, refillRate: 20 }, // Media controls, seeking, volume

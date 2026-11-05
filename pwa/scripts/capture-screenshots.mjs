@@ -71,10 +71,6 @@ try {
       localStorage.setItem('aerokin_device_credential', 'mock_credential_123');
       localStorage.setItem('aerokin_device_name', "Allen's iPhone 14");
 
-      window.DeviceMotionEvent = {
-        requestPermission: async () => 'granted',
-      };
-
       class MockWebSocket extends EventTarget {
         constructor(url) {
           super();
@@ -162,17 +158,24 @@ try {
       await page.waitForTimeout(300);
     }
 
-    // Dismiss motion permission screen if shown on iOS
-    const motionBtn = page.locator('button:has-text("Enable motion")');
-    try {
-      await motionBtn.waitFor({ state: 'visible', timeout: 2000 });
-      await motionBtn.click();
-      await page.waitForTimeout(400);
-    } catch {
-      // Not shown or already granted
-    }
+    // 0. Verify and capture default Trackpad tab
+    const trackpadTabBtn = page.locator('button:has-text("Trackpad")');
+    await trackpadTabBtn.waitFor({ state: 'visible', timeout: 5000 });
+    const trackpadOverflowCheck = await page.evaluate(() => {
+      const body = document.body;
+      return {
+        hasOverflow: body.scrollWidth > body.clientWidth,
+        scrollWidth: body.scrollWidth,
+        clientWidth: body.clientWidth,
+      };
+    });
+    console.log(`[${vp.label}] Trackpad tab overflow check:`, trackpadOverflowCheck);
+    const suffix = vp.scale === 3 ? '@3x' : '';
+    const trackpadScreenshotPath = path.join(outDir, `trackpad-tab-${vp.name}${suffix}.png`);
+    await page.screenshot({ path: trackpadScreenshotPath });
+    console.log(`Saved Trackpad tab screenshot: ${trackpadScreenshotPath}`);
 
-    // 1. Navigate to Media Tab first
+    // 1. Navigate to Media Tab
     const mediaTabBtn = page.locator('button:has-text("Media")');
     await mediaTabBtn.waitFor({ state: 'visible', timeout: 5000 });
     await mediaTabBtn.click();
@@ -192,7 +195,6 @@ try {
 
     console.log(`[${vp.label}] Media tab overflow check:`, mediaOverflowCheck);
 
-    const suffix = vp.scale === 3 ? '@3x' : '';
     const mediaScreenshotPath = path.join(outDir, `media-tab-${vp.name}${suffix}.png`);
     await page.screenshot({ path: mediaScreenshotPath });
     console.log(`Saved Media tab screenshot: ${mediaScreenshotPath}`);

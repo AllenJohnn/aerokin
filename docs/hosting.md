@@ -31,7 +31,7 @@ The root `vercel.json` file configures:
 - **SPA Rewrites**: Redirects navigation requests to `/index.html` via a catch-all rewrite rule (`/(.*)`). On Vercel, static filesystem files (assets, icons, manifest) take precedence before rewrites are evaluated.
 - **Cache Headers**: 1-year immutable caching for hashed `/assets/*`, and `no-cache, must-revalidate` for `index.html` and `manifest.json`.
 - **Security Headers**: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
-- **Permissions-Policy**: Explicitly enables `accelerometer=*`, `gyroscope=*`, and `magnetometer=*` so the Air Pointer gyroscopic engine functions when loaded from the hosted origin.
+- **Permissions-Policy**: Restricted default policy; gyroscopic/motion sensor policies removed following retirement of the air-mouse in favor of trackpad and direct desktop streaming.
 - **Content Security Policy (CSP)**: Intentionally omitted for now (untested). If a CSP header is added in the future, it must explicitly allow `connect-src wss:` to local LAN hosts (e.g. `connect-src 'self' wss: https:;`).
 
 ---
