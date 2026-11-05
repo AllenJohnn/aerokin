@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import https from 'node:https';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -62,11 +63,49 @@ async function checkNoOverflow(page, label) {
 async function run() {
   console.log('--- Starting Aerokin Server for Playwright Verification ---');
 
-  const tokenFile = path.join(ROOT_DIR, 'server/.certs/token.txt');
+  const certsDir = path.join(ROOT_DIR, 'server/.certs');
+  const tokenFile = path.join(certsDir, 'token.txt');
   let token = '4EA378';
   if (fs.existsSync(tokenFile)) {
     token = fs.readFileSync(tokenFile, 'utf8').trim();
   }
+
+  // Pre-register test device in devices.json for instant authenticated connection
+  const testDeviceId = 'dev_playwright_test';
+  const testRawCredential = 'playwright_credential_secret_12345';
+  const testHash = crypto.createHash('sha256').update(testRawCredential).digest('hex');
+  const devicesFile = path.join(certsDir, 'devices.json');
+
+  let originalDevicesContent = null;
+  if (fs.existsSync(devicesFile)) {
+    originalDevicesContent = fs.readFileSync(devicesFile, 'utf8');
+  }
+
+  let devicesList = [];
+  if (originalDevicesContent) {
+    try {
+      devicesList = JSON.parse(originalDevicesContent);
+    } catch {}
+  }
+  const existingIdx = devicesList.findIndex((d) => d.deviceId === testDeviceId);
+  const testRecord = {
+    deviceId: testDeviceId,
+    name: 'Playwright iPhone',
+    platform: 'iOS',
+    credentialHash: testHash,
+    createdAt: Date.now(),
+    lastSeen: Date.now(),
+    revoked: false,
+  };
+  if (existingIdx >= 0) {
+    devicesList[existingIdx] = testRecord;
+  } else {
+    devicesList.push(testRecord);
+  }
+  if (!fs.existsSync(certsDir)) {
+    fs.mkdirSync(certsDir, { recursive: true });
+  }
+  fs.writeFileSync(devicesFile, JSON.stringify(devicesList, null, 2), 'utf8');
 
   const serverProcess = spawn('node', ['server/dist/index.js'], {
     cwd: ROOT_DIR,
@@ -139,19 +178,28 @@ async function run() {
         ignoreHTTPSErrors: true,
       });
 
+      await mobileContext.addInitScript(
+        ({ id, cred, name }) => {
+          localStorage.setItem('aerokin_device_id', id);
+          localStorage.setItem('aerokin_device_credential', cred);
+          localStorage.setItem('aerokin_device_name', name);
+        },
+        { id: testDeviceId, cred: testRawCredential, name: 'Playwright iPhone' }
+      );
+
       const page = await mobileContext.newPage();
 
       // 2A. Trackpad Tab (Default)
       await page.goto(`https://127.0.0.1:8443/?token=${token}`, {
         waitUntil: 'networkidle',
       });
-      await sleep(600);
+      await sleep(800);
       await checkNoOverflow(page, `Trackpad Tab ${vp.name}`);
       const trackpadShot = path.join(SCREENSHOTS_DIR, `trackpad-${vp.name}.png`);
       await page.screenshot({ path: trackpadShot });
       console.log(`✓ Saved: ${trackpadShot}`);
 
-      // 2D. Media Tab
+      // 2B. Media Tab
       const mediaTabBtn = page.getByRole('tab', { name: /Media/i });
       if (await mediaTabBtn.isVisible()) {
         await mediaTabBtn.click();
@@ -162,8 +210,37 @@ async function run() {
         console.log(`✓ Saved: ${mediaShot}`);
       }
 
-      // 2E. Settings Sheet (open sheet last so it doesn't block tab navigation)
-      const settingsBtn = page.getByRole('button', { name: /Settings/i });
+      // 2C. Desktop Tab (Live Remote Viewer)
+      const desktopTabBtn = page.getByRole('tab', { name: /Desktop/i });
+      if (await desktopTabBtn.isVisible()) {
+        await desktopTabBtn.click();
+        await sleep(800);
+        await checkNoOverflow(page, `Desktop Viewer ${vp.name}`);
+        const desktopViewerShot = path.join(SCREENSHOTS_DIR, `desktop-viewer-${vp.name}.png`);
+        await page.screenshot({ path: desktopViewerShot });
+        console.log(`✓ Saved: ${desktopViewerShot}`);
+
+        // Toggle Quick-Key Bar
+        const keybarBtn = page.locator('button[aria-label="Toggle keyboard"]');
+        if (await keybarBtn.isVisible()) {
+          await keybarBtn.click();
+          await sleep(400);
+          await checkNoOverflow(page, `Desktop Keybar ${vp.name}`);
+          const keybarShot = path.join(SCREENSHOTS_DIR, `desktop-keybar-${vp.name}.png`);
+          await page.screenshot({ path: keybarShot });
+          console.log(`✓ Saved: ${keybarShot}`);
+        }
+
+        // Return to normal navigation via Disconnect button
+        const disconnectBtn = page.locator('button[aria-label="Disconnect"]');
+        if (await disconnectBtn.isVisible()) {
+          await disconnectBtn.click();
+          await sleep(600);
+        }
+      }
+
+      // 2D. Settings Sheet
+      const settingsBtn = page.locator('button[aria-label="Settings"]');
       if (await settingsBtn.isVisible()) {
         await settingsBtn.click();
         await sleep(600);
@@ -176,12 +253,55 @@ async function run() {
       await mobileContext.close();
     }
 
+    // =========================================================================
+    // 3. LANDSCAPE MOBILE VIEWPORT (844x390 @ 3x) FOR DESKTOP VIEWER
+    // =========================================================================
+    console.log(`\nCapturing Landscape Desktop Viewer (844x390 @ 3x)...`);
+    const landscapeContext = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+      ignoreHTTPSErrors: true,
+    });
+
+    await landscapeContext.addInitScript(
+      ({ id, cred, name }) => {
+        localStorage.setItem('aerokin_device_id', id);
+        localStorage.setItem('aerokin_device_credential', cred);
+        localStorage.setItem('aerokin_device_name', name);
+      },
+      { id: testDeviceId, cred: testRawCredential, name: 'Playwright iPhone' }
+    );
+
+    const landscapePage = await landscapeContext.newPage();
+    await landscapePage.goto(`https://127.0.0.1:8443/?token=${token}`, {
+      waitUntil: 'networkidle',
+    });
+    await sleep(800);
+
+    const desktopTabBtnLs = landscapePage.getByRole('tab', { name: /Desktop/i });
+    if (await desktopTabBtnLs.isVisible()) {
+      await desktopTabBtnLs.click();
+      await sleep(800);
+      await checkNoOverflow(landscapePage, 'Desktop Viewer Landscape 844x390');
+      const lsShot = path.join(SCREENSHOTS_DIR, 'desktop-viewer-landscape-844x390.png');
+      await landscapePage.screenshot({ path: lsShot });
+      console.log(`✓ Saved: ${lsShot}`);
+    }
+    await landscapeContext.close();
+
     console.log('\n======================================================');
     console.log('✓ ALL PLAYWRIGHT SCREENSHOTS & OVERFLOW CHECKS PASSED!');
     console.log('======================================================\n');
   } finally {
     await browser.close();
     serverProcess.kill('SIGINT');
+
+    // Restore original devices.json
+    if (originalDevicesContent !== null) {
+      fs.writeFileSync(devicesFile, originalDevicesContent, 'utf8');
+    }
   }
 }
 

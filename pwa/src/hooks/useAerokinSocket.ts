@@ -11,6 +11,12 @@ import {
   saveStoredDeviceCredentials,
   clearStoredDeviceCredentials,
 } from '../utils/hosting';
+import {
+  MonitorInfo,
+  DesktopStats,
+  DesktopStreamState,
+  QualityPresetName,
+} from '../types/desktop';
 
 export type MediaAction =
   | 'playpause'
@@ -78,6 +84,7 @@ export interface UseAerokinSocketReturn {
   isHosted: boolean;
   connectionError: string | null;
   deviceId: string | null;
+  credential: string | null;
   deviceName: string | null;
   devices: DeviceInfo[];
   pairingCode: string | null;
@@ -102,6 +109,39 @@ export interface UseAerokinSocketReturn {
   sendClick: (button: 'left' | 'right' | 'middle') => void;
   sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
   sendScroll: (dy: number, dx?: number) => void;
+  sendAbsMove: (x: number, y: number, monitorId?: string) => void;
+  sendAbsClick: (
+    button: 'left' | 'right' | 'middle',
+    count?: number,
+    x?: number,
+    y?: number,
+    monitorId?: string
+  ) => void;
+  sendAbsButton: (
+    button: 'left' | 'right' | 'middle',
+    state: 'down' | 'up',
+    x?: number,
+    y?: number,
+    monitorId?: string
+  ) => void;
+  sendKey: (key: string, action?: 'down' | 'up' | 'tap', modifiers?: string[]) => void;
+  sendText: (text: string) => void;
+  startDesktopStream: (options?: {
+    monitorId?: string;
+    preset?: QualityPresetName;
+    customScale?: number;
+    customFps?: number;
+  }) => void;
+  stopDesktopStream: () => void;
+  requestMonitors: () => void;
+  desktopMonitors: MonitorInfo[];
+  desktopStatus: {
+    state: DesktopStreamState;
+    monitor?: MonitorInfo;
+    stats?: DesktopStats;
+    error?: string;
+  };
+  desktopStats: DesktopStats | null;
   sendMedia: (action: MediaAction) => void;
   sendSeekBy: (seconds: number) => void;
   sendSeekTo: (position: number) => void;
@@ -155,6 +195,16 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const [sessions, setSessions] = useState<MediaSessionItem[]>([]);
   const [volume, setVolume] = useState<number>(50);
   const [muted, setMuted] = useState<boolean>(false);
+
+  // Live desktop remote state
+  const [desktopMonitors, setDesktopMonitors] = useState<MonitorInfo[]>([]);
+  const [desktopStatus, setDesktopStatus] = useState<{
+    state: DesktopStreamState;
+    monitor?: MonitorInfo;
+    stats?: DesktopStats;
+    error?: string;
+  }>({ state: 'stopped' });
+  const [desktopStats, setDesktopStats] = useState<DesktopStats | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -364,6 +414,73 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     [sendRaw]
   );
 
+  const sendAbsMove = useCallback(
+    (x: number, y: number, monitorId?: string) => {
+      sendRaw({ type: 'abs_move', x, y, monitorId });
+    },
+    [sendRaw]
+  );
+
+  const sendAbsClick = useCallback(
+    (
+      button: 'left' | 'right' | 'middle',
+      count = 1,
+      x?: number,
+      y?: number,
+      monitorId?: string
+    ) => {
+      sendRaw({ type: 'abs_click', button, count, x, y, monitorId });
+    },
+    [sendRaw]
+  );
+
+  const sendAbsButton = useCallback(
+    (
+      button: 'left' | 'right' | 'middle',
+      state: 'down' | 'up',
+      x?: number,
+      y?: number,
+      monitorId?: string
+    ) => {
+      sendRaw({ type: 'abs_button', button, state, x, y, monitorId });
+    },
+    [sendRaw]
+  );
+
+  const sendKey = useCallback(
+    (key: string, action: 'down' | 'up' | 'tap' = 'tap', modifiers?: string[]) => {
+      sendRaw({ type: 'key', key, action, modifiers });
+    },
+    [sendRaw]
+  );
+
+  const sendText = useCallback(
+    (text: string) => {
+      sendRaw({ type: 'text', text });
+    },
+    [sendRaw]
+  );
+
+  const startDesktopStream = useCallback(
+    (options?: {
+      monitorId?: string;
+      preset?: QualityPresetName;
+      customScale?: number;
+      customFps?: number;
+    }) => {
+      sendRaw({ type: 'desktop_start', ...options });
+    },
+    [sendRaw]
+  );
+
+  const stopDesktopStream = useCallback(() => {
+    sendRaw({ type: 'desktop_stop' });
+  }, [sendRaw]);
+
+  const requestMonitors = useCallback(() => {
+    sendRaw({ type: 'desktop_monitors' });
+  }, [sendRaw]);
+
   const sendMedia = useCallback(
     (action: MediaAction) => {
       sendRaw({ type: 'media', action });
@@ -522,6 +639,20 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               }
             } else if (data.type === 'sessions' && Array.isArray(data.list)) {
               setSessions(data.list);
+            } else if (data.type === 'desktop_monitors' && Array.isArray(data.monitors)) {
+              setDesktopMonitors(data.monitors);
+            } else if (data.type === 'desktop_status') {
+              setDesktopStatus({
+                state: data.state || 'stopped',
+                monitor: data.monitor,
+                stats: data.stats,
+                error: data.error,
+              });
+              if (data.stats) {
+                setDesktopStats(data.stats);
+              }
+            } else if (data.type === 'desktop_stats' && data.stats) {
+              setDesktopStats(data.stats);
             } else if (data.type === 'volume' && typeof data.volume === 'number') {
               const norm =
                 data.volume <= 1.0 && data.volume > 0
@@ -614,6 +745,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     isHosted,
     connectionError,
     deviceId,
+    credential,
     deviceName,
     devices,
     pairingCode,
@@ -633,6 +765,17 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     sendClick,
     sendButton,
     sendScroll,
+    sendAbsMove,
+    sendAbsClick,
+    sendAbsButton,
+    sendKey,
+    sendText,
+    startDesktopStream,
+    stopDesktopStream,
+    requestMonitors,
+    desktopMonitors,
+    desktopStatus,
+    desktopStats,
     sendMedia,
     sendSeekBy,
     sendSeekTo,

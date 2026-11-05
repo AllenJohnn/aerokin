@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { TrackpadConfig } from '../engine/trackpadGestures';
 import { DeviceInfo } from '../hooks/useAerokinSocket';
+import { DesktopSettings, QualityPresetName } from '../types/desktop';
 import { triggerHaptic } from '../utils/haptics';
 import { Slider } from './ui/Slider';
 import { Switch } from './ui/Switch';
@@ -23,6 +24,8 @@ interface SettingsDrawerProps {
   onResetTrackpadConfig: () => void;
   seekMethod: 'auto' | 'keys';
   onSeekMethodChange: (method: 'auto' | 'keys') => void;
+  desktopSettings?: DesktopSettings;
+  onDesktopSettingsChange?: (settings: Partial<DesktopSettings>) => void;
   token?: string | null;
   deviceId?: string | null;
   deviceName?: string | null;
@@ -43,6 +46,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onResetTrackpadConfig,
   seekMethod,
   onSeekMethodChange,
+  desktopSettings,
+  onDesktopSettingsChange,
   deviceId,
   deviceName,
   devices = [],
@@ -278,6 +283,141 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
           </div>
 
           <div className="h-[1px] bg-border" />
+
+          {/* Section: Desktop Remote */}
+          {desktopSettings && onDesktopSettingsChange && (
+            <>
+              <div className="space-y-4">
+                <h3 className="text-xs font-medium text-muted-foreground">
+                  Desktop Remote
+                </h3>
+
+                {/* Default Input Mode */}
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <span className="text-sm text-foreground">Default Input Mode</span>
+                    <p className="text-xs text-muted-foreground">Touch style on desktop stream</p>
+                  </div>
+                  <div className="inline-flex rounded-xl bg-raised p-1 border border-border">
+                    <button
+                      onClick={() => {
+                        onDesktopSettingsChange({ inputMode: 'direct' });
+                        triggerHaptic('light');
+                      }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        desktopSettings.inputMode === 'direct'
+                          ? 'bg-accent text-black font-semibold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Direct
+                    </button>
+                    <button
+                      onClick={() => {
+                        onDesktopSettingsChange({ inputMode: 'trackpad' });
+                        triggerHaptic('light');
+                      }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        desktopSettings.inputMode === 'trackpad'
+                          ? 'bg-accent text-black font-semibold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Trackpad
+                    </button>
+                  </div>
+                </div>
+
+                {/* Default Quality Preset */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-foreground">Default Quality</span>
+                      <p className="text-xs text-muted-foreground">Resolution & compression scale</p>
+                    </div>
+                    <span className="font-mono text-xs capitalize text-muted-foreground">
+                      {desktopSettings.defaultPreset}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {(['ultra', 'high', 'balanced', 'fast', 'low'] as QualityPresetName[]).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => {
+                          onDesktopSettingsChange({ defaultPreset: p });
+                          triggerHaptic('light');
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-mono capitalize border transition-colors ${
+                          desktopSettings.defaultPreset === p
+                            ? 'bg-accent text-black font-semibold border-accent'
+                            : 'bg-raised border-border text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FPS Cap Slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-foreground">Frame rate cap</span>
+                      <p className="text-xs text-muted-foreground">Target stream frames per second</p>
+                    </div>
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {desktopSettings.fpsCap} fps
+                    </span>
+                  </div>
+                  <Slider
+                    value={[desktopSettings.fpsCap]}
+                    min={15}
+                    max={60}
+                    step={15}
+                    onValueChange={([val]) =>
+                      onDesktopSettingsChange({ fpsCap: Math.round(val) })
+                    }
+                    aria-label="Frame rate cap"
+                  />
+                </div>
+
+                {/* Live Stats Overlay Toggle */}
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <span className="text-sm text-foreground">Show stream stats</span>
+                    <p className="text-xs text-muted-foreground">Display live FPS, bitrate, and latency</p>
+                  </div>
+                  <Switch
+                    checked={desktopSettings.showStats}
+                    onCheckedChange={(checked) => {
+                      onDesktopSettingsChange({ showStats: checked });
+                      triggerHaptic('light');
+                    }}
+                    aria-label="Show stream stats"
+                  />
+                </div>
+
+                {/* Auto-Hide Toolbar Toggle */}
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <span className="text-sm text-foreground">Auto-hide toolbar</span>
+                    <p className="text-xs text-muted-foreground">Fade toolbar after 4 seconds of idle</p>
+                  </div>
+                  <Switch
+                    checked={desktopSettings.autoHideToolbar}
+                    onCheckedChange={(checked) => {
+                      onDesktopSettingsChange({ autoHideToolbar: checked });
+                      triggerHaptic('light');
+                    }}
+                    aria-label="Auto-hide toolbar"
+                  />
+                </div>
+              </div>
+
+              <div className="h-[1px] bg-border" />
+            </>
+          )}
 
           {/* Section 4: Devices & Security */}
           <div className="space-y-4">

@@ -5,6 +5,7 @@ import { useAerokinSocket } from './hooks/useAerokinSocket';
 import { ManualTokenModal } from './components/ManualTokenModal';
 import { TrackpadTab } from './components/TrackpadTab';
 import { MediaTab } from './components/MediaTab';
+import { DesktopViewer } from './components/DesktopViewer';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { triggerHaptic } from './utils/haptics';
@@ -16,6 +17,11 @@ import {
   DEFAULT_TRACKPAD_CONFIG,
   validateAndMigrateTrackpadConfig,
 } from './engine/trackpadGestures';
+import {
+  DesktopSettings,
+  loadDesktopSettings,
+  saveDesktopSettings,
+} from './types/desktop';
 import {
   HandPointing,
   PlayPause,
@@ -68,19 +74,30 @@ export const App: React.FC = () => {
     localStorage.setItem(STORAGE_SEEK_METHOD_KEY, method);
   };
 
-  // 3. Desktop Mode Detection (disabled in hosted mode to never call /api/pair)
+  // 3. Desktop Remote Settings
+  const [desktopSettings, setDesktopSettings] = useState<DesktopSettings>(() => loadDesktopSettings());
+
+  const handleDesktopSettingsChange = (partial: Partial<DesktopSettings>) => {
+    setDesktopSettings((prev) => {
+      const updated = { ...prev, ...partial };
+      saveDesktopSettings(updated);
+      return updated;
+    });
+  };
+
+  // 4. Desktop Mode Detection (disabled in hosted mode to never call /api/pair)
   const [isDesktopMode, setIsDesktopMode] = useState(() => {
     if (typeof window === 'undefined') return false;
     if (isHostedMode()) return false;
     return window.matchMedia('(min-width: 768px) and (pointer: fine)').matches;
   });
 
-  // 4. Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'trackpad' | 'media'>('trackpad');
+  // 5. Navigation Tabs (Desktop, Trackpad, Media)
+  const [activeTab, setActiveTab] = useState<'desktop' | 'trackpad' | 'media'>('trackpad');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
 
-  // 8. WebSocket Connection Engine
+  // 6. WebSocket Connection Engine
   const {
     status,
     latency,
@@ -89,6 +106,7 @@ export const App: React.FC = () => {
     isHosted,
     connectionError,
     deviceId,
+    credential,
     deviceName,
     devices,
     pairingCode,
@@ -107,6 +125,16 @@ export const App: React.FC = () => {
     sendClick,
     sendButton,
     sendScroll,
+    sendAbsMove,
+    sendAbsClick,
+    sendAbsButton,
+    sendKey,
+    sendText,
+    startDesktopStream,
+    stopDesktopStream,
+    desktopMonitors,
+    desktopStatus,
+    desktopStats,
     sendMedia,
     sendSeekBy,
     sendSeekTo,
@@ -120,11 +148,12 @@ export const App: React.FC = () => {
   } = useAerokinSocket();
 
   const tabs = [
+    { id: 'desktop', label: 'Desktop', icon: Monitor },
     { id: 'trackpad', label: 'Trackpad', icon: HandPointing },
     { id: 'media', label: 'Media', icon: PlayPause },
   ] as const;
 
-  const handleTabChange = (newTabId: 'trackpad' | 'media') => {
+  const handleTabChange = (newTabId: 'desktop' | 'trackpad' | 'media') => {
     triggerHaptic('light');
     setActiveTab(newTabId);
   };
@@ -299,6 +328,35 @@ export const App: React.FC = () => {
           onOpenAuthModal={() => setShowAuthModal(true)}
         />
       </div>
+    );
+  }
+
+  // Full-viewport focused Desktop Remote viewer
+  if (activeTab === 'desktop') {
+    return (
+      <DesktopViewer
+        host={host}
+        deviceId={deviceId}
+        credential={credential}
+        isHosted={isHosted}
+        active={activeTab === 'desktop'}
+        monitors={desktopMonitors}
+        desktopStatus={desktopStatus}
+        desktopSettings={desktopSettings}
+        onUpdateDesktopSettings={handleDesktopSettingsChange}
+        onClose={() => setActiveTab('trackpad')}
+        sendAbsMove={sendAbsMove}
+        sendAbsClick={sendAbsClick}
+        sendAbsButton={sendAbsButton}
+        sendMove={sendMove}
+        sendClick={sendClick}
+        sendButton={sendButton}
+        sendScroll={sendScroll}
+        sendKey={sendKey}
+        sendText={sendText}
+        startDesktopStream={startDesktopStream}
+        stopDesktopStream={stopDesktopStream}
+      />
     );
   }
 
@@ -480,6 +538,8 @@ export const App: React.FC = () => {
         onResetTrackpadConfig={handleResetTrackpadConfig}
         seekMethod={seekMethod}
         onSeekMethodChange={handleSeekMethodChange}
+        desktopSettings={desktopSettings}
+        onDesktopSettingsChange={handleDesktopSettingsChange}
         token={pairingCode || token}
         deviceId={deviceId}
         deviceName={deviceName}
