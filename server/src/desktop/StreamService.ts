@@ -1,0 +1,325 @@
+import { WebSocket } from 'ws';
+import { DeviceStore } from '../device-store.js';
+import { MonitorService } from './MonitorService.js';
+import { CaptureAdapter, WindowsFfmpegCaptureAdapter } from './CaptureAdapter.js';
+import {
+  MonitorInfo,
+  QualityPresetName,
+  QUALITY_PRESETS,
+  DesktopStats,
+  DesktopSessionState,
+} from './types.js';
+
+export interface StreamServiceConfig {
+  deviceStore: DeviceStore;
+  captureAdapter?: CaptureAdapter;
+  onStatusChange?: (state: DesktopSessionState, error?: string) => void;
+  onStatsUpdate?: (stats: DesktopStats) => void;
+}
+
+export class StreamService {
+  private deviceStore: DeviceStore;
+  private captureAdapter: CaptureAdapter;
+  private activeWs: WebSocket | null = null;
+  private activeDeviceId: string | null = null;
+  private activeClientIp: string | null = null;
+  private state: DesktopSessionState = 'stopped';
+  private selectedMonitor: MonitorInfo | null = null;
+  private currentPreset: QualityPresetName = 'balanced';
+
+  private originalConsoleTitle = 'AEROKIN SERVER';
+  private statsInterval: NodeJS.Timeout | null = null;
+
+  // Stats accumulators
+  private frameCount = 0;
+  private byteCount = 0;
+  private droppedFrameCount = 0;
+  private lastStatsTime = Date.now();
+  private currentFps = 0;
+  private currentBitrateKbps = 0;
+  private lastWidth = 0;
+  private lastHeight = 0;
+  private currentSequence = 0;
+
+  private onStatusChange?: (state: DesktopSessionState, error?: string) => void;
+  private onStatsUpdate?: (stats: DesktopStats) => void;
+
+  // Max bufferedAmount before adaptive frame dropping (256 KB)
+  private readonly MAX_BUFFERED_BYTES = 256 * 1024;
+
+  constructor(config: StreamServiceConfig) {
+    this.deviceStore = config.deviceStore;
+    this.captureAdapter = config.captureAdapter || new WindowsFfmpegCaptureAdapter();
+    this.onStatusChange = config.onStatusChange;
+    this.onStatsUpdate = config.onStatsUpdate;
+
+    this.captureAdapter.onFrame((packet, width, height, seq) => {
+      this.handleCapturedFrame(packet, width, height, seq);
+    });
+
+    this.captureAdapter.onError((err, isSecureScreen) => {
+      this.handleCaptureError(err, isSecureScreen);
+    });
+
+    this.captureAdapter.onExit(() => {
+      if (this.state === 'active') {
+        this.transitionState('stopped');
+      }
+    });
+  }
+
+  public getState(): DesktopSessionState {
+    return this.state;
+  }
+
+  public setOnStatusChange(cb?: (state: DesktopSessionState, error?: string) => void): void {
+    this.onStatusChange = cb;
+  }
+
+  public setOnStatsUpdate(cb?: (stats: DesktopStats) => void): void {
+    this.onStatsUpdate = cb;
+  }
+
+  public getActiveMonitor(): MonitorInfo | null {
+    return this.selectedMonitor;
+  }
+
+  public getStats(): DesktopStats {
+    return {
+      fps: this.currentFps,
+      bitrateKbps: this.currentBitrateKbps,
+      droppedFrames: this.droppedFrameCount,
+      frameSequence: this.currentSequence,
+      width: this.lastWidth,
+      height: this.lastHeight,
+    };
+  }
+
+  public getSessionInfo(): {
+    state: DesktopSessionState;
+    deviceId: string | null;
+    clientIp: string | null;
+    monitor: MonitorInfo | null;
+    preset: QualityPresetName;
+    stats: DesktopStats;
+  } {
+    return {
+      state: this.state,
+      deviceId: this.activeDeviceId,
+      clientIp: this.activeClientIp,
+      monitor: this.selectedMonitor,
+      preset: this.currentPreset,
+      stats: this.getStats(),
+    };
+  }
+
+  /**
+   * Attaches an incoming authenticated WebSocket connection for desktop streaming.
+   */
+  public handleStreamSocket(
+    ws: WebSocket,
+    deviceId: string,
+    clientIp: string
+  ): void {
+    // Single active viewer policy: if existing stream socket is connected, close it cleanly
+    if (this.activeWs && this.activeWs !== ws) {
+      try {
+        this.activeWs.close(1000, 'Replaced by new desktop viewing session');
+      } catch {}
+      this.activeWs = null;
+    }
+
+    this.activeWs = ws;
+    this.activeDeviceId = deviceId;
+    this.activeClientIp = clientIp;
+
+    ws.on('close', () => {
+      if (this.activeWs === ws) {
+        this.stopSession('Viewer disconnected');
+      }
+    });
+
+    ws.on('error', () => {
+      if (this.activeWs === ws) {
+        this.stopSession('Viewer connection error');
+      }
+    });
+  }
+
+  /**
+   * Starts a desktop streaming session for the specified monitor and quality preset.
+   */
+  public async startSession(
+    options: {
+      monitorId?: string;
+      preset?: QualityPresetName;
+      customScale?: number;
+      customFps?: number;
+    } = {}
+  ): Promise<{ ok: boolean; monitor: MonitorInfo; error?: string }> {
+    const presetName = options.preset || 'balanced';
+    const presetConfig = QUALITY_PRESETS[presetName] || QUALITY_PRESETS.balanced;
+    this.currentPreset = presetName;
+
+    const monitor = MonitorService.getMonitor(options.monitorId);
+    this.selectedMonitor = monitor;
+
+    const fps = options.customFps || presetConfig.fps;
+    const scale = options.customScale || presetConfig.scale;
+    const quality = presetConfig.jpegQuality;
+
+    this.transitionState('starting');
+
+    try {
+      await this.captureAdapter.start({
+        monitor,
+        fps,
+        scale,
+        quality,
+      });
+
+      this.transitionState('active');
+      this.startStatsTimer();
+      this.setPcIndicator(true);
+
+      return { ok: true, monitor };
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to start screen capture';
+      this.transitionState('error', msg);
+      return { ok: false, monitor, error: msg };
+    }
+  }
+
+  /**
+   * Stops the active desktop stream session.
+   */
+  public async stopSession(reason = 'Session stopped'): Promise<void> {
+    if (this.state === 'stopped') return;
+
+    this.stopStatsTimer();
+    this.setPcIndicator(false);
+    this.transitionState('stopped');
+
+    await this.captureAdapter.stop();
+
+    if (this.activeWs) {
+      try {
+        if (
+          this.activeWs.readyState === WebSocket.OPEN ||
+          this.activeWs.readyState === WebSocket.CONNECTING
+        ) {
+          this.activeWs.close(1000, reason);
+        }
+      } catch {}
+      this.activeWs = null;
+    }
+
+    this.activeDeviceId = null;
+    this.activeClientIp = null;
+    this.selectedMonitor = null;
+  }
+
+  private handleCapturedFrame(
+    packet: Buffer,
+    width: number,
+    height: number,
+    seq: number
+  ): void {
+    this.lastWidth = width;
+    this.lastHeight = height;
+    this.currentSequence = seq;
+
+    if (!this.activeWs || this.activeWs.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    // Adaptive Backpressure:
+    // Drop frame immediately if client Wi-Fi buffer is backing up
+    if (this.activeWs.bufferedAmount > this.MAX_BUFFERED_BYTES) {
+      this.droppedFrameCount++;
+      return;
+    }
+
+    try {
+      this.activeWs.send(packet);
+      this.frameCount++;
+      this.byteCount += packet.length;
+    } catch {
+      this.droppedFrameCount++;
+    }
+  }
+
+  private handleCaptureError(err: Error, isSecureScreen = false): void {
+    if (isSecureScreen) {
+      console.warn('[DesktopStream] Secure desktop screen detected (UAC prompt or Windows Lock).');
+      this.transitionState('secure_screen', err.message);
+    } else {
+      console.error('[DesktopStream] Screen capture error:', err.message);
+      this.transitionState('error', err.message);
+    }
+  }
+
+  private transitionState(newState: DesktopSessionState, errorMsg?: string): void {
+    this.state = newState;
+    this.onStatusChange?.(newState, errorMsg);
+  }
+
+  private startStatsTimer(): void {
+    this.stopStatsTimer();
+    this.frameCount = 0;
+    this.byteCount = 0;
+    this.droppedFrameCount = 0;
+    this.lastStatsTime = Date.now();
+
+    this.statsInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsedSec = Math.max(0.1, (now - this.lastStatsTime) / 1000);
+
+      this.currentFps = Math.round((this.frameCount / elapsedSec) * 10) / 10;
+      this.currentBitrateKbps = Math.round(((this.byteCount * 8) / elapsedSec / 1024) * 10) / 10;
+
+      this.frameCount = 0;
+      this.byteCount = 0;
+      this.lastStatsTime = now;
+
+      const currentStats = this.getStats();
+      this.onStatsUpdate?.(currentStats);
+    }, 1000);
+  }
+
+  private stopStatsTimer(): void {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    this.currentFps = 0;
+    this.currentBitrateKbps = 0;
+  }
+
+  private setPcIndicator(active: boolean): void {
+    if (active) {
+      try {
+        if (process.title) {
+          this.originalConsoleTitle = process.title;
+          process.title = 'AeroKin: REMOTE VIEWING ACTIVE';
+        }
+      } catch {}
+
+      console.log('\n======================================================');
+      console.log('  ✦ AEROKIN: REMOTE DESKTOP VIEWING ACTIVE ✦');
+      console.log(`  Viewer: ${this.activeDeviceId || 'Mobile Client'} (${this.activeClientIp || 'LAN'})`);
+      console.log(
+        `  Display: ${this.selectedMonitor?.name || 'Primary'} (${this.selectedMonitor?.bounds.width}x${this.selectedMonitor?.bounds.height})`
+      );
+      console.log('  Type "stop-desktop" in terminal to terminate stream.');
+      console.log('======================================================\n');
+    } else {
+      try {
+        if (process.title && this.originalConsoleTitle) {
+          process.title = this.originalConsoleTitle;
+        }
+      } catch {}
+      console.log('[DesktopStream] Desktop remote session ended.');
+    }
+  }
+}

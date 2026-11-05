@@ -37,3 +37,7 @@ dist-ssr
 .temp
 .cache
 .agents
+
+# Tools & Binaries
+tools/
+*.exe

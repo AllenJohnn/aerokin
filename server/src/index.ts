@@ -79,7 +79,7 @@ async function main() {
   qrcode.generate(trustUrl, { small: true });
 
   console.log('\n------------------------------------------------------');
-  console.log('  QR #2: CONNECT IPHONE AIR MOUSE & REMOTE');
+  console.log('  QR #2: CONNECT IPHONE REMOTE & TRACKPAD');
   console.log('  Scan to launch AEROKIN directly on your iPhone:');
   console.log(`  LAN URL:  ${pairUrl}`);
   console.log(`  mDNS URL: ${mdnsPairUrl}`);
@@ -147,7 +147,7 @@ async function main() {
 
     rl.prompt();
 
-    rl.on('line', (line) => {
+    rl.on('line', async (line) => {
       const input = line.trim();
 
       if (pendingApproval) {
@@ -227,12 +227,41 @@ async function main() {
           break;
         }
 
+        case 'desktop': {
+          const info = server.streamService.getSessionInfo();
+          console.log('\n--- Desktop Remote Status ---');
+          console.log(`• State:          ${info.state.toUpperCase()}`);
+          console.log(`• Viewer Device:  ${info.deviceId || 'None'}`);
+          console.log(`• Client IP:      ${info.clientIp || 'None'}`);
+          console.log(
+            `• Target Monitor: ${info.monitor?.name || 'Primary'} (${info.monitor?.bounds.width || 0}x${info.monitor?.bounds.height || 0})`
+          );
+          console.log(`• Quality Preset: ${info.preset}`);
+          console.log(
+            `• Stream Stats:   ${info.stats.fps} fps | ${info.stats.bitrateKbps} kbps | Dropped frames: ${info.stats.droppedFrames}`
+          );
+          console.log('-----------------------------\n');
+          break;
+        }
+
+        case 'stop-desktop': {
+          if (server.streamService.getState() === 'stopped') {
+            console.log('[Desktop] No desktop remote session is currently active.');
+          } else {
+            await server.streamService.stopSession('Terminated via CLI stop-desktop command');
+            console.log('[Desktop] Desktop remote session immediately terminated.');
+          }
+          break;
+        }
+
         case 'help': {
           console.log('\nCommands:');
           console.log('  devices        - List all paired devices');
           console.log('  pair           - Generate a new 8-digit pairing code & QR');
           console.log('  revoke <id>    - Revoke and disconnect a device by ID (or prefix)');
           console.log('  revoke-all     - Revoke all devices immediately');
+          console.log('  desktop        - Show status of active desktop streaming session');
+          console.log('  stop-desktop   - Emergency stop active desktop streaming session');
           console.log('  help           - Show this help message\n');
           break;
         }

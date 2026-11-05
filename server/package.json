@@ -11,6 +11,7 @@
     "trust": "tsx src/trust.ts",
     "test:input": "tsx scripts/test-input.ts",
     "test:media": "tsx scripts/test-media.ts",
+    "bench:desktop": "tsx scripts/desktop-bench.ts",
     "test": "vitest run"
   },
   "dependencies": {

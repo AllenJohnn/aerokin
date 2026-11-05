@@ -1,5 +1,6 @@
 import { mouse, keyboard, Button, Key, Point } from '@nut-tree-fork/nut-js';
 import { Win32Input } from './native/win32.js';
+import { MonitorService } from './desktop/MonitorService.js';
 
 // Configure nut-js for zero-delay instant response fallback
 mouse.config.autoDelayMs = 0;
@@ -254,4 +255,134 @@ export async function handleScroll(dyRaw: unknown, dxRaw?: unknown): Promise<voi
 export function resetDefaultScroller(): void {
   defaultScroller.destroy();
   defaultScroller = createScroller();
+}
+
+/**
+ * Handles absolute cursor positioning across displays.
+ * NormX and NormY are [0, 1] relative to the target monitor bounds.
+ */
+export function handleAbsMove(normX: number, normY: number, monitorId?: string): boolean {
+  if (typeof normX !== 'number' || typeof normY !== 'number') return false;
+  if (!Number.isFinite(normX) || !Number.isFinite(normY)) return false;
+
+  const monitor = MonitorService.getMonitor(monitorId);
+  const virtual = MonitorService.getVirtualDesktopBounds();
+  const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
+
+  if (Win32Input.isSupported()) {
+    return Win32Input.moveAbsolute(
+      mapped.virtualNormX,
+      mapped.virtualNormY,
+      mapped.screenX,
+      mapped.screenY
+    );
+  }
+  return false;
+}
+
+/**
+ * Handles absolute mouse clicks at specified normalized coordinates.
+ */
+export async function handleAbsClick(
+  button: 'left' | 'right' | 'middle',
+  count: number = 1,
+  normX?: number,
+  normY?: number,
+  monitorId?: string
+): Promise<boolean> {
+  if (button !== 'left' && button !== 'right' && button !== 'middle') return false;
+
+  if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
+    const monitor = MonitorService.getMonitor(monitorId);
+    const virtual = MonitorService.getVirtualDesktopBounds();
+    const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
+
+    if (Win32Input.isSupported()) {
+      return Win32Input.clickAbsolute(
+        button,
+        mapped.virtualNormX,
+        mapped.virtualNormY,
+        mapped.screenX,
+        mapped.screenY,
+        count
+      );
+    }
+  }
+
+  if (Win32Input.isSupported()) {
+    return Win32Input.clickAbsolute(button, undefined, undefined, undefined, undefined, count);
+  }
+
+  // Fallback to handleClick
+  for (let i = 0; i < count; i++) {
+    await handleClick(button);
+  }
+  return true;
+}
+
+/**
+ * Handles absolute mouse button transitions (down / up) for dragging.
+ */
+export async function handleAbsButton(
+  button: 'left' | 'right' | 'middle',
+  state: 'down' | 'up',
+  normX?: number,
+  normY?: number,
+  monitorId?: string
+): Promise<boolean> {
+  if (button !== 'left' && button !== 'right' && button !== 'middle') return false;
+  if (state !== 'down' && state !== 'up') return false;
+
+  if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
+    const monitor = MonitorService.getMonitor(monitorId);
+    const virtual = MonitorService.getVirtualDesktopBounds();
+    const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
+
+    if (Win32Input.isSupported()) {
+      return Win32Input.buttonAbsolute(
+        button,
+        state,
+        mapped.virtualNormX,
+        mapped.virtualNormY,
+        mapped.screenX,
+        mapped.screenY
+      );
+    }
+  }
+
+  if (Win32Input.isSupported()) {
+    return Win32Input.buttonAbsolute(button, state);
+  }
+
+  await handleButton(button, state);
+  return true;
+}
+
+/**
+ * Handles keyboard input with optional modifiers.
+ */
+export async function handleKey(
+  key: string,
+  action: 'down' | 'up' | 'tap' = 'tap',
+  modifiers: string[] = []
+): Promise<boolean> {
+  if (!key || typeof key !== 'string') return false;
+  if (Win32Input.isSupported()) {
+    return Win32Input.keyWithModifiers(key, action, modifiers);
+  }
+  return false;
+}
+
+/**
+ * Handles typed unicode text input.
+ */
+export async function handleText(text: string): Promise<boolean> {
+  if (!text || typeof text !== 'string') return false;
+  if (Win32Input.isSupported()) {
+    for (const char of text) {
+      await Win32Input.sendUnicodeChar(char);
+    }
+    return true;
+  }
+  return false;
 }

@@ -8,6 +8,11 @@ import {
   handleClick,
   handleButton,
   handleScroll,
+  handleAbsMove,
+  handleAbsClick,
+  handleAbsButton,
+  handleKey,
+  handleText,
 } from './input.js';
 import {
   validateClientMessage,
@@ -19,6 +24,7 @@ import { parseAllowedOrigins, isOriginAllowed } from './origin.js';
 import { MediaManager } from './media-manager.js';
 import { DeviceStore, DevicePublicInfo } from './device-store.js';
 import { PairingManager } from './pairing-manager.js';
+import { StreamService, MonitorService } from './desktop/index.js';
 
 export interface ServerConfig {
   port: number;
@@ -30,6 +36,7 @@ export interface ServerConfig {
   allowedOrigins?: Set<string>;
   deviceStore?: DeviceStore;
   pairingManager?: PairingManager;
+  streamService?: StreamService;
 }
 
 export interface ActivityEvent {
@@ -55,6 +62,8 @@ function isLoopback(req: express.Request): boolean {
 export function startServer(config: ServerConfig): {
   httpsServer: https.Server;
   wss: WebSocketServer;
+  desktopWss: WebSocketServer;
+  streamService: StreamService;
   mediaManager: MediaManager;
   deviceStore: DeviceStore;
   pairingManager: PairingManager;
@@ -90,7 +99,50 @@ export function startServer(config: ServerConfig): {
     }
   }
 
+  // Initialize StreamService for live desktop remote
+  const streamService = config.streamService || new StreamService({ deviceStore });
+
+  function broadcastDesktopStatus() {
+    const payload = JSON.stringify({
+      type: 'desktop_status',
+      state: streamService.getState(),
+      monitor: streamService.getActiveMonitor(),
+      stats: streamService.getStats(),
+    });
+    for (const ws of activeSockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(payload);
+      }
+    }
+  }
+
+  function broadcastDesktopStats(stats: any) {
+    const payload = JSON.stringify({
+      type: 'desktop_stats',
+      stats,
+    });
+    for (const ws of activeSockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(payload);
+      }
+    }
+  }
+
+  streamService.setOnStatusChange((state, error) => {
+    broadcastDesktopStatus();
+    if (error) {
+      recordEvent('disconnect', `Desktop stream error: ${error}`);
+    }
+  });
+
+  streamService.setOnStatsUpdate((stats) => {
+    broadcastDesktopStats(stats);
+  });
+
   function closeDeviceSockets(deviceId: string) {
+    if (streamService.getSessionInfo().deviceId === deviceId) {
+      streamService.stopSession('Device revoked');
+    }
     const set = socketsByDeviceId.get(deviceId);
     if (set) {
       for (const socket of set) {
@@ -378,17 +430,108 @@ export function startServer(config: ServerConfig): {
   );
 
   const wss = new WebSocketServer({
-    server: httpsServer,
+    noServer: true,
     maxPayload: WS_MAX_PAYLOAD_BYTES,
-    verifyClient: (info, callback) => {
-      const origin = info.origin;
-      if (isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
-        callback(true);
-      } else {
-        // Disallowed origin rejected before upgrade with HTTP 403 Forbidden
-        callback(false, 403, 'Forbidden: Disallowed Origin');
+  });
+
+  const desktopWss = new WebSocketServer({
+    noServer: true,
+    maxPayload: 1024 * 1024,
+  });
+
+  desktopWss.on('connection', (ws: WebSocket, req) => {
+    const clientIp = req.socket.remoteAddress || 'unknown';
+    let isStreamAuth = false;
+    let streamDeviceId: string | null = null;
+
+    // 1. Check query parameters ?deviceId=...&credential=...
+    try {
+      const parsedUrl = new URL(req.url || '', `https://${req.headers.host || config.lanIp}`);
+      const dId = parsedUrl.searchParams.get('deviceId');
+      const cred = parsedUrl.searchParams.get('credential');
+      if (dId && cred && deviceStore.verifyCredential(dId, cred)) {
+        isStreamAuth = true;
+        streamDeviceId = dId;
+        streamService.handleStreamSocket(ws, dId, clientIp);
       }
-    },
+    } catch {}
+
+    // 2. 5s auth timeout if not authenticated via query params
+    let authTimeout: NodeJS.Timeout | null = null;
+    if (!isStreamAuth) {
+      authTimeout = setTimeout(() => {
+        if (!isStreamAuth) {
+          try {
+            ws.close(4001, 'Stream auth timeout (5s)');
+          } catch {}
+        }
+      }, 5000);
+
+      ws.on('message', (data: Buffer | string) => {
+        if (isStreamAuth) return;
+        try {
+          const raw = typeof data === 'string' ? data : data.toString('utf8');
+          const parsed = JSON.parse(raw);
+          if (
+            parsed &&
+            parsed.type === 'auth' &&
+            typeof parsed.deviceId === 'string' &&
+            typeof parsed.credential === 'string'
+          ) {
+            if (deviceStore.verifyCredential(parsed.deviceId, parsed.credential)) {
+              isStreamAuth = true;
+              streamDeviceId = parsed.deviceId;
+              if (authTimeout) {
+                clearTimeout(authTimeout);
+                authTimeout = null;
+              }
+              ws.send(JSON.stringify({ type: 'stream_auth_ok', deviceId: parsed.deviceId }));
+              streamService.handleStreamSocket(ws, parsed.deviceId, clientIp);
+              return;
+            }
+          }
+        } catch {}
+
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+          authTimeout = null;
+        }
+        try {
+          ws.close(4001, 'Unauthorized stream socket');
+        } catch {}
+      });
+    }
+
+    ws.on('close', () => {
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+        authTimeout = null;
+      }
+    });
+  });
+
+  httpsServer.on('upgrade', (req, socket, head) => {
+    const origin = req.headers.origin;
+    if (!isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(req.url || '/', `https://${req.headers.host || config.lanIp}`);
+      if (parsedUrl.pathname === '/desktop/stream') {
+        desktopWss.handleUpgrade(req, socket, head, (ws) => {
+          desktopWss.emit('connection', ws, req);
+        });
+      } else {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      }
+    } catch {
+      socket.destroy();
+    }
   });
 
   wss.on('connection', (ws: WebSocket, req) => {
@@ -515,6 +658,17 @@ export function startServer(config: ServerConfig): {
 
       // Send current device list
       ws.send(JSON.stringify({ type: 'devices', list: deviceStore.listDevices() }));
+
+      // Send initial desktop status and monitors
+      ws.send(JSON.stringify({ type: 'desktop_monitors', monitors: MonitorService.listMonitors() }));
+      ws.send(
+        JSON.stringify({
+          type: 'desktop_status',
+          state: streamService.getState(),
+          monitor: streamService.getActiveMonitor(),
+          stats: streamService.getStats(),
+        })
+      );
     }
 
     ws.on('message', async (data: Buffer | string) => {
@@ -685,6 +839,87 @@ export function startServer(config: ServerConfig): {
               ws.send(JSON.stringify({ type: 'volume', volume: volRes.detail }));
             }
             break;
+
+          case 'desktop_monitors': {
+            const list = MonitorService.listMonitors(true);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'desktop_monitors', monitors: list }));
+            }
+            break;
+          }
+
+          case 'desktop_start': {
+            recordEvent(
+              'connect',
+              `Desktop stream request (preset: ${msg.preset || 'balanced'}, monitor: ${msg.monitorId || 'primary'})`
+            );
+            const startRes = await streamService.startSession({
+              monitorId: msg.monitorId,
+              preset: msg.preset,
+              customScale: msg.customScale,
+              customFps: msg.customFps,
+            });
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'desktop_status',
+                  state: streamService.getState(),
+                  monitor: startRes.monitor,
+                  stats: streamService.getStats(),
+                  error: startRes.error,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'desktop_stop': {
+            recordEvent('disconnect', 'Desktop stream stop requested');
+            await streamService.stopSession('Client requested stop');
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'desktop_status',
+                  state: 'stopped',
+                })
+              );
+            }
+            break;
+          }
+
+          case 'abs_move': {
+            handleAbsMove(msg.x, msg.y, msg.monitorId);
+            break;
+          }
+
+          case 'abs_click': {
+            await handleAbsClick(msg.button, msg.count, msg.x, msg.y, msg.monitorId);
+            recordEvent('click', `abs_click ${msg.button} x${msg.count || 1}`);
+            break;
+          }
+
+          case 'abs_button': {
+            await handleAbsButton(msg.button, msg.state, msg.x, msg.y, msg.monitorId);
+            recordEvent('button', `abs_button ${msg.button} ${msg.state}`);
+            break;
+          }
+
+          case 'key': {
+            await handleKey(msg.key, msg.action, msg.modifiers);
+            recordEvent(
+              'move',
+              `key: ${msg.key} ${msg.action || 'tap'}${
+                msg.modifiers?.length ? ` (${msg.modifiers.join('+')})` : ''
+              }`
+            );
+            break;
+          }
+
+          case 'text': {
+            await handleText(msg.text);
+            recordEvent('move', `text (${msg.text.length} chars)`);
+            break;
+          }
         }
       } catch {
         // Ignore parse errors or handler rejections; never crash
@@ -700,6 +935,8 @@ export function startServer(config: ServerConfig): {
   return {
     httpsServer,
     wss,
+    desktopWss,
+    streamService,
     mediaManager,
     deviceStore,
     pairingManager,

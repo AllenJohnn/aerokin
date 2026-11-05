@@ -26,6 +26,53 @@ export const ALLOWED_MEDIA_ACTIONS = [
 
 export type AllowedMediaAction = typeof ALLOWED_MEDIA_ACTIONS[number];
 
+export const ALLOWED_KEY_MODIFIERS = ['ctrl', 'alt', 'shift', 'win'] as const;
+export type AllowedKeyModifier = typeof ALLOWED_KEY_MODIFIERS[number];
+
+export const ALLOWED_SPECIAL_KEYS = [
+  'left',
+  'right',
+  'up',
+  'down',
+  'arrowleft',
+  'arrowright',
+  'arrowup',
+  'arrowdown',
+  'home',
+  'end',
+  'pageup',
+  'pagedown',
+  'backspace',
+  'delete',
+  'del',
+  'insert',
+  'enter',
+  'return',
+  'tab',
+  'space',
+  'escape',
+  'esc',
+  'shift',
+  'ctrl',
+  'control',
+  'alt',
+  'win',
+  'windows',
+  'meta',
+  'f1',
+  'f2',
+  'f3',
+  'f4',
+  'f5',
+  'f6',
+  'f7',
+  'f8',
+  'f9',
+  'f10',
+  'f11',
+  'f12',
+] as const;
+
 export type ValidClientMessage =
   | { type: 'ping'; t: number }
   | { type: 'auth'; deviceId: string; credential: string }
@@ -43,7 +90,40 @@ export type ValidClientMessage =
   | { type: 'seekto'; position: number; sessionId?: string }
   | { type: 'session'; id: string }
   | { type: 'setvolume'; level: number }
-  | { type: 'getvolume' };
+  | { type: 'getvolume' }
+  | {
+      type: 'desktop_start';
+      monitorId?: string;
+      preset?: 'low' | 'balanced' | 'high' | 'ultra';
+      customScale?: number;
+      customFps?: number;
+    }
+  | { type: 'desktop_stop' }
+  | { type: 'desktop_monitors' }
+  | { type: 'abs_move'; x: number; y: number; monitorId?: string }
+  | {
+      type: 'abs_click';
+      button: 'left' | 'right' | 'middle';
+      count?: number;
+      x?: number;
+      y?: number;
+      monitorId?: string;
+    }
+  | {
+      type: 'abs_button';
+      button: 'left' | 'right' | 'middle';
+      state: 'down' | 'up';
+      x?: number;
+      y?: number;
+      monitorId?: string;
+    }
+  | {
+      type: 'key';
+      key: string;
+      action?: 'down' | 'up' | 'tap';
+      modifiers?: string[];
+    }
+  | { type: 'text'; text: string };
 
 /**
  * Validates and clamps an incoming message payload.
@@ -258,6 +338,161 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       return { type: 'getvolume' };
     }
 
+    case 'desktop_start': {
+      let preset: 'low' | 'balanced' | 'high' | 'ultra' | undefined = undefined;
+      if (typeof msg.preset === 'string') {
+        if (['low', 'balanced', 'high', 'ultra'].includes(msg.preset)) {
+          preset = msg.preset as 'low' | 'balanced' | 'high' | 'ultra';
+        }
+      }
+      let monitorId: string | undefined = undefined;
+      if (typeof msg.monitorId === 'string' && msg.monitorId.length > 0 && msg.monitorId.length <= 64) {
+        monitorId = msg.monitorId;
+      }
+      let customScale: number | undefined = undefined;
+      if (typeof msg.customScale === 'number' && Number.isFinite(msg.customScale)) {
+        customScale = Math.max(0.1, Math.min(1.0, msg.customScale));
+      }
+      let customFps: number | undefined = undefined;
+      if (typeof msg.customFps === 'number' && Number.isFinite(msg.customFps)) {
+        customFps = Math.max(5, Math.min(60, Math.round(msg.customFps)));
+      }
+      return {
+        type: 'desktop_start',
+        monitorId,
+        preset,
+        customScale,
+        customFps,
+      };
+    }
+
+    case 'desktop_stop': {
+      return { type: 'desktop_stop' };
+    }
+
+    case 'desktop_monitors': {
+      return { type: 'desktop_monitors' };
+    }
+
+    case 'abs_move': {
+      if (
+        typeof msg.x !== 'number' ||
+        !Number.isFinite(msg.x) ||
+        typeof msg.y !== 'number' ||
+        !Number.isFinite(msg.y)
+      ) {
+        return null;
+      }
+      return {
+        type: 'abs_move',
+        x: Math.max(0, Math.min(1, msg.x)),
+        y: Math.max(0, Math.min(1, msg.y)),
+        monitorId:
+          typeof msg.monitorId === 'string' && msg.monitorId.length <= 64
+            ? msg.monitorId
+            : undefined,
+      };
+    }
+
+    case 'abs_click': {
+      if (msg.button !== 'left' && msg.button !== 'right' && msg.button !== 'middle') {
+        return null;
+      }
+      const count =
+        typeof msg.count === 'number' && Number.isFinite(msg.count)
+          ? Math.max(1, Math.min(3, Math.round(msg.count)))
+          : 1;
+      const x =
+        typeof msg.x === 'number' && Number.isFinite(msg.x)
+          ? Math.max(0, Math.min(1, msg.x))
+          : undefined;
+      const y =
+        typeof msg.y === 'number' && Number.isFinite(msg.y)
+          ? Math.max(0, Math.min(1, msg.y))
+          : undefined;
+      return {
+        type: 'abs_click',
+        button: msg.button,
+        count,
+        x,
+        y,
+        monitorId:
+          typeof msg.monitorId === 'string' && msg.monitorId.length <= 64
+            ? msg.monitorId
+            : undefined,
+      };
+    }
+
+    case 'abs_button': {
+      if (
+        (msg.button !== 'left' && msg.button !== 'right' && msg.button !== 'middle') ||
+        (msg.state !== 'down' && msg.state !== 'up')
+      ) {
+        return null;
+      }
+      const x =
+        typeof msg.x === 'number' && Number.isFinite(msg.x)
+          ? Math.max(0, Math.min(1, msg.x))
+          : undefined;
+      const y =
+        typeof msg.y === 'number' && Number.isFinite(msg.y)
+          ? Math.max(0, Math.min(1, msg.y))
+          : undefined;
+      return {
+        type: 'abs_button',
+        button: msg.button,
+        state: msg.state,
+        x,
+        y,
+        monitorId:
+          typeof msg.monitorId === 'string' && msg.monitorId.length <= 64
+            ? msg.monitorId
+            : undefined,
+      };
+    }
+
+    case 'key': {
+      if (typeof msg.key !== 'string' || msg.key.length === 0 || msg.key.length > 32) {
+        return null;
+      }
+      const lowerKey = msg.key.toLowerCase().trim();
+      const isSpecial = (ALLOWED_SPECIAL_KEYS as readonly string[]).includes(lowerKey);
+      const isSingleChar = lowerKey.length === 1 && /^[a-z0-9 `\-=\[\]\\;',.\/]$/.test(lowerKey);
+
+      if (!isSpecial && !isSingleChar) {
+        return null;
+      }
+
+      let action: 'down' | 'up' | 'tap' = 'tap';
+      if (msg.action === 'down' || msg.action === 'up' || msg.action === 'tap') {
+        action = msg.action;
+      }
+
+      let modifiers: string[] | undefined = undefined;
+      if (Array.isArray(msg.modifiers)) {
+        modifiers = msg.modifiers
+          .filter((m) => typeof m === 'string')
+          .map((m) => m.toLowerCase().trim())
+          .filter((m) => (ALLOWED_KEY_MODIFIERS as readonly string[]).includes(m));
+      }
+
+      return {
+        type: 'key',
+        key: lowerKey,
+        action,
+        modifiers,
+      };
+    }
+
+    case 'text': {
+      if (typeof msg.text !== 'string' || msg.text.length === 0 || msg.text.length > 256) {
+        return null;
+      }
+      const sanitized = msg.text.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
+      if (sanitized.length === 0) return null;
+      return { type: 'text', text: sanitized };
+    }
+
     default:
       return null;
   }
@@ -303,8 +538,11 @@ export interface RateLimitCategoryConfig {
 
 export const RATE_LIMIT_CONFIGS: Record<string, RateLimitCategoryConfig> = {
   move: { capacity: 250, refillRate: 200 }, // Trackpad sends up to 120-200Hz
+  abs_move: { capacity: 250, refillRate: 200 }, // Desktop absolute pointer moves
   scroll: { capacity: 150, refillRate: 100 }, // Multi-touch scroll updates
   click: { capacity: 40, refillRate: 20 }, // Clicks and button down/up transitions
+  key: { capacity: 40, refillRate: 20 }, // Keyboard typing and shortcuts
+  desktop: { capacity: 10, refillRate: 5 }, // Desktop start/stop/monitors queries
   media: { capacity: 40, refillRate: 20 }, // Media controls, seeking, volume
   ping: { capacity: 10, refillRate: 5 }, // Keepalive pings (phone sends ~0.5Hz)
   device: { capacity: 20, refillRate: 5 }, // Device list, rename, revoke
@@ -330,11 +568,22 @@ export class ConnectionRateLimiter {
     switch (type) {
       case 'move':
         return 'move';
+      case 'abs_move':
+        return 'abs_move';
       case 'scroll':
         return 'scroll';
       case 'click':
       case 'button':
+      case 'abs_click':
+      case 'abs_button':
         return 'click';
+      case 'key':
+      case 'text':
+        return 'key';
+      case 'desktop_start':
+      case 'desktop_stop':
+      case 'desktop_monitors':
+        return 'desktop';
       case 'media':
       case 'seekby':
       case 'seekto':

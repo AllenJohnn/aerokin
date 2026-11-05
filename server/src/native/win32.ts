@@ -71,32 +71,59 @@ const MOUSEEVENTF_MIDDLEDOWN = 0x0020;
 const MOUSEEVENTF_MIDDLEUP = 0x0040;
 const MOUSEEVENTF_WHEEL = 0x0800;
 const MOUSEEVENTF_HWHEEL = 0x1000;
+const MOUSEEVENTF_VIRTUALDESK = 0x4000;
+const MOUSEEVENTF_ABSOLUTE = 0x8000;
 
 const KEYEVENTF_EXTENDEDKEY = 0x0001;
 const KEYEVENTF_KEYUP = 0x0002;
+const KEYEVENTF_UNICODE = 0x0004;
 const KEYEVENTF_SCANCODE = 0x0008;
 
 // Common Virtual Key Codes
 const VK_MAP: Record<string, { vk: number; extended?: boolean }> = {
   left: { vk: 0x25, extended: true },
+  arrowleft: { vk: 0x25, extended: true },
   up: { vk: 0x26, extended: true },
+  arrowup: { vk: 0x26, extended: true },
   right: { vk: 0x27, extended: true },
+  arrowright: { vk: 0x27, extended: true },
   down: { vk: 0x28, extended: true },
+  arrowdown: { vk: 0x28, extended: true },
   space: { vk: 0x20 },
   enter: { vk: 0x0d },
   return: { vk: 0x0d },
   escape: { vk: 0x1b },
+  esc: { vk: 0x1b },
   shift: { vk: 0x10 },
   control: { vk: 0x11 },
   ctrl: { vk: 0x11 },
   alt: { vk: 0x12 },
+  win: { vk: 0x5b, extended: true },
+  meta: { vk: 0x5b, extended: true },
+  windows: { vk: 0x5b, extended: true },
   tab: { vk: 0x09 },
   backspace: { vk: 0x08 },
   delete: { vk: 0x2e, extended: true },
+  del: { vk: 0x2e, extended: true },
   home: { vk: 0x24, extended: true },
   end: { vk: 0x23, extended: true },
   pageup: { vk: 0x21, extended: true },
   pagedown: { vk: 0x22, extended: true },
+  insert: { vk: 0x2d, extended: true },
+
+  // Function Keys F1-F12
+  f1: { vk: 0x70 },
+  f2: { vk: 0x71 },
+  f3: { vk: 0x72 },
+  f4: { vk: 0x73 },
+  f5: { vk: 0x74 },
+  f6: { vk: 0x75 },
+  f7: { vk: 0x76 },
+  f8: { vk: 0x77 },
+  f9: { vk: 0x78 },
+  f10: { vk: 0x79 },
+  f11: { vk: 0x7a },
+  f12: { vk: 0x7b },
 
   // Media Keys
   volup: { vk: 0xaf },
@@ -202,6 +229,86 @@ export class Win32Input {
     }
 
     return false;
+  }
+
+  /**
+   * Moves cursor to absolute coordinates using SendInput with MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+   * falling back to SetCursorPos if needed.
+   * `virtualNormX` and `virtualNormY` are mapped to [0, 65535] on the virtual desktop.
+   * `screenX` and `screenY` are physical pixel coordinates.
+   */
+  public static moveAbsolute(
+    virtualNormX: number,
+    virtualNormY: number,
+    screenX?: number,
+    screenY?: number
+  ): boolean {
+    let sent = false;
+
+    if (SendInputFn) {
+      const buf = Buffer.alloc(40);
+      buf.writeUInt32LE(INPUT_MOUSE, 0);
+      buf.writeInt32LE(virtualNormX, 8);
+      buf.writeInt32LE(virtualNormY, 12);
+      buf.writeUInt32LE(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_MOVE, 20);
+      const res = SendInputFn(1, buf, 40);
+      if (res > 0) sent = true;
+    }
+
+    if (!sent && screenX !== undefined && screenY !== undefined && SetCursorPosFn) {
+      sent = SetCursorPosFn(screenX, screenY);
+      if (mouseEventFn) {
+        try {
+          mouseEventFn(MOUSEEVENTF_MOVE, 0, 0, 0, 0);
+        } catch {}
+      }
+    }
+
+    return sent;
+  }
+
+  /**
+   * Dispatches absolute click at given coordinates.
+   */
+  public static async clickAbsolute(
+    button: 'left' | 'right' | 'middle',
+    virtualNormX?: number,
+    virtualNormY?: number,
+    screenX?: number,
+    screenY?: number,
+    count: number = 1
+  ): Promise<boolean> {
+    if (virtualNormX !== undefined && virtualNormY !== undefined) {
+      this.moveAbsolute(virtualNormX, virtualNormY, screenX, screenY);
+    }
+
+    let ok = true;
+    for (let i = 0; i < count; i++) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      const down = this.mouseButton(button, 'down');
+      const up = this.mouseButton(button, 'up');
+      if (!down || !up) ok = false;
+    }
+    return ok;
+  }
+
+  /**
+   * Dispatches mouse button down or up at absolute coordinates for drag operations.
+   */
+  public static buttonAbsolute(
+    button: 'left' | 'right' | 'middle',
+    state: 'down' | 'up',
+    virtualNormX?: number,
+    virtualNormY?: number,
+    screenX?: number,
+    screenY?: number
+  ): boolean {
+    if (virtualNormX !== undefined && virtualNormY !== undefined) {
+      this.moveAbsolute(virtualNormX, virtualNormY, screenX, screenY);
+    }
+    return this.mouseButton(button, state);
   }
 
   /**
@@ -337,6 +444,60 @@ export class Win32Input {
     }
 
     return true;
+  }
+
+  /**
+   * Dispatches key with held modifiers.
+   */
+  public static async keyWithModifiers(
+    keyName: string,
+    action: 'down' | 'up' | 'tap' = 'tap',
+    modifiers: string[] = []
+  ): Promise<boolean> {
+    // Hold modifiers
+    for (const mod of modifiers) {
+      await this.key(mod, 'down');
+    }
+
+    let ok = false;
+    if (action === 'down' || action === 'up' || action === 'tap') {
+      ok = await this.key(keyName, action);
+    }
+
+    // Release modifiers in reverse order for tap actions
+    if (action === 'tap') {
+      for (const mod of [...modifiers].reverse()) {
+        await this.key(mod, 'up');
+      }
+    }
+
+    return ok;
+  }
+
+  /**
+   * Sends text via Unicode SendInput events
+   */
+  public static async sendUnicodeChar(char: string): Promise<boolean> {
+    if (!SendInputFn || char.length === 0) return false;
+    const code = char.charCodeAt(0);
+
+    const bufDown = Buffer.alloc(40);
+    bufDown.writeUInt32LE(INPUT_KEYBOARD, 0);
+    bufDown.writeUInt16LE(0, 8);
+    bufDown.writeUInt16LE(code, 10);
+    bufDown.writeUInt32LE(KEYEVENTF_UNICODE, 12);
+
+    const bufUp = Buffer.alloc(40);
+    bufUp.writeUInt32LE(INPUT_KEYBOARD, 0);
+    bufUp.writeUInt16LE(0, 8);
+    bufUp.writeUInt16LE(code, 10);
+    bufUp.writeUInt32LE(KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 12);
+
+    const sentDown = SendInputFn(1, bufDown, 40) > 0;
+    await new Promise((r) => setTimeout(r, 10));
+    const sentUp = SendInputFn(1, bufUp, 40) > 0;
+
+    return sentDown && sentUp;
   }
 
   /**
