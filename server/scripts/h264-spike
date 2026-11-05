@@ -1,0 +1,2 @@
+#!/bin/sh
+node --loader ts-node/esm --no-warnings "$(dirname "$0")/h264-spike.ts" "$@"

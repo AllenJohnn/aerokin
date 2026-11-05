@@ -13,6 +13,7 @@
     "test:media": "tsx scripts/test-media.ts",
     "bench:desktop": "tsx scripts/desktop-bench.ts",
     "capture:check": "tsx scripts/capture-check.ts",
+    "spike:h264": "tsx scripts/h264-spike.ts",
     "test": "vitest run"
   },
   "dependencies": {
