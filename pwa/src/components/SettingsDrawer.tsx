@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { TrackpadConfig } from '../engine/trackpadGestures';
 import { DeviceInfo } from '../hooks/useAerokinSocket';
@@ -14,7 +14,18 @@ import {
   SignOut,
   Shield,
   Check,
+  Pulse,
+  Copy,
+  ShareNetwork,
+  CaretDown,
+  CaretUp,
+  TerminalWindow,
 } from '@phosphor-icons/react';
+import {
+  diagnosticsLogger,
+  formatDiagnosticsReport,
+  DiagnosticEvent,
+} from '../utils/diagnosticsLogger';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -36,6 +47,14 @@ interface SettingsDrawerProps {
   onLogout?: () => void;
   onUnpairThisDevice?: () => void;
   onOpenAuthModal?: () => void;
+  status?: string;
+  host?: string | null;
+  latency?: number | null;
+  desktopStats?: { fps: number; bitrateKbps: number; droppedFrames: number } | null;
+  lastCloseCode?: number | null;
+  lastCloseReason?: string | null;
+  agentLogs?: any[];
+  onRequestAgentLogs?: (limit?: number) => void;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -57,9 +76,29 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onLogout,
   onUnpairThisDevice,
   onOpenAuthModal,
+  status = 'disconnected',
+  host = null,
+  latency = null,
+  desktopStats = null,
+  lastCloseCode = null,
+  lastCloseReason = null,
+  agentLogs = [],
+  onRequestAgentLogs,
 }) => {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [editNameVal, setEditNameVal] = useState('');
+
+  const [events, setEvents] = useState<DiagnosticEvent[]>(() => diagnosticsLogger.getEvents());
+  const [copiedDiag, setCopiedDiag] = useState(false);
+  const [showEventLog, setShowEventLog] = useState(false);
+  const [showAgentLogs, setShowAgentLogs] = useState(false);
+  const [fetchingLogs, setFetchingLogs] = useState(false);
+
+  useEffect(() => {
+    return diagnosticsLogger.subscribe(() => {
+      setEvents(diagnosticsLogger.getEvents());
+    });
+  }, []);
 
   const startRename = (id: string, currentName: string) => {
     setEditingDeviceId(id);
@@ -641,6 +680,248 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 <Trash size={14} />
                 <span>Revoke All Devices</span>
               </button>
+            </div>
+          </div>
+
+          {/* Section 5: Diagnostics & Logs */}
+          <div className="space-y-4 pt-4 border-t border-border/80">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Pulse size={14} className="text-accent" />
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Diagnostics & Logs
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                    status === 'connected'
+                      ? 'bg-optic-green/10 text-optic-green border-optic-green/30'
+                      : status === 'reconnecting'
+                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                      : 'bg-muted/20 text-muted-foreground border-border'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      status === 'connected'
+                        ? 'bg-optic-green'
+                        : status === 'reconnecting'
+                        ? 'bg-amber-500'
+                        : 'bg-muted-foreground'
+                    }`}
+                  />
+                  {status}
+                </span>
+                {latency !== null && (
+                  <span className="font-mono text-[11px] text-muted-foreground bg-surface px-1.5 py-0.5 rounded border border-border">
+                    {latency}ms
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Diagnostic Details Grid */}
+            <div className="rounded-xl bg-surface border border-border p-3.5 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Host:</span>
+                <span className="font-mono text-foreground">{host || 'Not connected'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Device ID:</span>
+                <span className="font-mono text-foreground">
+                  {deviceId ? `${deviceId.slice(0, 10)}...` : 'Unknown'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Stream:</span>
+                <span className="font-mono text-foreground">
+                  {desktopStats
+                    ? `${desktopStats.fps} fps · ${(desktopStats.bitrateKbps / 1000).toFixed(1)} Mbps · ${desktopStats.droppedFrames} drop`
+                    : 'Inactive'}
+                </span>
+              </div>
+              {lastCloseCode !== null && (
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Last Close:</span>
+                  <span className="font-mono text-foreground text-[11px]">
+                    {lastCloseCode} {lastCloseReason ? `(${lastCloseReason})` : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Diagnostics Actions */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={async () => {
+                  triggerHaptic('light');
+                  const report = formatDiagnosticsReport(
+                    { status, host, deviceId: deviceId ?? null, latency, desktopStats, lastCloseCode, lastCloseReason },
+                    events
+                  );
+                  try {
+                    await navigator.clipboard.writeText(report);
+                    setCopiedDiag(true);
+                    setTimeout(() => setCopiedDiag(false), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy diagnostics', err);
+                  }
+                }}
+                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
+                title="Copy full diagnostics report"
+              >
+                {copiedDiag ? <Check size={13} className="text-optic-green" /> : <Copy size={13} />}
+                <span>{copiedDiag ? 'Copied' : 'Copy'}</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  triggerHaptic('light');
+                  const report = formatDiagnosticsReport(
+                    { status, host, deviceId: deviceId ?? null, latency, desktopStats, lastCloseCode, lastCloseReason },
+                    events
+                  );
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: 'AeroKin Diagnostics Report',
+                        text: report,
+                      });
+                    } catch {}
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(report);
+                      setCopiedDiag(true);
+                      setTimeout(() => setCopiedDiag(false), 2000);
+                    } catch {}
+                  }
+                }}
+                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
+                title="Share diagnostics report"
+              >
+                <ShareNetwork size={13} />
+                <span>Share</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  diagnosticsLogger.clear();
+                  setEvents([]);
+                }}
+                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-muted-foreground hover:text-optic-red transition-colors flex items-center justify-center gap-1.5"
+                title="Clear local event logs"
+              >
+                <Trash size={13} />
+                <span>Clear</span>
+              </button>
+            </div>
+
+            {/* Expandable Client Ring Buffer Log */}
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <button
+                onClick={() => setShowEventLog((v) => !v)}
+                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs text-foreground hover:bg-raised transition-colors"
+              >
+                <span className="font-medium flex items-center gap-1.5">
+                  Client Event Log
+                  <span className="font-mono text-[10px] text-muted-foreground bg-raised px-1.5 py-0.5 rounded border border-border">
+                    {events.length}
+                  </span>
+                </span>
+                {showEventLog ? <CaretUp size={14} /> : <CaretDown size={14} />}
+              </button>
+
+              {showEventLog && (
+                <div className="p-2.5 border-t border-border bg-black/40 max-h-48 overflow-y-auto space-y-1.5 font-mono text-[11px]">
+                  {events.length === 0 ? (
+                    <div className="text-muted-foreground text-center py-2 text-xs">No client events logged yet</div>
+                  ) : (
+                    events
+                      .slice()
+                      .reverse()
+                      .map((ev) => (
+                        <div key={ev.id} className="flex items-start gap-1.5 leading-snug break-all">
+                          <span className="text-muted-foreground shrink-0 text-[10px]">
+                            {new Date(ev.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                          <span
+                            className={`text-[9px] px-1 py-0.2 rounded shrink-0 font-sans uppercase font-semibold ${
+                              ev.level === 'error'
+                                ? 'bg-optic-red/20 text-optic-red'
+                                : ev.level === 'warn'
+                                ? 'bg-amber-500/20 text-amber-500'
+                                : 'bg-surface text-muted-foreground border border-border'
+                            }`}
+                          >
+                            {ev.category}
+                          </span>
+                          <span className="text-foreground/90">{ev.message}</span>
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Expandable Server Agent Logs */}
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <button
+                onClick={() => {
+                  setShowAgentLogs((v) => !v);
+                  if (!showAgentLogs && onRequestAgentLogs) {
+                    setFetchingLogs(true);
+                    onRequestAgentLogs(50);
+                    setTimeout(() => setFetchingLogs(false), 800);
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs text-foreground hover:bg-raised transition-colors"
+              >
+                <span className="font-medium flex items-center gap-1.5">
+                  <TerminalWindow size={14} className="text-muted-foreground" />
+                  Agent Server Logs
+                  {agentLogs && agentLogs.length > 0 && (
+                    <span className="font-mono text-[10px] text-muted-foreground bg-raised px-1.5 py-0.5 rounded border border-border">
+                      {agentLogs.length}
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  {fetchingLogs && <span className="text-[10px] text-accent animate-pulse">Loading...</span>}
+                  {showAgentLogs ? <CaretUp size={14} /> : <CaretDown size={14} />}
+                </div>
+              </button>
+
+              {showAgentLogs && (
+                <div className="p-2.5 border-t border-border bg-black/40 max-h-48 overflow-y-auto space-y-1 font-mono text-[11px]">
+                  {agentLogs && agentLogs.length > 0 ? (
+                    agentLogs.map((log: any, idx: number) => (
+                      <div key={log.id || idx} className="text-foreground/80 leading-snug break-all flex items-start gap-1.5">
+                        <span className="text-muted-foreground shrink-0 text-[10px]">
+                          {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour12: false }) : ''}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded shrink-0 uppercase font-sans font-semibold ${
+                            log.level === 'error'
+                              ? 'bg-optic-red/20 text-optic-red'
+                              : log.level === 'warn'
+                              ? 'bg-amber-500/20 text-amber-500'
+                              : 'bg-surface text-muted-foreground border border-border'
+                          }`}
+                        >
+                          {log.category || 'server'}
+                        </span>
+                        <span>{log.message}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-muted-foreground text-center py-2 text-xs">
+                      {fetchingLogs ? 'Requesting server logs...' : 'No server logs received yet'}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1103,6 +1103,14 @@ export function startServer(config: ServerConfig): {
             }
             break;
 
+          case 'tail_logs':
+            if (ws.readyState === WebSocket.OPEN) {
+              const limit = Math.min(200, typeof msg.limit === 'number' ? msg.limit : 50);
+              const entries = serverLogger.getEntries(0, limit);
+              ws.send(JSON.stringify({ type: 'tail_logs_response', entries }));
+            }
+            break;
+
           case 'ping':
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'pong', t: msg.t }));

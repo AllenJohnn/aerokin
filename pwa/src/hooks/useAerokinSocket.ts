@@ -17,6 +17,7 @@ import {
   DesktopStreamState,
   QualityPresetName,
 } from '../types/desktop';
+import { diagnosticsLogger } from '../utils/diagnosticsLogger';
 
 export type MediaAction =
   | 'playpause'
@@ -152,6 +153,10 @@ export interface UseAerokinSocketReturn {
   sessions: MediaSessionItem[];
   volume: number;
   muted: boolean;
+  lastCloseCode: number | null;
+  lastCloseReason: string | null;
+  agentLogs: any[];
+  requestAgentLogs: (limit?: number) => void;
 }
 
 export function useAerokinSocket(): UseAerokinSocketReturn {
@@ -205,6 +210,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     error?: string;
   }>({ state: 'stopped' });
   const [desktopStats, setDesktopStats] = useState<DesktopStats | null>(null);
+  const [lastCloseCode, setLastCloseCode] = useState<number | null>(null);
+  const [lastCloseReason, setLastCloseReason] = useState<string | null>(null);
+  const [agentLogs, setAgentLogs] = useState<any[]>([]);
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -468,12 +476,14 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       customScale?: number;
       customFps?: number;
     }) => {
+      diagnosticsLogger.log('info', 'stream', `Desktop stream start requested (preset: ${options?.preset || 'balanced'})`);
       sendRaw({ type: 'desktop_start', ...options });
     },
     [sendRaw]
   );
 
   const stopDesktopStream = useCallback(() => {
+    diagnosticsLogger.log('info', 'stream', 'Desktop stream stop requested');
     sendRaw({ type: 'desktop_stop' });
   }, [sendRaw]);
 
@@ -483,6 +493,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
   const sendMedia = useCallback(
     (action: MediaAction) => {
+      diagnosticsLogger.log('info', 'media', `Media action: ${action}`);
       sendRaw({ type: 'media', action });
     },
     [sendRaw]
@@ -513,6 +524,13 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     (level: number) => {
       setVolume(Math.round(level));
       sendRaw({ type: 'setvolume', level: Math.round(level) });
+    },
+    [sendRaw]
+  );
+
+  const requestAgentLogs = useCallback(
+    (limit = 50) => {
+      sendRaw({ type: 'tail_logs', limit });
     },
     [sendRaw]
   );
@@ -577,6 +595,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
         ws.onopen = () => {
           if (!isMounted) return;
+          diagnosticsLogger.log('info', 'socket', `WebSocket connection opened to ${wsUrl}`);
           // Authenticate with the per-device credential in the first WS message
           ws.send(
             JSON.stringify({
@@ -597,6 +616,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               setConnectionError(null);
               backoffDelayRef.current = 1000;
               requestWakeLock();
+              diagnosticsLogger.log('info', 'socket', `Authenticated successfully as device ${deviceId}`);
 
               if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
               pingIntervalRef.current = setInterval(() => {
@@ -604,6 +624,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
                   ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
                 }
               }, 2000);
+              return;
+            }
+
+            if (data.type === 'tail_logs_response' && Array.isArray(data.entries)) {
+              setAgentLogs(data.entries);
               return;
             }
 
@@ -674,6 +699,13 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
           if (!isMounted) return;
           releaseWakeLock();
           isAuthenticatedRef.current = false;
+          setLastCloseCode(event.code);
+          setLastCloseReason(event.reason || '');
+          diagnosticsLogger.log(
+            'warn',
+            'socket',
+            `WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'})`
+          );
           if (pingIntervalRef.current) {
             clearInterval(pingIntervalRef.current);
             pingIntervalRef.current = null;
@@ -793,5 +825,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     sessions,
     volume,
     muted,
+    lastCloseCode,
+    lastCloseReason,
+    agentLogs,
+    requestAgentLogs,
   };
 }

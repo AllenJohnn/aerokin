@@ -77,6 +77,7 @@ export type ValidClientMessage =
   | { type: 'ping'; t: number }
   | { type: 'server_pong'; t: number }
   | { type: 'battery'; percent: number | null; charging?: boolean }
+  | { type: 'tail_logs'; limit?: number }
   | { type: 'auth'; deviceId: string; credential: string }
   | { type: 'device_list' }
   | { type: 'device_rename'; deviceId: string; name: string }
@@ -164,6 +165,14 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
           : null;
       const charging = typeof msg.charging === 'boolean' ? msg.charging : undefined;
       return { type: 'battery', percent, charging };
+    }
+
+    case 'tail_logs': {
+      const limit =
+        typeof msg.limit === 'number' && Number.isFinite(msg.limit)
+          ? Math.max(1, Math.min(200, Math.round(msg.limit)))
+          : 50;
+      return { type: 'tail_logs', limit };
     }
 
     case 'auth': {
@@ -615,6 +624,7 @@ export class ConnectionRateLimiter {
       case 'auth':
         return 'auth';
       case 'battery':
+      case 'tail_logs':
       case 'device_list':
       case 'device_rename':
       case 'device_revoke':

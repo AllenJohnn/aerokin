@@ -147,6 +147,10 @@ export const App: React.FC = () => {
     sessions,
     volume,
     muted,
+    lastCloseCode,
+    lastCloseReason,
+    agentLogs,
+    requestAgentLogs,
   } = useAerokinSocket();
 
   const tabs = [
@@ -558,6 +562,14 @@ export const App: React.FC = () => {
         onLogout={logout}
         onUnpairThisDevice={unpairThisDevice}
         onOpenAuthModal={() => setShowAuthModal(true)}
+        status={status}
+        host={host}
+        latency={latency}
+        desktopStats={desktopStats}
+        lastCloseCode={lastCloseCode}
+        lastCloseReason={lastCloseReason}
+        agentLogs={agentLogs}
+        onRequestAgentLogs={requestAgentLogs}
       />
 
       {/* Manual Token Entry Modal */}
