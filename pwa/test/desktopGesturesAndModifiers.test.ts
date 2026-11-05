@@ -54,10 +54,22 @@ describe('AEROKIN Desktop Settings & Key Modifier Latching', () => {
       );
 
       const sanitized = loadDesktopSettings();
-      expect(sanitized.defaultPreset).toBe('balanced');
+      expect(sanitized.defaultPreset).toBe('fast');
       expect(sanitized.fpsCap).toBe(60); // clamped to 60 max
       expect(sanitized.inputMode).toBe('direct');
       expect(sanitized.showStats).toBe(true);
+    });
+
+    it('migrates legacy low preset to tiny', () => {
+      storage.set(
+        STORAGE_DESKTOP_SETTINGS_KEY,
+        JSON.stringify({
+          defaultPreset: 'low',
+        })
+      );
+
+      const loaded = loadDesktopSettings();
+      expect(loaded.defaultPreset).toBe('tiny');
     });
   });
 

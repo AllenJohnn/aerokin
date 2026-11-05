@@ -678,6 +678,8 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
             <div>Latency: <span className="text-foreground">{stats.latencyMs} ms</span></div>
             <div>Bitrate: <span className="text-foreground">{stats.bitrateKbps} kbps</span></div>
             <div>Resolution: <span className="text-foreground">{stats.width}x{stats.height}</span></div>
+            <div>Tier: <span className="text-foreground capitalize">{stats.activeTier || activePreset}{stats.activeTier && stats.activeTier !== activePreset ? ' (adapted)' : ''}</span></div>
+            {stats.backend && <div>Backend: <span className="text-foreground">{stats.backend}</span></div>}
             <div>Dropped: <span className="text-foreground">{stats.droppedFrames}</span></div>
             <div>Zoom: <span className="text-foreground">{zoom.toFixed(1)}x</span></div>
           </div>
@@ -821,7 +823,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
               {showPresetMenu && (
                 <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-surface border border-border rounded-xl p-1.5 shadow-xl min-w-[120px] z-40 space-y-1">
-                  {(['high', 'balanced', 'fast', 'ultra', 'low'] as QualityPresetName[]).map((p) => (
+                  {(['ultra', 'high', 'balanced', 'fast', 'tiny'] as QualityPresetName[]).map((p) => (
                     <button
                       key={p}
                       onClick={() => handlePresetSelect(p)}

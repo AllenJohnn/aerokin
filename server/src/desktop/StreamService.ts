@@ -2,6 +2,8 @@ import { WebSocket } from 'ws';
 import { DeviceStore } from '../device-store.js';
 import { MonitorService } from './MonitorService.js';
 import { CaptureAdapter, WindowsFfmpegCaptureAdapter } from './CaptureAdapter.js';
+import { FrameDeduplicator } from './FrameDeduplicator.js';
+import { AdaptiveQualityManager } from './AdaptiveQualityManager.js';
 import {
   MonitorInfo,
   QualityPresetName,
@@ -14,6 +16,8 @@ import {
 export interface StreamServiceConfig {
   deviceStore: DeviceStore;
   captureAdapter?: CaptureAdapter;
+  deduplicator?: FrameDeduplicator;
+  adaptiveQuality?: AdaptiveQualityManager;
   onStatusChange?: (state: DesktopSessionState, error?: string) => void;
   onStatsUpdate?: (stats: DesktopStats) => void;
   onBackendChange?: (backend: CaptureBackend) => void;
@@ -22,12 +26,14 @@ export interface StreamServiceConfig {
 export class StreamService {
   private deviceStore: DeviceStore;
   private captureAdapter: CaptureAdapter;
+  private deduplicator: FrameDeduplicator;
+  private adaptiveQuality: AdaptiveQualityManager;
   private activeWs: WebSocket | null = null;
   private activeDeviceId: string | null = null;
   private activeClientIp: string | null = null;
   private state: DesktopSessionState = 'stopped';
   private selectedMonitor: MonitorInfo | null = null;
-  private currentPreset: QualityPresetName = 'balanced';
+  private currentPreset: QualityPresetName = 'fast';
 
   private originalConsoleTitle = 'AEROKIN SERVER';
   private statsInterval: NodeJS.Timeout | null = null;
@@ -36,6 +42,7 @@ export class StreamService {
   private frameCount = 0;
   private byteCount = 0;
   private droppedFrameCount = 0;
+  private droppedInWindow = 0;
   private lastStatsTime = Date.now();
   private currentFps = 0;
   private currentBitrateKbps = 0;
@@ -53,6 +60,8 @@ export class StreamService {
   constructor(config: StreamServiceConfig) {
     this.deviceStore = config.deviceStore;
     this.captureAdapter = config.captureAdapter || new WindowsFfmpegCaptureAdapter();
+    this.deduplicator = config.deduplicator || new FrameDeduplicator({ keepaliveIntervalMs: 1000 });
+    this.adaptiveQuality = config.adaptiveQuality || new AdaptiveQualityManager('fast');
     this.onStatusChange = config.onStatusChange;
     this.onStatsUpdate = config.onStatsUpdate;
     this.onBackendChange = config.onBackendChange;
@@ -110,6 +119,7 @@ export class StreamService {
       width: this.lastWidth,
       height: this.lastHeight,
       backend: this.getActiveBackend(),
+      activeTier: this.adaptiveQuality.getActiveTier(),
     };
   }
 
@@ -177,9 +187,12 @@ export class StreamService {
       customFps?: number;
     } = {}
   ): Promise<{ ok: boolean; monitor: MonitorInfo; error?: string }> {
-    const presetName = options.preset || 'balanced';
-    const presetConfig = QUALITY_PRESETS[presetName] || QUALITY_PRESETS.balanced;
+    const presetName = options.preset || 'fast';
     this.currentPreset = presetName;
+    this.adaptiveQuality.setUserCap(presetName);
+
+    const activeTier = this.adaptiveQuality.getActiveTier();
+    const presetConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
 
     const monitor = MonitorService.getMonitor(options.monitorId);
     this.selectedMonitor = monitor;
@@ -220,6 +233,9 @@ export class StreamService {
     this.setPcIndicator(false);
     this.transitionState('stopped');
 
+    this.deduplicator.reset();
+    this.adaptiveQuality.reset();
+
     await this.captureAdapter.stop();
 
     if (this.activeWs) {
@@ -253,10 +269,20 @@ export class StreamService {
       return;
     }
 
+    // Bandwidth reduction: Deduplicate consecutive identical frames (16-byte metadata + JPEG)
+    if (packet.length > 16) {
+      const jpegBytes = packet.subarray(16);
+      const decision = this.deduplicator.shouldSend(jpegBytes);
+      if (!decision.send) {
+        return;
+      }
+    }
+
     // Adaptive Backpressure:
     // Drop frame immediately if client Wi-Fi buffer is backing up
     if (this.activeWs.bufferedAmount > this.MAX_BUFFERED_BYTES) {
       this.droppedFrameCount++;
+      this.droppedInWindow++;
       return;
     }
 
@@ -266,6 +292,7 @@ export class StreamService {
       this.byteCount += packet.length;
     } catch {
       this.droppedFrameCount++;
+      this.droppedInWindow++;
     }
   }
 
@@ -289,6 +316,7 @@ export class StreamService {
     this.frameCount = 0;
     this.byteCount = 0;
     this.droppedFrameCount = 0;
+    this.droppedInWindow = 0;
     this.lastStatsTime = Date.now();
 
     this.statsInterval = setInterval(() => {
@@ -301,6 +329,27 @@ export class StreamService {
       this.frameCount = 0;
       this.byteCount = 0;
       this.lastStatsTime = now;
+
+      // Check adaptive quality condition based on backlog
+      const bufferedAmount = this.activeWs ? this.activeWs.bufferedAmount : 0;
+      const { activeTier, changed } = this.adaptiveQuality.updateNetworkCondition(
+        bufferedAmount,
+        this.droppedInWindow
+      );
+      this.droppedInWindow = 0;
+
+      if (changed && this.selectedMonitor && this.state === 'active') {
+        console.log(`[DesktopStream] Adaptive quality adjusted active tier to: ${activeTier}`);
+        const adaptedConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
+        this.captureAdapter.start({
+          monitor: this.selectedMonitor,
+          fps: adaptedConfig.fps,
+          scale: adaptedConfig.scale,
+          quality: adaptedConfig.jpegQuality,
+        }).catch((err) => {
+          console.warn('[DesktopStream] Failed to adapt capture tier:', err);
+        });
+      }
 
       const currentStats = this.getStats();
       this.onStatsUpdate?.(currentStats);

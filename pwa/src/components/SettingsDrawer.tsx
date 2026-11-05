@@ -340,7 +340,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     </span>
                   </div>
                   <div className="grid grid-cols-5 gap-1.5">
-                    {(['ultra', 'high', 'balanced', 'fast', 'low'] as QualityPresetName[]).map((p) => (
+                    {(['ultra', 'high', 'balanced', 'fast', 'tiny'] as QualityPresetName[]).map((p) => (
                       <button
                         key={p}
                         onClick={() => {

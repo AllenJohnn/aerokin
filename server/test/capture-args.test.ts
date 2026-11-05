@@ -188,7 +188,7 @@ describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
   });
 
   describe('presets dimension parity and quality validation', () => {
-    const presets: QualityPresetName[] = ['ultra', 'high', 'balanced', 'fast', 'low'];
+    const presets: QualityPresetName[] = ['ultra', 'high', 'balanced', 'fast', 'tiny', 'low'];
 
     for (const p of presets) {
       it(`preset "${p}" builds even dimensions for both backends`, () => {

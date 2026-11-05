@@ -82,7 +82,7 @@ describe('AEROKIN StreamService & Adaptive Backpressure', () => {
     service.handleStreamSocket(mockWs, 'dev_123', '192.168.1.100');
 
     // Deliver frame 1 with normal buffer
-    const frame1 = Buffer.alloc(2048);
+    const frame1 = Buffer.alloc(2048, 1);
     mockAdapter.frameCb!(frame1, 1920, 1080, 1);
     expect(sentBuffers.length).toBe(1);
     expect(service.getStats().droppedFrames).toBe(0);
@@ -90,9 +90,9 @@ describe('AEROKIN StreamService & Adaptive Backpressure', () => {
     // Simulate network congestion: bufferedAmount = 300 KB (> 256KB threshold)
     mockWs.bufferedAmount = 300 * 1024;
 
-    // Deliver frame 2 and frame 3 during congestion
-    const frame2 = Buffer.alloc(2048);
-    const frame3 = Buffer.alloc(2048);
+    // Deliver frame 2 and frame 3 during congestion (distinct content to test backpressure)
+    const frame2 = Buffer.alloc(2048, 2);
+    const frame3 = Buffer.alloc(2048, 3);
     mockAdapter.frameCb!(frame2, 1920, 1080, 2);
     mockAdapter.frameCb!(frame3, 1920, 1080, 3);
 
@@ -102,7 +102,7 @@ describe('AEROKIN StreamService & Adaptive Backpressure', () => {
 
     // Network recovers: bufferedAmount drops to 10 KB
     mockWs.bufferedAmount = 10 * 1024;
-    const frame4 = Buffer.alloc(2048);
+    const frame4 = Buffer.alloc(2048, 4);
     mockAdapter.frameCb!(frame4, 1920, 1080, 4);
 
     expect(sentBuffers.length).toBe(2);

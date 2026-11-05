@@ -18,11 +18,11 @@ export interface MonitorInfo {
   isPrimary: boolean;
 }
 
-export type QualityPresetName = 'ultra' | 'high' | 'balanced' | 'fast' | 'low';
+export type QualityPresetName = 'ultra' | 'high' | 'balanced' | 'fast' | 'tiny' | 'low';
 
 export interface QualityPresetConfig {
   name: QualityPresetName;
-  scale: number; // 1.0, 0.75, 0.50
+  scale: number; // 1.0, 0.75, 0.50, 0.40
   fps: number; // 60, 30, 15
   jpegQuality: number; // 2 (high quality, low compression) to 8 (lower quality, fast)
 }
@@ -52,6 +52,12 @@ export const QUALITY_PRESETS: Record<QualityPresetName, QualityPresetConfig> = {
     fps: 30,
     jpegQuality: 7,
   },
+  tiny: {
+    name: 'tiny',
+    scale: 0.4,
+    fps: 15,
+    jpegQuality: 8,
+  },
   low: {
     name: 'low',
     scale: 0.5,
@@ -78,4 +84,5 @@ export interface DesktopStats {
   width: number;
   height: number;
   backend?: CaptureBackend;
+  activeTier?: QualityPresetName;
 }

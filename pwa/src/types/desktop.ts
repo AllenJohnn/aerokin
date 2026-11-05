@@ -14,7 +14,7 @@ export interface MonitorInfo {
   isPrimary: boolean;
 }
 
-export type QualityPresetName = 'ultra' | 'high' | 'balanced' | 'fast' | 'low';
+export type QualityPresetName = 'ultra' | 'high' | 'balanced' | 'fast' | 'tiny' | 'low';
 
 export interface DesktopStats {
   fps: number;
@@ -25,6 +25,7 @@ export interface DesktopStats {
   height?: number;
   latencyMs?: number;
   backend?: 'ddagrab' | 'gdigrab';
+  activeTier?: QualityPresetName;
 }
 
 export type DesktopStreamState =
@@ -46,7 +47,7 @@ export interface DesktopSettings {
 }
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
-  defaultPreset: 'balanced',
+  defaultPreset: 'fast',
   fpsCap: 30,
   inputMode: 'direct',
   showStats: false,
@@ -62,9 +63,9 @@ export function loadDesktopSettings(): DesktopSettings {
     if (!raw) return DEFAULT_DESKTOP_SETTINGS;
     const parsed = JSON.parse(raw);
     return {
-      defaultPreset: ['ultra', 'high', 'balanced', 'fast', 'low'].includes(parsed.defaultPreset)
-        ? parsed.defaultPreset
-        : 'balanced',
+      defaultPreset: ['ultra', 'high', 'balanced', 'fast', 'tiny', 'low'].includes(parsed.defaultPreset)
+        ? parsed.defaultPreset === 'low' ? 'tiny' : parsed.defaultPreset
+        : 'fast',
       fpsCap: typeof parsed.fpsCap === 'number' ? Math.max(15, Math.min(60, parsed.fpsCap)) : 30,
       inputMode: parsed.inputMode === 'trackpad' ? 'trackpad' : 'direct',
       showStats: Boolean(parsed.showStats),
