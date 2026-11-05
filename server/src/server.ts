@@ -106,6 +106,7 @@ export function startServer(config: ServerConfig): {
     const payload = JSON.stringify({
       type: 'desktop_status',
       state: streamService.getState(),
+      backend: streamService.getActiveBackend(),
       monitor: streamService.getActiveMonitor(),
       stats: streamService.getStats(),
     });
@@ -133,6 +134,10 @@ export function startServer(config: ServerConfig): {
     if (error) {
       recordEvent('disconnect', `Desktop stream error: ${error}`);
     }
+  });
+
+  streamService.setOnBackendChange(() => {
+    broadcastDesktopStatus();
   });
 
   streamService.setOnStatsUpdate((stats) => {
@@ -665,6 +670,7 @@ export function startServer(config: ServerConfig): {
         JSON.stringify({
           type: 'desktop_status',
           state: streamService.getState(),
+          backend: streamService.getActiveBackend(),
           monitor: streamService.getActiveMonitor(),
           stats: streamService.getStats(),
         })
@@ -864,6 +870,7 @@ export function startServer(config: ServerConfig): {
                 JSON.stringify({
                   type: 'desktop_status',
                   state: streamService.getState(),
+                  backend: streamService.getActiveBackend(),
                   monitor: startRes.monitor,
                   stats: streamService.getStats(),
                   error: startRes.error,

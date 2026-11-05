@@ -1,0 +1,229 @@
+import { describe, it, expect } from 'vitest';
+import {
+  buildFfmpegArgs,
+  mapMonitorToDdagrabIndex,
+  CaptureOptions,
+} from '../src/desktop/CaptureAdapter.js';
+import { MonitorInfo, QUALITY_PRESETS, QualityPresetName } from '../src/desktop/types.js';
+
+describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
+  const primaryMonitor: MonitorInfo = {
+    id: 'mon_0',
+    name: '\\\\.\\DISPLAY1',
+    bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+    dpiScale: 1.25,
+    isPrimary: true,
+  };
+
+  const secondaryNegativeMonitor: MonitorInfo = {
+    id: 'mon_1',
+    name: '\\\\.\\DISPLAY2',
+    bounds: { x: -1920, y: -120, width: 1920, height: 1080 },
+    dpiScale: 1.0,
+    isPrimary: false,
+  };
+
+  describe('mapMonitorToDdagrabIndex', () => {
+    it('maps mon_0 and mon_1 correctly', () => {
+      expect(mapMonitorToDdagrabIndex(primaryMonitor)).toBe(0);
+      expect(mapMonitorToDdagrabIndex(secondaryNegativeMonitor)).toBe(1);
+    });
+
+    it('maps DISPLAY name patterns when id is arbitrary', () => {
+      expect(
+        mapMonitorToDdagrabIndex({
+          id: 'custom_id',
+          name: '\\\\.\\DISPLAY1',
+          bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+          dpiScale: 1.0,
+          isPrimary: true,
+        })
+      ).toBe(0);
+
+      expect(
+        mapMonitorToDdagrabIndex({
+          id: 'custom_id_2',
+          name: '\\\\.\\DISPLAY3',
+          bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
+          dpiScale: 1.0,
+          isPrimary: false,
+        })
+      ).toBe(2);
+    });
+
+    it('returns null for monitors without recognizable id or display name', () => {
+      expect(
+        mapMonitorToDdagrabIndex({
+          id: 'virtual_mirror',
+          name: 'Virtual Desktop Display',
+          bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+          dpiScale: 1.0,
+          isPrimary: false,
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('buildFfmpegArgs for ddagrab', () => {
+    it('constructs correct ddagrab filter chain for primary display', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 30,
+        scale: 1.0,
+        quality: 3,
+      };
+
+      const args = buildFfmpegArgs(options, 'ddagrab');
+
+      expect(args).toContain('-nostdin');
+      expect(args).toContain('-loglevel');
+      expect(args).toContain('warning');
+      expect(args).toContain('-f');
+      expect(args).toContain('lavfi');
+
+      const inputIdx = args.indexOf('-i');
+      expect(inputIdx).toBeGreaterThan(-1);
+      expect(args[inputIdx + 1]).toBe('ddagrab=framerate=30:draw_mouse=1:output_idx=0');
+
+      const vfIdx = args.indexOf('-vf');
+      expect(vfIdx).toBeGreaterThan(-1);
+      expect(args[vfIdx + 1]).toBe('hwdownload,format=bgra,scale=1920:1080');
+
+      expect(args).toContain('-c:v');
+      expect(args).toContain('mjpeg');
+      const qIdx = args.indexOf('-q:v');
+      expect(args[qIdx + 1]).toBe('3');
+      expect(args).toContain('pipe:1');
+    });
+
+    it('constructs correct ddagrab filter chain for secondary display with scaling', () => {
+      const options: CaptureOptions = {
+        monitor: secondaryNegativeMonitor,
+        fps: 60,
+        scale: 0.75,
+        quality: 5,
+      };
+
+      const args = buildFfmpegArgs(options, 'ddagrab');
+
+      const inputIdx = args.indexOf('-i');
+      expect(args[inputIdx + 1]).toBe('ddagrab=framerate=60:draw_mouse=1:output_idx=1');
+
+      const vfIdx = args.indexOf('-vf');
+      expect(args[vfIdx + 1]).toBe('hwdownload,format=bgra,scale=1440:810');
+
+      const qIdx = args.indexOf('-q:v');
+      expect(args[qIdx + 1]).toBe('5');
+    });
+  });
+
+  describe('buildFfmpegArgs for gdigrab', () => {
+    it('constructs correct gdigrab args for primary monitor at (0, 0)', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 30,
+        scale: 1.0,
+        quality: 3,
+      };
+
+      const args = buildFfmpegArgs(options, 'gdigrab');
+
+      expect(args).toContain('-nostdin');
+      expect(args).toContain('-f');
+      const fIdx = args.indexOf('-f');
+      expect(args[fIdx + 1]).toBe('gdigrab');
+
+      const fpsIdx = args.indexOf('-framerate');
+      expect(args[fpsIdx + 1]).toBe('30');
+
+      expect(args).toContain('-draw_mouse');
+      const dmIdx = args.indexOf('-draw_mouse');
+      expect(args[dmIdx + 1]).toBe('1');
+
+      const oxIdx = args.indexOf('-offset_x');
+      expect(args[oxIdx + 1]).toBe('0');
+
+      const oyIdx = args.indexOf('-offset_y');
+      expect(args[oyIdx + 1]).toBe('0');
+
+      const vsIdx = args.indexOf('-video_size');
+      expect(args[vsIdx + 1]).toBe('1920x1080');
+
+      const inputIdx = args.indexOf('-i');
+      expect(args[inputIdx + 1]).toBe('desktop');
+
+      const vfIdx = args.indexOf('-vf');
+      expect(args[vfIdx + 1]).toBe('scale=1920:1080');
+
+      const qIdx = args.indexOf('-q:v');
+      expect(args[qIdx + 1]).toBe('3');
+    });
+
+    it('constructs correct gdigrab args with negative monitor offsets', () => {
+      const options: CaptureOptions = {
+        monitor: secondaryNegativeMonitor,
+        fps: 15,
+        scale: 0.5,
+        quality: 8,
+      };
+
+      const args = buildFfmpegArgs(options, 'gdigrab');
+
+      const oxIdx = args.indexOf('-offset_x');
+      expect(args[oxIdx + 1]).toBe('-1920');
+
+      const oyIdx = args.indexOf('-offset_y');
+      expect(args[oyIdx + 1]).toBe('-120');
+
+      const vsIdx = args.indexOf('-video_size');
+      expect(args[vsIdx + 1]).toBe('1920x1080');
+
+      const vfIdx = args.indexOf('-vf');
+      expect(args[vfIdx + 1]).toBe('scale=960:540');
+
+      const qIdx = args.indexOf('-q:v');
+      expect(args[qIdx + 1]).toBe('8');
+    });
+  });
+
+  describe('presets dimension parity and quality validation', () => {
+    const presets: QualityPresetName[] = ['ultra', 'high', 'balanced', 'fast', 'low'];
+
+    for (const p of presets) {
+      it(`preset "${p}" builds even dimensions for both backends`, () => {
+        const config = QUALITY_PRESETS[p];
+        const options: CaptureOptions = {
+          monitor: primaryMonitor,
+          fps: config.fps,
+          scale: config.scale,
+          quality: config.jpegQuality,
+        };
+
+        const ddaArgs = buildFfmpegArgs(options, 'ddagrab');
+        const gdiArgs = buildFfmpegArgs(options, 'gdigrab');
+
+        const vfDda = ddaArgs[ddaArgs.indexOf('-vf') + 1];
+        const vfGdi = gdiArgs[gdiArgs.indexOf('-vf') + 1];
+
+        const matchDda = /scale=(\d+):(\d+)/.exec(vfDda);
+        const matchGdi = /scale=(\d+):(\d+)/.exec(vfGdi);
+
+        expect(matchDda).not.toBeNull();
+        expect(matchGdi).not.toBeNull();
+
+        const wDda = parseInt(matchDda![1], 10);
+        const hDda = parseInt(matchDda![2], 10);
+        const wGdi = parseInt(matchGdi![1], 10);
+        const hGdi = parseInt(matchGdi![2], 10);
+
+        expect(wDda % 2).toBe(0);
+        expect(hDda % 2).toBe(0);
+        expect(wGdi % 2).toBe(0);
+        expect(hGdi % 2).toBe(0);
+
+        expect(wDda).toBe(wGdi);
+        expect(hDda).toBe(hGdi);
+      });
+    }
+  });
+});

@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MonitorInfo } from './types.js';
+import { MonitorInfo, CaptureBackend } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +25,7 @@ export type FrameCallback = (
 
 export type ErrorCallback = (error: Error, isSecureScreen?: boolean) => void;
 export type ExitCallback = (code: number | null) => void;
+export type BackendChangeCallback = (backend: CaptureBackend) => void;
 
 export interface CaptureAdapter {
   start(options: CaptureOptions): Promise<void>;
@@ -32,8 +33,95 @@ export interface CaptureAdapter {
   onFrame(callback: FrameCallback): void;
   onError(callback: ErrorCallback): void;
   onExit(callback: ExitCallback): void;
+  onBackendChange?(callback: BackendChangeCallback): void;
+  getActiveBackend(): CaptureBackend;
   isAvailable(): boolean;
   getFfmpegPath(): string | null;
+}
+
+/**
+ * Maps a MonitorInfo structure to a ddagrab output_idx integer.
+ * Returns null if the monitor ID or name cannot be determined.
+ */
+export function mapMonitorToDdagrabIndex(monitor: MonitorInfo): number | null {
+  if (!monitor) return null;
+
+  // 1. Check mon_N pattern (assigned sequentially by MonitorService, e.g. mon_0, mon_1)
+  const matchId = /^mon_(\d+)$/.exec(monitor.id || '');
+  if (matchId) {
+    const idx = parseInt(matchId[1], 10);
+    if (!isNaN(idx) && idx >= 0) {
+      return idx;
+    }
+  }
+
+  // 2. Check name pattern e.g. \\.\DISPLAY1 -> 0, \\.\DISPLAY2 -> 1
+  const matchName = /DISPLAY(\d+)/i.exec(monitor.name || '');
+  if (matchName) {
+    const num = parseInt(matchName[1], 10);
+    if (!isNaN(num) && num >= 1) {
+      return num - 1;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Pure builder function for constructing FFmpeg command line arguments for either backend.
+ */
+export function buildFfmpegArgs(
+  options: CaptureOptions,
+  backend: CaptureBackend
+): string[] {
+  const { monitor, fps, scale, quality } = options;
+  const targetWidth = Math.max(320, Math.round((monitor.bounds.width * scale) / 2) * 2);
+  const targetHeight = Math.max(240, Math.round((monitor.bounds.height * scale) / 2) * 2);
+
+  const args: string[] = ['-nostdin', '-loglevel', 'warning'];
+
+  if (backend === 'ddagrab') {
+    const outputIdx = mapMonitorToDdagrabIndex(monitor) ?? 0;
+    args.push(
+      '-f',
+      'lavfi',
+      '-i',
+      `ddagrab=framerate=${fps}:draw_mouse=1:output_idx=${outputIdx}`,
+      '-vf',
+      `hwdownload,format=bgra,scale=${targetWidth}:${targetHeight}`
+    );
+  } else {
+    args.push(
+      '-f',
+      'gdigrab',
+      '-framerate',
+      String(fps),
+      '-draw_mouse',
+      '1',
+      '-offset_x',
+      String(monitor.bounds.x),
+      '-offset_y',
+      String(monitor.bounds.y),
+      '-video_size',
+      `${monitor.bounds.width}x${monitor.bounds.height}`,
+      '-i',
+      'desktop',
+      '-vf',
+      `scale=${targetWidth}:${targetHeight}`
+    );
+  }
+
+  args.push(
+    '-c:v',
+    'mjpeg',
+    '-q:v',
+    String(quality),
+    '-f',
+    'image2pipe',
+    'pipe:1'
+  );
+
+  return args;
 }
 
 /**
@@ -104,6 +192,10 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
   private frameCallback: FrameCallback | null = null;
   private errorCallback: ErrorCallback | null = null;
   private exitCallback: ExitCallback | null = null;
+  private backendChangeCallback: BackendChangeCallback | null = null;
+  private activeBackend: CaptureBackend = 'ddagrab';
+  private hasReceivedFrame = false;
+  private noFrameTimer: NodeJS.Timeout | null = null;
   private frameSequence = 0;
   private restartAttempts = 0;
   private readonly maxRestarts = 3;
@@ -123,6 +215,14 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
 
   public isAvailable(): boolean {
     return this.getFfmpegPath() !== null;
+  }
+
+  public getActiveBackend(): CaptureBackend {
+    return this.activeBackend;
+  }
+
+  public onBackendChange(callback: BackendChangeCallback): void {
+    this.backendChangeCallback = callback;
   }
 
   public onFrame(callback: FrameCallback): void {
@@ -155,7 +255,40 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     this.currentOptions = options;
     this.restartAttempts = 0;
 
-    await this.spawnCapture(ffmpegPath, options, false);
+    // Check if monitor can be mapped to ddagrab index
+    const ddaIndex = mapMonitorToDdagrabIndex(options.monitor);
+    const isFallbackGdi = ddaIndex === null;
+
+    if (isFallbackGdi) {
+      console.warn(
+        `[DesktopStream] Monitor "${options.monitor.name}" (${options.monitor.id}) cannot be mapped to ddagrab output_idx. Falling back to gdigrab directly.`
+      );
+    }
+
+    await this.spawnCapture(ffmpegPath, options, isFallbackGdi);
+  }
+
+  private clearNoFrameTimer(): void {
+    if (this.noFrameTimer) {
+      clearTimeout(this.noFrameTimer);
+      this.noFrameTimer = null;
+    }
+  }
+
+  private switchToGdiFallback(ffmpegPath: string, options: CaptureOptions): void {
+    this.clearNoFrameTimer();
+
+    if (this.ffmpegProc) {
+      const proc = this.ffmpegProc;
+      this.ffmpegProc = null;
+      try {
+        proc.kill('SIGKILL');
+      } catch {}
+    }
+
+    this.spawnCapture(ffmpegPath, options, true).catch((e) => {
+      this.errorCallback?.(e);
+    });
   }
 
   private async spawnCapture(
@@ -163,59 +296,24 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     options: CaptureOptions,
     isFallbackGdi = false
   ): Promise<void> {
-    const { monitor, fps, scale, quality } = options;
+    this.clearNoFrameTimer();
+    this.hasReceivedFrame = false;
 
+    this.activeBackend = isFallbackGdi ? 'gdigrab' : 'ddagrab';
+    const ddaIndex = mapMonitorToDdagrabIndex(options.monitor) ?? 0;
+
+    console.log(
+      `[DesktopStream] Active capture backend: ${this.activeBackend}${
+        !isFallbackGdi ? ` (output_idx=${ddaIndex})` : ''
+      }`
+    );
+    this.backendChangeCallback?.(this.activeBackend);
+
+    const args = buildFfmpegArgs(options, this.activeBackend);
+
+    const { monitor, scale } = options;
     const targetWidth = Math.max(320, Math.round((monitor.bounds.width * scale) / 2) * 2);
     const targetHeight = Math.max(240, Math.round((monitor.bounds.height * scale) / 2) * 2);
-
-    const args: string[] = [];
-
-    if (!isFallbackGdi) {
-      // Primary: DirectX Desktop Duplication API (ddagrab)
-      args.push(
-        '-nostdin',
-        '-loglevel',
-        'warning',
-        '-f',
-        'lavfi',
-        '-i',
-        `ddagrab=framerate=${fps}:draw_mouse=1`
-      );
-    } else {
-      // Fallback: GDI Grab
-      args.push(
-        '-nostdin',
-        '-loglevel',
-        'warning',
-        '-f',
-        'gdigrab',
-        '-framerate',
-        String(fps),
-        '-draw_mouse',
-        '1',
-        '-offset_x',
-        String(monitor.bounds.x),
-        '-offset_y',
-        String(monitor.bounds.y),
-        '-video_size',
-        `${monitor.bounds.width}x${monitor.bounds.height}`,
-        '-i',
-        'desktop'
-      );
-    }
-
-    // Video filters & MJPEG encode
-    args.push(
-      '-vf',
-      `scale=${targetWidth}:${targetHeight}`,
-      '-c:v',
-      'mjpeg',
-      '-q:v',
-      String(quality),
-      '-f',
-      'image2pipe',
-      'pipe:1'
-    );
 
     let stdoutBuffer = Buffer.alloc(0);
     let stderrLog = '';
@@ -226,6 +324,18 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     });
 
     this.ffmpegProc = proc;
+
+    // If using ddagrab, monitor for first frame arrival within 3s; retry with gdigrab on timeout
+    if (!isFallbackGdi) {
+      this.noFrameTimer = setTimeout(() => {
+        if (this.isRunning && !this.hasReceivedFrame && this.activeBackend === 'ddagrab') {
+          console.warn(
+            '[DesktopStream] No frame received from ddagrab within 3s. Automatically retrying with gdigrab...'
+          );
+          this.switchToGdiFallback(ffmpegPath, options);
+        }
+      }, 3000);
+    }
 
     proc.stderr?.on('data', (chunk: Buffer) => {
       const msg = chunk.toString('utf8');
@@ -244,6 +354,14 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
           new Error('PC screen is locked or displaying a secure UAC prompt'),
           true
         );
+      }
+
+      // On first ffmpeg stderr error on ddagrab before receiving any frame, automatically retry with gdigrab
+      if (!isFallbackGdi && !this.hasReceivedFrame && this.isRunning) {
+        console.warn(
+          `[DesktopStream] ddagrab stderr error detected: ${msg.trim()}. Automatically retrying with gdigrab...`
+        );
+        this.switchToGdiFallback(ffmpegPath, options);
       }
     });
 
@@ -279,6 +397,11 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
         searchOffset = 0;
 
         if (this.isRunning && this.frameCallback && jpegFrame.length > 100) {
+          if (!this.hasReceivedFrame) {
+            this.hasReceivedFrame = true;
+            this.clearNoFrameTimer();
+          }
+
           const seq = ++this.frameSequence;
           const nowMs = Date.now();
 
@@ -302,6 +425,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     });
 
     proc.on('exit', (code) => {
+      this.clearNoFrameTimer();
       this.ffmpegProc = null;
 
       if (!this.isRunning) {
@@ -309,25 +433,25 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
         return;
       }
 
-      // Check if primary ddagrab failed and we haven't tried gdigrab yet
-      if (!isFallbackGdi && (stderrLog.includes('ddagrab') || code !== 0)) {
-        console.warn('[DesktopStream] ddagrab failed; attempting gdigrab fallback...');
-        this.spawnCapture(ffmpegPath, options, true).catch((e) => {
-          this.errorCallback?.(e);
-        });
+      // If primary ddagrab failed/exited before or during session, automatically retry with gdigrab
+      if (!isFallbackGdi) {
+        console.warn(
+          `[DesktopStream] ddagrab exited with code ${code}. Automatically retrying with gdigrab...`
+        );
+        this.switchToGdiFallback(ffmpegPath, options);
         return;
       }
 
-      // Auto-restart with exponential backoff if unexpected exit
+      // Auto-restart with exponential backoff if unexpected exit on gdigrab
       if (this.restartAttempts < this.maxRestarts) {
         this.restartAttempts++;
         const delayMs = Math.min(3000, 500 * Math.pow(2, this.restartAttempts - 1));
         console.warn(
-          `[DesktopStream] FFmpeg exited with code ${code}. Reconnecting in ${delayMs}ms (attempt ${this.restartAttempts}/${this.maxRestarts})...`
+          `[DesktopStream] FFmpeg (gdigrab) exited with code ${code}. Reconnecting in ${delayMs}ms (attempt ${this.restartAttempts}/${this.maxRestarts})...`
         );
         this.restartTimeout = setTimeout(() => {
           if (this.isRunning && this.currentOptions) {
-            this.spawnCapture(ffmpegPath, this.currentOptions, isFallbackGdi).catch((e) => {
+            this.spawnCapture(ffmpegPath, this.currentOptions, true).catch((e) => {
               this.errorCallback?.(e);
             });
           }
@@ -349,6 +473,8 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
   public async stop(): Promise<void> {
     this.isRunning = false;
     this.currentOptions = null;
+    this.clearNoFrameTimer();
+    this.hasReceivedFrame = false;
 
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);

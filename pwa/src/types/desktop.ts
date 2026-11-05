@@ -24,6 +24,7 @@ export interface DesktopStats {
   width?: number;
   height?: number;
   latencyMs?: number;
+  backend?: 'ddagrab' | 'gdigrab';
 }
 
 export type DesktopStreamState =

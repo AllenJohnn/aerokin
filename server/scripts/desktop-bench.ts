@@ -52,16 +52,14 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
   });
 
   try {
-    const started = await adapter.start({
+    await adapter.start({
       monitor: primary,
       fps: preset.fps,
       scale: preset.scale,
       quality: preset.jpegQuality,
     });
 
-    if (!started) {
-      throw new Error('CaptureAdapter.start returned false');
-    }
+    
 
     console.log(`[Stream Started] Collecting frames for ${durationSec} seconds...`);
     await new Promise((resolve) => setTimeout(resolve, durationSec * 1000));

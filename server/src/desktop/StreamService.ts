@@ -8,6 +8,7 @@ import {
   QUALITY_PRESETS,
   DesktopStats,
   DesktopSessionState,
+  CaptureBackend,
 } from './types.js';
 
 export interface StreamServiceConfig {
@@ -15,6 +16,7 @@ export interface StreamServiceConfig {
   captureAdapter?: CaptureAdapter;
   onStatusChange?: (state: DesktopSessionState, error?: string) => void;
   onStatsUpdate?: (stats: DesktopStats) => void;
+  onBackendChange?: (backend: CaptureBackend) => void;
 }
 
 export class StreamService {
@@ -43,6 +45,7 @@ export class StreamService {
 
   private onStatusChange?: (state: DesktopSessionState, error?: string) => void;
   private onStatsUpdate?: (stats: DesktopStats) => void;
+  private onBackendChange?: (backend: CaptureBackend) => void;
 
   // Max bufferedAmount before adaptive frame dropping (256 KB)
   private readonly MAX_BUFFERED_BYTES = 256 * 1024;
@@ -52,6 +55,7 @@ export class StreamService {
     this.captureAdapter = config.captureAdapter || new WindowsFfmpegCaptureAdapter();
     this.onStatusChange = config.onStatusChange;
     this.onStatsUpdate = config.onStatsUpdate;
+    this.onBackendChange = config.onBackendChange;
 
     this.captureAdapter.onFrame((packet, width, height, seq) => {
       this.handleCapturedFrame(packet, width, height, seq);
@@ -66,10 +70,19 @@ export class StreamService {
         this.transitionState('stopped');
       }
     });
+
+    this.captureAdapter.onBackendChange?.((backend) => {
+      this.onBackendChange?.(backend);
+      this.onStatusChange?.(this.state);
+    });
   }
 
   public getState(): DesktopSessionState {
     return this.state;
+  }
+
+  public getActiveBackend(): CaptureBackend {
+    return this.captureAdapter.getActiveBackend?.() || 'ddagrab';
   }
 
   public setOnStatusChange(cb?: (state: DesktopSessionState, error?: string) => void): void {
@@ -78,6 +91,10 @@ export class StreamService {
 
   public setOnStatsUpdate(cb?: (stats: DesktopStats) => void): void {
     this.onStatsUpdate = cb;
+  }
+
+  public setOnBackendChange(cb?: (backend: CaptureBackend) => void): void {
+    this.onBackendChange = cb;
   }
 
   public getActiveMonitor(): MonitorInfo | null {
@@ -92,6 +109,7 @@ export class StreamService {
       frameSequence: this.currentSequence,
       width: this.lastWidth,
       height: this.lastHeight,
+      backend: this.getActiveBackend(),
     };
   }
 
@@ -101,6 +119,7 @@ export class StreamService {
     clientIp: string | null;
     monitor: MonitorInfo | null;
     preset: QualityPresetName;
+    backend: CaptureBackend;
     stats: DesktopStats;
   } {
     return {
@@ -109,6 +128,7 @@ export class StreamService {
       clientIp: this.activeClientIp,
       monitor: this.selectedMonitor,
       preset: this.currentPreset,
+      backend: this.getActiveBackend(),
       stats: this.getStats(),
     };
   }

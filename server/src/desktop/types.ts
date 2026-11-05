@@ -67,6 +67,8 @@ export type DesktopSessionState =
   | 'secure_screen'
   | 'error';
 
+export type CaptureBackend = 'ddagrab' | 'gdigrab';
+
 export interface DesktopStats {
   fps: number;
   bitrateKbps: number;
@@ -75,4 +77,5 @@ export interface DesktopStats {
   frameSequence: number;
   width: number;
   height: number;
+  backend?: CaptureBackend;
 }
