@@ -79,6 +79,10 @@ describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
       expect(args).toContain('-nostdin');
       expect(args).toContain('-loglevel');
       expect(args).toContain('warning');
+      expect(args).toContain('-fflags');
+      expect(args).toContain('nobuffer');
+      expect(args).toContain('-flags');
+      expect(args).toContain('low_delay');
       expect(args).toContain('-f');
       expect(args).toContain('lavfi');
 
@@ -94,6 +98,8 @@ describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
       expect(args).toContain('mjpeg');
       const qIdx = args.indexOf('-q:v');
       expect(args[qIdx + 1]).toBe('3');
+      expect(args).toContain('-threads');
+      expect(args).toContain('1');
       expect(args).toContain('pipe:1');
     });
 

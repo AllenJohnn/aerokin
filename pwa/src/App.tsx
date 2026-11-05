@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AerokinLogo } from '@ui';
 import { useAerokinSocket } from './hooks/useAerokinSocket';
 import { ManualTokenModal } from './components/ManualTokenModal';
 import { TrackpadTab } from './components/TrackpadTab';
-import { MediaTab } from './components/MediaTab';
-import { DesktopViewer } from './components/DesktopViewer';
 import { DesktopDashboard } from './components/DesktopDashboard';
-import { SettingsDrawer } from './components/SettingsDrawer';
 import { triggerHaptic } from './utils/haptics';
 import { isHostedMode, buildTrustUrl } from './utils/hosting';
 import {
@@ -28,6 +25,17 @@ import {
   Gear,
   Monitor,
 } from '@phosphor-icons/react';
+
+// Code-split heavy views using React.lazy for faster initial mobile bundle
+const DesktopViewer = lazy(() =>
+  import('./components/DesktopViewer').then((m) => ({ default: m.DesktopViewer }))
+);
+const MediaTab = lazy(() =>
+  import('./components/MediaTab').then((m) => ({ default: m.MediaTab }))
+);
+const SettingsDrawer = lazy(() =>
+  import('./components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer }))
+);
 
 const STORAGE_SEEK_METHOD_KEY = 'aerokin_seek_method';
 
@@ -151,6 +159,7 @@ export const App: React.FC = () => {
     lastCloseReason,
     agentLogs,
     requestAgentLogs,
+    runLatencyTest,
   } = useAerokinSocket();
 
   const tabs = [
@@ -346,29 +355,32 @@ export const App: React.FC = () => {
   // Full-viewport focused Desktop Remote viewer
   if (activeTab === 'desktop') {
     return (
-      <DesktopViewer
-        host={host}
-        deviceId={deviceId}
-        credential={credential}
-        isHosted={isHosted}
-        active={activeTab === 'desktop'}
-        monitors={desktopMonitors}
-        desktopStatus={desktopStatus}
-        desktopSettings={desktopSettings}
-        onUpdateDesktopSettings={handleDesktopSettingsChange}
-        onClose={() => setActiveTab('trackpad')}
-        sendAbsMove={sendAbsMove}
-        sendAbsClick={sendAbsClick}
-        sendAbsButton={sendAbsButton}
-        sendMove={sendMove}
-        sendClick={sendClick}
-        sendButton={sendButton}
-        sendScroll={sendScroll}
-        sendKey={sendKey}
-        sendText={sendText}
-        startDesktopStream={startDesktopStream}
-        stopDesktopStream={stopDesktopStream}
-      />
+      <Suspense fallback={<div className="h-full w-full bg-black flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Desktop Remote...</div>}>
+        <DesktopViewer
+          host={host}
+          deviceId={deviceId}
+          credential={credential}
+          isHosted={isHosted}
+          active={activeTab === 'desktop'}
+          monitors={desktopMonitors}
+          desktopStatus={desktopStatus}
+          desktopSettings={desktopSettings}
+          onUpdateDesktopSettings={handleDesktopSettingsChange}
+          onClose={() => setActiveTab('trackpad')}
+          sendAbsMove={sendAbsMove}
+          sendAbsClick={sendAbsClick}
+          sendAbsButton={sendAbsButton}
+          sendMove={sendMove}
+          sendClick={sendClick}
+          sendButton={sendButton}
+          sendScroll={sendScroll}
+          sendKey={sendKey}
+          sendText={sendText}
+          startDesktopStream={startDesktopStream}
+          stopDesktopStream={stopDesktopStream}
+          onRunLatencyTest={runLatencyTest}
+        />
+      </Suspense>
     );
   }
 
@@ -485,19 +497,21 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col"
             >
-              <MediaTab
-                nowPlaying={nowPlaying}
-                sessions={sessions}
-                volume={volume}
-                muted={muted}
-                sendMedia={sendMedia}
-                sendSeekBy={sendSeekBy}
-                sendSeekTo={sendSeekTo}
-                sendSession={sendSession}
-                sendSetVolume={sendSetVolume}
-                seekMethod={seekMethod}
-                onOpenSettings={() => setShowSettingsDrawer(true)}
-              />
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Media Controls...</div>}>
+                <MediaTab
+                  nowPlaying={nowPlaying}
+                  sessions={sessions}
+                  volume={volume}
+                  muted={muted}
+                  sendMedia={sendMedia}
+                  sendSeekBy={sendSeekBy}
+                  sendSeekTo={sendSeekTo}
+                  sendSession={sendSession}
+                  sendSetVolume={sendSetVolume}
+                  seekMethod={seekMethod}
+                  onOpenSettings={() => setShowSettingsDrawer(true)}
+                />
+              </Suspense>
             </motion.div>
           )}
         </AnimatePresence>
@@ -541,36 +555,39 @@ export const App: React.FC = () => {
         </div>
       </nav>
 
-      {/* Settings Vaul Sheet */}
-      <SettingsDrawer
-        isOpen={showSettingsDrawer}
-        onOpenChange={setShowSettingsDrawer}
-        trackpadConfig={trackpadConfig}
-        onTrackpadConfigChange={handleTrackpadConfigChange}
-        onResetTrackpadConfig={handleResetTrackpadConfig}
-        seekMethod={seekMethod}
-        onSeekMethodChange={handleSeekMethodChange}
-        desktopSettings={desktopSettings}
-        onDesktopSettingsChange={handleDesktopSettingsChange}
-        token={pairingCode || token}
-        deviceId={deviceId}
-        deviceName={deviceName}
-        devices={devices}
-        onRenameDevice={renameDevice}
-        onRevokeDevice={revokeDevice}
-        onRevokeAllDevices={revokeAllDevices}
-        onLogout={logout}
-        onUnpairThisDevice={unpairThisDevice}
-        onOpenAuthModal={() => setShowAuthModal(true)}
-        status={status}
-        host={host}
-        latency={latency}
-        desktopStats={desktopStats}
-        lastCloseCode={lastCloseCode}
-        lastCloseReason={lastCloseReason}
-        agentLogs={agentLogs}
-        onRequestAgentLogs={requestAgentLogs}
-      />
+      {/* Settings Vaul Sheet (Lazy Loaded) */}
+      <Suspense fallback={null}>
+        <SettingsDrawer
+          isOpen={showSettingsDrawer}
+          onOpenChange={setShowSettingsDrawer}
+          trackpadConfig={trackpadConfig}
+          onTrackpadConfigChange={handleTrackpadConfigChange}
+          onResetTrackpadConfig={handleResetTrackpadConfig}
+          seekMethod={seekMethod}
+          onSeekMethodChange={handleSeekMethodChange}
+          desktopSettings={desktopSettings}
+          onDesktopSettingsChange={handleDesktopSettingsChange}
+          token={pairingCode || token}
+          deviceId={deviceId}
+          deviceName={deviceName}
+          devices={devices}
+          onRenameDevice={renameDevice}
+          onRevokeDevice={revokeDevice}
+          onRevokeAllDevices={revokeAllDevices}
+          onLogout={logout}
+          onUnpairThisDevice={unpairThisDevice}
+          onOpenAuthModal={() => setShowAuthModal(true)}
+          status={status}
+          host={host}
+          latency={latency}
+          desktopStats={desktopStats}
+          lastCloseCode={lastCloseCode}
+          lastCloseReason={lastCloseReason}
+          agentLogs={agentLogs}
+          onRequestAgentLogs={requestAgentLogs}
+          onRunLatencyTest={runLatencyTest}
+        />
+      </Suspense>
 
       {/* Manual Token Entry Modal */}
       {(status === 'unauthorized' || showAuthModal) && (

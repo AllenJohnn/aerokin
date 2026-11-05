@@ -24,6 +24,10 @@ export interface DesktopStats {
   width?: number;
   height?: number;
   latencyMs?: number;
+  latencyP50?: number;
+  latencyP95?: number;
+  decodeMs?: number;
+  paintMs?: number;
   backend?: 'ddagrab' | 'gdigrab';
   activeTier?: QualityPresetName;
 }

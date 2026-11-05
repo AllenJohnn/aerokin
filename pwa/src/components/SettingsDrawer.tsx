@@ -55,6 +55,7 @@ interface SettingsDrawerProps {
   lastCloseReason?: string | null;
   agentLogs?: any[];
   onRequestAgentLogs?: (limit?: number) => void;
+  onRunLatencyTest?: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -84,6 +85,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   lastCloseReason = null,
   agentLogs = [],
   onRequestAgentLogs,
+  onRunLatencyTest,
 }) => {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [editNameVal, setEditNameVal] = useState('');
@@ -93,6 +95,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   const [showEventLog, setShowEventLog] = useState(false);
   const [showAgentLogs, setShowAgentLogs] = useState(false);
   const [fetchingLogs, setFetchingLogs] = useState(false);
+  const [testingLatency, setTestingLatency] = useState(false);
+  const [latencyBenchResult, setLatencyBenchResult] = useState<{ min: number; avg: number; max: number; p95: number } | null>(null);
 
   useEffect(() => {
     return diagnosticsLogger.subscribe(() => {
@@ -816,6 +820,37 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                 <Trash size={13} />
                 <span>Clear</span>
               </button>
+            </div>
+
+            {/* Run Latency Test Button in Drawer */}
+            <div className="pt-1">
+              <button
+                onClick={async () => {
+                  triggerHaptic('light');
+                  if (onRunLatencyTest) {
+                    setTestingLatency(true);
+                    try {
+                      const res = await onRunLatencyTest();
+                      setLatencyBenchResult(res);
+                      setTimeout(() => setLatencyBenchResult(null), 8000);
+                    } catch {}
+                    setTestingLatency(false);
+                  }
+                }}
+                disabled={testingLatency || status !== 'connected'}
+                className="w-full min-h-[40px] px-3 py-2 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Pulse size={14} className={testingLatency ? 'animate-spin text-accent' : 'text-accent'} />
+                <span>{testingLatency ? 'Running Latency Benchmark (10 pings)...' : 'Run Latency Benchmark'}</span>
+              </button>
+              {latencyBenchResult && (
+                <div className="mt-2 p-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent font-mono text-xs flex justify-between items-center">
+                  <span>min: {latencyBenchResult.min}ms</span>
+                  <span>avg: {latencyBenchResult.avg}ms</span>
+                  <span>max: {latencyBenchResult.max}ms</span>
+                  <span className="font-semibold">p95: {latencyBenchResult.p95}ms</span>
+                </div>
+              )}
             </div>
 
             {/* Expandable Client Ring Buffer Log */}

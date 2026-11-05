@@ -758,14 +758,19 @@ export function startServer(config: ServerConfig): {
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: WS_MAX_PAYLOAD_BYTES,
+    perMessageDeflate: false,
   });
 
   const desktopWss = new WebSocketServer({
     noServer: true,
     maxPayload: 1024 * 1024,
+    perMessageDeflate: false,
   });
 
   desktopWss.on('connection', (ws: WebSocket, req) => {
+    if (req.socket && typeof req.socket.setNoDelay === 'function') {
+      req.socket.setNoDelay(true);
+    }
     const clientIp = req.socket.remoteAddress || 'unknown';
     let isStreamAuth = false;
     let streamDeviceId: string | null = null;
@@ -861,6 +866,9 @@ export function startServer(config: ServerConfig): {
   });
 
   wss.on('connection', (ws: WebSocket, req) => {
+    if (req.socket && typeof req.socket.setNoDelay === 'function') {
+      req.socket.setNoDelay(true);
+    }
     const clientIp = req.socket.remoteAddress || 'unknown';
 
     // 1. Concurrency limit: max 4 concurrent unauthenticated connections per IP

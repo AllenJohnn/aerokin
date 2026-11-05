@@ -34,6 +34,8 @@ export class StreamService {
   private state: DesktopSessionState = 'stopped';
   private selectedMonitor: MonitorInfo | null = null;
   private currentPreset: QualityPresetName = 'fast';
+  private isStarting = false;
+  private pendingStartOptions: any = null;
 
   private originalConsoleTitle = 'AEROKIN SERVER';
   private statsInterval: NodeJS.Timeout | null = null;
@@ -187,23 +189,29 @@ export class StreamService {
       customFps?: number;
     } = {}
   ): Promise<{ ok: boolean; monitor: MonitorInfo; error?: string }> {
-    const presetName = options.preset || 'fast';
-    this.currentPreset = presetName;
-    this.adaptiveQuality.setUserCap(presetName);
+    if (this.isStarting) {
+      this.pendingStartOptions = options;
+      return { ok: true, monitor: this.selectedMonitor || MonitorService.getMonitor() };
+    }
 
-    const activeTier = this.adaptiveQuality.getActiveTier();
-    const presetConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
-
-    const monitor = MonitorService.getMonitor(options.monitorId);
-    this.selectedMonitor = monitor;
-
-    const fps = options.customFps || presetConfig.fps;
-    const scale = options.customScale || presetConfig.scale;
-    const quality = presetConfig.jpegQuality;
-
-    this.transitionState('starting');
-
+    this.isStarting = true;
     try {
+      const presetName = options.preset || 'fast';
+      this.currentPreset = presetName;
+      this.adaptiveQuality.setUserCap(presetName);
+
+      const activeTier = this.adaptiveQuality.getActiveTier();
+      const presetConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
+
+      const monitor = MonitorService.getMonitor(options.monitorId);
+      this.selectedMonitor = monitor;
+
+      const fps = options.customFps || presetConfig.fps;
+      const scale = options.customScale || presetConfig.scale;
+      const quality = presetConfig.jpegQuality;
+
+      this.transitionState('starting');
+
       await this.captureAdapter.start({
         monitor,
         fps,
@@ -219,7 +227,14 @@ export class StreamService {
     } catch (err: any) {
       const msg = err?.message || 'Failed to start screen capture';
       this.transitionState('error', msg);
-      return { ok: false, monitor, error: msg };
+      return { ok: false, monitor: this.selectedMonitor || MonitorService.getMonitor(), error: msg };
+    } finally {
+      this.isStarting = false;
+      if (this.pendingStartOptions) {
+        const next = this.pendingStartOptions;
+        this.pendingStartOptions = null;
+        this.startSession(next).catch(() => {});
+      }
     }
   }
 
@@ -287,7 +302,7 @@ export class StreamService {
     }
 
     try {
-      this.activeWs.send(packet);
+      this.activeWs.send(packet, { binary: true, compress: false });
       this.frameCount++;
       this.byteCount += packet.length;
     } catch {

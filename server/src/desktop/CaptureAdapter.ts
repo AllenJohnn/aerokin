@@ -79,7 +79,15 @@ export function buildFfmpegArgs(
   const targetWidth = Math.max(320, Math.round((monitor.bounds.width * scale) / 2) * 2);
   const targetHeight = Math.max(240, Math.round((monitor.bounds.height * scale) / 2) * 2);
 
-  const args: string[] = ['-nostdin', '-loglevel', 'warning'];
+  const args: string[] = [
+    '-nostdin',
+    '-loglevel',
+    'warning',
+    '-fflags',
+    'nobuffer',
+    '-flags',
+    'low_delay',
+  ];
 
   if (backend === 'ddagrab') {
     const outputIdx = mapMonitorToDdagrabIndex(monitor) ?? 0;
@@ -117,6 +125,8 @@ export function buildFfmpegArgs(
     'mjpeg',
     '-q:v',
     String(quality),
+    '-threads',
+    '1',
     '-f',
     'image2pipe',
     'pipe:1'
@@ -302,19 +312,20 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     }
   }
 
-  private switchToGdiFallback(ffmpegPath: string, options: CaptureOptions): void {
+  private async switchToGdiFallback(ffmpegPath: string, options: CaptureOptions): Promise<void> {
     this.clearNoFrameTimer();
     WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = 'gdigrab';
 
     if (this.ffmpegProc) {
       const proc = this.ffmpegProc;
       this.ffmpegProc = null;
+      (proc as any)._isStopping = true;
       try {
         proc.kill('SIGKILL');
       } catch {}
     }
 
-    this.spawnCapture(ffmpegPath, options, true).catch((e) => {
+    await this.spawnCapture(ffmpegPath, options, true).catch((e) => {
       this.errorCallback?.(e);
     });
   }
@@ -455,12 +466,16 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
 
     proc.on('exit', (code) => {
       this.clearNoFrameTimer();
-      this.ffmpegProc = null;
 
-      if (!this.isRunning) {
+      if ((proc as any)._isStopping || !this.isRunning) {
+        if (this.ffmpegProc === proc) {
+          this.ffmpegProc = null;
+        }
         this.exitCallback?.(code);
         return;
       }
+
+      this.ffmpegProc = null;
 
       // If primary ddagrab failed/exited before or during session, automatically retry with gdigrab
       if (!isFallbackGdi) {
@@ -513,15 +528,31 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     if (this.ffmpegProc) {
       const proc = this.ffmpegProc;
       this.ffmpegProc = null;
-      try {
-        proc.kill('SIGINT');
-        // Force kill after 500ms if still running
+      (proc as any)._isStopping = true;
+
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (!done) {
+            done = true;
+            resolve();
+          }
+        };
+
+        proc.once('exit', finish);
+        proc.once('close', finish);
+
+        try {
+          proc.kill('SIGINT');
+        } catch {}
+
         setTimeout(() => {
           try {
             proc.kill('SIGKILL');
           } catch {}
-        }, 500);
-      } catch {}
+          finish();
+        }, 400);
+      });
     }
   }
 }

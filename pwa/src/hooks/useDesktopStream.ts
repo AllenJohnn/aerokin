@@ -72,6 +72,9 @@ export function useDesktopStream({
   const byteCountRef = useRef<number>(0);
   const lastStatsCalcRef = useRef<number>(Date.now());
   const lastLatencyRef = useRef<number>(0);
+  const latencySamplesRef = useRef<number[]>([]);
+  const lastDecodeTimeRef = useRef<number>(0);
+  const lastPaintTimeRef = useRef<number>(0);
 
   // Geometry tracking for coordinate hit-testing
   const geometryRef = useRef({
@@ -159,8 +162,10 @@ export function useDesktopStream({
     ctx.scale(zoom, zoom);
     ctx.translate(-cw / 2, -ch / 2);
 
+    const tPaint0 = performance.now();
     ctx.drawImage(bitmap, ox, oy, rw, rh);
     ctx.restore();
+    lastPaintTimeRef.current = Math.round((performance.now() - tPaint0) * 10) / 10;
 
     rafIdRef.current = requestAnimationFrame(renderFrame);
   }, [zoom, pan]);
@@ -261,13 +266,26 @@ export function useDesktopStream({
         const width = view.getUint16(12, true);
         const height = view.getUint16(14, true);
 
-        const latency = Math.max(1, Date.now() - serverTimestamp);
-        lastLatencyRef.current = latency;
+        const nowMs = Date.now();
+        let netLatency = (nowMs >>> 0) - serverTimestamp;
+        if (netLatency < 0) netLatency += 0x100000000;
+        netLatency = Math.max(1, Math.min(2000, netLatency));
 
-        // Decode JPEG blob
+        // Decode JPEG blob off main thread
         try {
+          const tDecode0 = performance.now();
           const jpegBlob = new Blob([new Uint8Array(buf, 16)], { type: 'image/jpeg' });
           const newBitmap = await createImageBitmap(jpegBlob);
+          const decodeMs = Math.round((performance.now() - tDecode0) * 10) / 10;
+          lastDecodeTimeRef.current = decodeMs;
+
+          const totalLatency = Math.round(netLatency + decodeMs + (lastPaintTimeRef.current || 0));
+          lastLatencyRef.current = totalLatency;
+
+          latencySamplesRef.current.push(totalLatency);
+          if (latencySamplesRef.current.length > 60) {
+            latencySamplesRef.current.shift();
+          }
 
           const oldBitmap = latestBitmapRef.current;
           latestBitmapRef.current = newBitmap;
@@ -372,11 +390,24 @@ export function useDesktopStream({
       byteCountRef.current = 0;
       lastStatsCalcRef.current = now;
 
+      // Compute p50 and p95 over sliding 60-frame window
+      const samples = [...latencySamplesRef.current].sort((a, b) => a - b);
+      let p50 = 0;
+      let p95 = 0;
+      if (samples.length > 0) {
+        p50 = samples[Math.floor(samples.length * 0.5)];
+        p95 = samples[Math.floor(samples.length * 0.95)];
+      }
+
       setStats((prev) => ({
         ...prev,
         fps,
         bitrateKbps,
         latencyMs: lastLatencyRef.current,
+        latencyP50: p50,
+        latencyP95: p95,
+        decodeMs: lastDecodeTimeRef.current,
+        paintMs: lastPaintTimeRef.current,
         width: geometryRef.current.streamWidth,
         height: geometryRef.current.streamHeight,
       }));

@@ -157,6 +157,7 @@ export interface UseAerokinSocketReturn {
   lastCloseReason: string | null;
   agentLogs: any[];
   requestAgentLogs: (limit?: number) => void;
+  runLatencyTest: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
 }
 
 export function useAerokinSocket(): UseAerokinSocketReturn {
@@ -777,6 +778,65 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     };
   }, [credential, deviceId, host, isHosted, connectTrigger]);
 
+  const runLatencyTest = useCallback(async (): Promise<{ min: number; avg: number; max: number; p95: number }> => {
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error('Socket not connected');
+    }
+
+    const rtts: number[] = [];
+    const count = 10;
+
+    for (let i = 0; i < count; i++) {
+      const sendTime = Date.now();
+      const rtt = await new Promise<number>((resolve) => {
+        const timer = setTimeout(() => {
+          resolve(100);
+        }, 1000);
+
+        const onMsg = (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'pong' && data.t === sendTime) {
+              clearTimeout(timer);
+              ws.removeEventListener('message', onMsg);
+              resolve(Math.max(1, Date.now() - sendTime));
+            }
+          } catch {}
+        };
+
+        ws.addEventListener('message', onMsg);
+        try {
+          ws.send(JSON.stringify({ type: 'ping', t: sendTime }));
+        } catch {
+          clearTimeout(timer);
+          ws.removeEventListener('message', onMsg);
+          resolve(100);
+        }
+      });
+
+      rtts.push(rtt);
+      if (i < count - 1) {
+        await new Promise((r) => setTimeout(r, 40));
+      }
+    }
+
+    const sorted = [...rtts].sort((a, b) => a - b);
+    const min = sorted[0] ?? 1;
+    const max = sorted[sorted.length - 1] ?? 1;
+    const avg = Math.round(rtts.reduce((a, b) => a + b, 0) / rtts.length);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? max;
+
+    const result = { min, avg, max, p95 };
+    diagnosticsLogger.log(
+      'info',
+      'socket',
+      `Latency Test Results (10 samples): min=${min}ms, avg=${avg}ms, max=${max}ms, p95=${p95}ms`
+    );
+
+    return result;
+  }, []);
+
   return {
     status,
     latency,
@@ -829,5 +889,6 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     lastCloseReason,
     agentLogs,
     requestAgentLogs,
+    runLatencyTest,
   };
 }

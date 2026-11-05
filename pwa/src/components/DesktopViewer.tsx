@@ -74,6 +74,7 @@ export interface DesktopViewerProps {
     customFps?: number;
   }) => void;
   stopDesktopStream: () => void;
+  onRunLatencyTest?: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
 }
 
 export const DesktopViewer: React.FC<DesktopViewerProps> = ({
@@ -98,9 +99,27 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
   sendText,
   startDesktopStream,
   stopDesktopStream,
+  onRunLatencyTest,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [isRunningLatencyTest, setIsRunningLatencyTest] = useState(false);
+  const [latencyTestResult, setLatencyTestResult] = useState<{ min: number; avg: number; max: number; p95: number } | null>(null);
+
+  // RAF throttlers for mouse/touch pointer moves
+  const pendingAbsMoveRef = useRef<{ x: number; y: number } | null>(null);
+  const absMoveRafIdRef = useRef<number | null>(null);
+
+  const pendingRelMoveRef = useRef<{ dx: number; dy: number } | null>(null);
+  const relMoveRafIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (absMoveRafIdRef.current !== null) cancelAnimationFrame(absMoveRafIdRef.current);
+      if (relMoveRafIdRef.current !== null) cancelAnimationFrame(relMoveRafIdRef.current);
+    };
+  }, []);
 
   // Stream hook
   const {
@@ -298,7 +317,21 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
       for (const intent of intents) {
         switch (intent.type) {
           case 'move':
-            sendMove(intent.dx, intent.dy);
+            if (!pendingRelMoveRef.current) {
+              pendingRelMoveRef.current = { dx: intent.dx, dy: intent.dy };
+            } else {
+              pendingRelMoveRef.current.dx += intent.dx;
+              pendingRelMoveRef.current.dy += intent.dy;
+            }
+            if (relMoveRafIdRef.current === null) {
+              relMoveRafIdRef.current = requestAnimationFrame(() => {
+                relMoveRafIdRef.current = null;
+                if (pendingRelMoveRef.current) {
+                  sendMove(pendingRelMoveRef.current.dx, pendingRelMoveRef.current.dy);
+                  pendingRelMoveRef.current = null;
+                }
+              });
+            }
             break;
           case 'click':
             triggerHaptic('light');
@@ -487,7 +520,16 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
             isDraggingRef.current = true;
             sendAbsButton('left', 'down', coords.x, coords.y, selectedMonitorId);
           } else {
-            sendAbsMove(coords.x, coords.y, selectedMonitorId);
+            pendingAbsMoveRef.current = { x: coords.x, y: coords.y };
+            if (absMoveRafIdRef.current === null) {
+              absMoveRafIdRef.current = requestAnimationFrame(() => {
+                absMoveRafIdRef.current = null;
+                if (pendingAbsMoveRef.current) {
+                  sendAbsMove(pendingAbsMoveRef.current.x, pendingAbsMoveRef.current.y, selectedMonitorId);
+                  pendingAbsMoveRef.current = null;
+                }
+              });
+            }
           }
         }
       }
@@ -669,19 +711,48 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
         {/* Live Measured Stats Overlay */}
         {showStats && (
-          <div className="absolute top-3 left-3 bg-black/80 border border-border/60 rounded-xl px-3 py-2 text-[10px] font-mono text-muted-foreground backdrop-blur-md z-30 pointer-events-none">
-            <div className="text-foreground font-semibold mb-1 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-optic-green" />
-              <span>DESKTOP REMOTE STREAM</span>
+          <div className="absolute top-3 left-3 bg-black/85 border border-border/80 rounded-xl px-3 py-2 text-[10px] font-mono text-muted-foreground backdrop-blur-md z-30 space-y-0.5">
+            <div className="text-foreground font-semibold mb-1 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-optic-green" />
+                <span>DESKTOP REMOTE STREAM</span>
+              </div>
             </div>
             <div>FPS: <span className="text-foreground">{stats.fps}</span></div>
-            <div>Latency: <span className="text-foreground">{stats.latencyMs} ms</span></div>
+            <div>Latency (p50/p95): <span className="text-foreground">{stats.latencyP50 || stats.latencyMs || 0} / {stats.latencyP95 || stats.latencyMs || 0} ms</span></div>
+            <div>Decode / Paint: <span className="text-foreground">{stats.decodeMs || 0} / {stats.paintMs || 0} ms</span></div>
             <div>Bitrate: <span className="text-foreground">{stats.bitrateKbps} kbps</span></div>
             <div>Resolution: <span className="text-foreground">{stats.width}x{stats.height}</span></div>
             <div>Tier: <span className="text-foreground capitalize">{stats.activeTier || activePreset}{stats.activeTier && stats.activeTier !== activePreset ? ' (adapted)' : ''}</span></div>
             {stats.backend && <div>Backend: <span className="text-foreground">{stats.backend}</span></div>}
             <div>Dropped: <span className="text-foreground">{stats.droppedFrames}</span></div>
             <div>Zoom: <span className="text-foreground">{zoom.toFixed(1)}x</span></div>
+
+            <div className="pt-1.5 pointer-events-auto">
+              <button
+                onClick={async () => {
+                  triggerHaptic('light');
+                  if (onRunLatencyTest) {
+                    setIsRunningLatencyTest(true);
+                    try {
+                      const res = await onRunLatencyTest();
+                      setLatencyTestResult(res);
+                      setTimeout(() => setLatencyTestResult(null), 5000);
+                    } catch {}
+                    setIsRunningLatencyTest(false);
+                  }
+                }}
+                disabled={isRunningLatencyTest}
+                className="w-full py-1 px-2 rounded-lg bg-raised hover:bg-border text-foreground font-medium text-[10px] border border-border transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+              >
+                <span>{isRunningLatencyTest ? 'Measuring (10 samples)...' : 'Run Latency Test'}</span>
+              </button>
+              {latencyTestResult && (
+                <div className="mt-1 p-1 rounded bg-accent/10 border border-accent/30 text-accent text-[9px] leading-tight">
+                  RTT min: {latencyTestResult.min}ms · avg: {latencyTestResult.avg}ms · max: {latencyTestResult.max}ms · p95: {latencyTestResult.p95}ms
+                </div>
+              )}
+            </div>
           </div>
         )}
 

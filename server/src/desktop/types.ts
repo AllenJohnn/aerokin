@@ -79,6 +79,10 @@ export interface DesktopStats {
   fps: number;
   bitrateKbps: number;
   latencyMs?: number;
+  latencyP50?: number;
+  latencyP95?: number;
+  decodeMs?: number;
+  paintMs?: number;
   droppedFrames: number;
   frameSequence: number;
   width: number;
