@@ -78,6 +78,88 @@ export interface DeviceInfo {
   revoked: boolean;
 }
 
+export interface ScreenshotResponseData {
+  success: boolean;
+  mimeType?: 'image/jpeg' | 'image/png';
+  data?: string;
+  width?: number;
+  height?: number;
+  sizeBytes?: number;
+  downscaled?: boolean;
+  note?: string;
+  error?: string;
+}
+
+export interface SystemStatsData {
+  timestamp: number;
+  uptimeSeconds: number;
+  cpu: {
+    totalPercent: number;
+    coresPercent: number[];
+    agentCpuPercent: number;
+  };
+  ram: {
+    usedBytes: number;
+    totalBytes: number;
+    percent: number;
+  };
+  disks: Array<{
+    drive: string;
+    totalBytes: number;
+    usedBytes: number;
+    freeBytes: number;
+    percent: number;
+  }>;
+  network: {
+    upBytesPerSec: number;
+    downBytesPerSec: number;
+  };
+  power: {
+    hasBattery: boolean;
+    batteryPercent: number | null;
+    isCharging: boolean;
+    acConnected: boolean;
+  };
+  gpu: {
+    available: boolean;
+    utilizationPercent: number | null;
+    note: string;
+  };
+  temperature: {
+    available: boolean;
+    celsius: number | null;
+    note: string;
+  };
+  topProcesses: {
+    byCpu: Array<{ name: string; value: string }>;
+    byRam: Array<{ name: string; value: string }>;
+  };
+}
+
+export interface FeatureFlags {
+  clipboard: boolean;
+  screenshot: boolean;
+  quickActions: boolean;
+  launcher: boolean;
+}
+
+export interface LauncherEntry {
+  id: string;
+  name: string;
+  icon?: string;
+  description?: string;
+  path: string;
+}
+
+export interface ActionResultData {
+  success: boolean;
+  action: string;
+  message?: string;
+  countdownActive?: boolean;
+  secondsRemaining?: number;
+  error?: string;
+}
+
 export interface UseAerokinSocketReturn {
   status: ConnectionStatus;
   latency: number | null;
@@ -158,6 +240,37 @@ export interface UseAerokinSocketReturn {
   agentLogs: any[];
   requestAgentLogs: (limit?: number) => void;
   runLatencyTest: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
+
+  // Screenshot
+  requestScreenshot: (options?: {
+    target?: 'all' | 'active_window' | 'monitor';
+    monitorId?: string;
+    includeCursor?: boolean;
+  }) => void;
+  lastScreenshot: ScreenshotResponseData | null;
+
+  // System Stats
+  subscribeStats: (intervalMs?: number) => void;
+  unsubscribeStats: () => void;
+  systemStats: SystemStatsData | null;
+
+  // Clipboard
+  getClipboard: () => void;
+  setClipboard: (text: string) => void;
+  setClipboardAndPaste: (text: string) => void;
+  clearClipboardHistory: () => void;
+  lastClipboardText: string | null;
+  lastClipboardLength: number | null;
+  clipboardError: string | null;
+
+  // Quick Actions & Launcher
+  executeQuickAction: (action: string, payload?: string) => void;
+  requestLauncherList: () => void;
+  lastActionResult: ActionResultData | null;
+  launcherEntries: LauncherEntry[];
+
+  // Features
+  featureFlags: FeatureFlags;
 }
 
 export function useAerokinSocket(): UseAerokinSocketReturn {
@@ -214,6 +327,29 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const [lastCloseCode, setLastCloseCode] = useState<number | null>(null);
   const [lastCloseReason, setLastCloseReason] = useState<string | null>(null);
   const [agentLogs, setAgentLogs] = useState<any[]>([]);
+
+  // Screenshot state
+  const [lastScreenshot, setLastScreenshot] = useState<ScreenshotResponseData | null>(null);
+
+  // System stats state
+  const [systemStats, setSystemStats] = useState<SystemStatsData | null>(null);
+
+  // Clipboard state
+  const [lastClipboardText, setLastClipboardText] = useState<string | null>(null);
+  const [lastClipboardLength, setLastClipboardLength] = useState<number | null>(null);
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+
+  // Quick actions & Launcher state
+  const [lastActionResult, setLastActionResult] = useState<ActionResultData | null>(null);
+  const [launcherEntries, setLauncherEntries] = useState<LauncherEntry[]>([]);
+
+  // Feature flags state
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({
+    clipboard: true,
+    screenshot: true,
+    quickActions: true,
+    launcher: true,
+  });
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -536,6 +672,76 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     [sendRaw]
   );
 
+  const requestScreenshot = useCallback(
+    (options?: {
+      target?: 'all' | 'active_window' | 'monitor';
+      monitorId?: string;
+      includeCursor?: boolean;
+    }) => {
+      sendRaw({ type: 'screenshot_request', ...options });
+    },
+    [sendRaw]
+  );
+
+  const subscribeStats = useCallback(
+    (intervalMs = 1000) => {
+      sendRaw({ type: 'stats_subscribe', intervalMs });
+    },
+    [sendRaw]
+  );
+
+  const unsubscribeStats = useCallback(() => {
+    sendRaw({ type: 'stats_unsubscribe' });
+  }, [sendRaw]);
+
+  const getClipboard = useCallback(() => {
+    sendRaw({ type: 'clipboard_get' });
+  }, [sendRaw]);
+
+  const setClipboard = useCallback(
+    (text: string) => {
+      sendRaw({ type: 'clipboard_set', text });
+    },
+    [sendRaw]
+  );
+
+  const setClipboardAndPaste = useCallback(
+    (text: string) => {
+      sendRaw({ type: 'clipboard_set_and_paste', text });
+    },
+    [sendRaw]
+  );
+
+  const clearClipboardHistory = useCallback(() => {
+    sendRaw({ type: 'clipboard_clear_history' });
+  }, [sendRaw]);
+
+  const executeQuickAction = useCallback(
+    (action: string, payload?: string) => {
+      sendRaw({ type: 'quick_action', action, payload });
+    },
+    [sendRaw]
+  );
+
+  const requestLauncherList = useCallback(() => {
+    sendRaw({ type: 'launcher_list' });
+  }, [sendRaw]);
+
+  // Auto-unsubscribe from system stats when the tab is hidden
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(JSON.stringify({ type: 'stats_unsubscribe' }));
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   useEffect(() => {
     if (!credential || !deviceId) {
       setStatus('unauthorized');
@@ -692,6 +898,24 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
                   ? Math.round(data.volume * 100)
                   : Math.round(data.volume);
               setVolume(norm);
+            } else if (data.type === 'screenshot_response') {
+              setLastScreenshot(data);
+            } else if (data.type === 'stats_data' && data.data) {
+              setSystemStats(data.data);
+            } else if (data.type === 'clipboard_data') {
+              setLastClipboardText(data.text);
+              setLastClipboardLength(data.length);
+              setClipboardError(null);
+            } else if (data.type === 'clipboard_ack') {
+              setClipboardError(null);
+            } else if (data.type === 'clipboard_error') {
+              setClipboardError(data.error);
+            } else if (data.type === 'action_result') {
+              setLastActionResult(data);
+            } else if (data.type === 'launcher_list' && Array.isArray(data.entries)) {
+              setLauncherEntries(data.entries);
+            } else if (data.type === 'features_status' && data.flags) {
+              setFeatureFlags(data.flags);
             }
           } catch {}
         };
@@ -890,5 +1114,22 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     agentLogs,
     requestAgentLogs,
     runLatencyTest,
+    requestScreenshot,
+    lastScreenshot,
+    subscribeStats,
+    unsubscribeStats,
+    systemStats,
+    getClipboard,
+    setClipboard,
+    setClipboardAndPaste,
+    clearClipboardHistory,
+    lastClipboardText,
+    lastClipboardLength,
+    clipboardError,
+    executeQuickAction,
+    requestLauncherList,
+    lastActionResult,
+    launcherEntries,
+    featureFlags,
   };
 }

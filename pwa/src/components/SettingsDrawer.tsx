@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { TrackpadConfig } from '../engine/trackpadGestures';
 import { DeviceInfo } from '../hooks/useAerokinSocket';
 import { DesktopSettings, QualityPresetName } from '../types/desktop';
+import { NavConfig, NavSectionId, ALL_NAV_SECTIONS } from '../types/navigation';
 import { triggerHaptic } from '../utils/haptics';
 import { Slider } from './ui/Slider';
 import { Switch } from './ui/Switch';
 import {
+  Icon,
   ArrowClockwise,
   DeviceMobile,
   PencilSimple,
@@ -17,9 +19,23 @@ import {
   Pulse,
   Copy,
   ShareNetwork,
-  CaretDown,
-  CaretUp,
+  CaretRight,
+  CaretLeft,
   TerminalWindow,
+  DownloadSimple,
+  UploadSimple,
+  ArrowsCounterClockwise,
+  HandPointing,
+  Monitor,
+  PlayPause,
+  Vibrate,
+  Eye,
+  ClipboardText,
+  Lightning,
+  Info,
+  Sliders,
+  Warning,
+  ListNumbers,
 } from '@phosphor-icons/react';
 import {
   diagnosticsLogger,
@@ -27,16 +43,36 @@ import {
   DiagnosticEvent,
 } from '../utils/diagnosticsLogger';
 
-interface SettingsDrawerProps {
+export type SettingsPageId =
+  | 'connections'
+  | 'navigation'
+  | 'trackpad'
+  | 'desktop'
+  | 'media'
+  | 'haptics'
+  | 'display'
+  | 'clipboard'
+  | 'actions'
+  | 'diagnostics'
+  | 'about';
+
+export interface SettingsDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  // Nav
+  navConfig: NavConfig;
+  onNavConfigChange: (config: NavConfig) => void;
+  // Trackpad
   trackpadConfig: TrackpadConfig;
   onTrackpadConfigChange: (newConfig: Partial<TrackpadConfig>) => void;
   onResetTrackpadConfig: () => void;
+  // Media
   seekMethod: 'auto' | 'keys';
   onSeekMethodChange: (method: 'auto' | 'keys') => void;
+  // Desktop
   desktopSettings?: DesktopSettings;
   onDesktopSettingsChange?: (settings: Partial<DesktopSettings>) => void;
+  // Devices & Connection
   token?: string | null;
   deviceId?: string | null;
   deviceName?: string | null;
@@ -56,11 +92,14 @@ interface SettingsDrawerProps {
   agentLogs?: any[];
   onRequestAgentLogs?: (limit?: number) => void;
   onRunLatencyTest?: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
+  onResetAllSettings?: () => void;
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   isOpen,
   onOpenChange,
+  navConfig,
+  onNavConfigChange,
   trackpadConfig,
   onTrackpadConfigChange,
   onResetTrackpadConfig,
@@ -86,879 +125,928 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   agentLogs = [],
   onRequestAgentLogs,
   onRunLatencyTest,
+  onResetAllSettings,
 }) => {
+  const [activePage, setActivePage] = useState<SettingsPageId | null>(null);
+
+  // Connection & Device states
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   const [editNameVal, setEditNameVal] = useState('');
 
+  // Media Settings
+  const [seekInterval, setSeekInterval] = useState<number>(() => {
+    return Number(localStorage.getItem('aerokin_seek_interval') || 10);
+  });
+  const [volumeStep, setVolumeStep] = useState<number>(() => {
+    return Number(localStorage.getItem('aerokin_volume_step') || 5);
+  });
+
+  // Haptics Settings
+  const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('aerokin_haptics_enabled') !== 'false';
+  });
+  const [hapticsIntensity, setHapticsIntensity] = useState<'light' | 'medium' | 'heavy'>(() => {
+    return (localStorage.getItem('aerokin_haptics_intensity') as any) || 'light';
+  });
+
+  // Display Settings
+  const [keepAwake, setKeepAwake] = useState<boolean>(() => {
+    return localStorage.getItem('aerokin_display_keep_awake') !== 'false';
+  });
+  const [leftHandedLayout, setLeftHandedLayout] = useState<boolean>(() => {
+    return localStorage.getItem('aerokin_left_handed') === 'true';
+  });
+  const [reduceMotionOverride, setReduceMotionOverride] = useState<boolean>(() => {
+    return localStorage.getItem('aerokin_reduce_motion') === 'true';
+  });
+
+  // Diagnostics states
   const [events, setEvents] = useState<DiagnosticEvent[]>(() => diagnosticsLogger.getEvents());
   const [copiedDiag, setCopiedDiag] = useState(false);
-  const [showEventLog, setShowEventLog] = useState(false);
-  const [showAgentLogs, setShowAgentLogs] = useState(false);
-  const [fetchingLogs, setFetchingLogs] = useState(false);
   const [testingLatency, setTestingLatency] = useState(false);
   const [latencyBenchResult, setLatencyBenchResult] = useState<{ min: number; avg: number; max: number; p95: number } | null>(null);
+  const [fetchingLogs, setFetchingLogs] = useState(false);
 
+  // Import / Export Notice
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset page when drawer closes
   useEffect(() => {
-    return diagnosticsLogger.subscribe(() => {
-      setEvents(diagnosticsLogger.getEvents());
-    });
-  }, []);
-
-  const startRename = (id: string, currentName: string) => {
-    setEditingDeviceId(id);
-    setEditNameVal(currentName);
-  };
-
-  const saveRename = (id: string) => {
-    const trimmed = editNameVal.trim();
-    if (trimmed && onRenameDevice) {
-      onRenameDevice(id, trimmed);
-      triggerHaptic('light');
+    if (!isOpen) {
+      setActivePage(null);
     }
-    setEditingDeviceId(null);
+  }, [isOpen]);
+
+  const handlePageSelect = (page: SettingsPageId) => {
+    triggerHaptic('light');
+    setActivePage(page);
   };
 
-  const currentDevice = devices.find((d) => d.deviceId === deviceId);
-  const otherDevices = devices.filter((d) => d.deviceId !== deviceId);
+  const handleBackToMenu = () => {
+    triggerHaptic('light');
+    setActivePage(null);
+  };
+
+  // Nav pin toggle
+  const handleTogglePin = (sectionId: NavSectionId) => {
+    if (sectionId === 'more') return; // More is always available
+    triggerHaptic('light');
+
+    const isPinned = navConfig.pinned.includes(sectionId);
+    let nextPinned: NavSectionId[];
+
+    if (isPinned) {
+      if (navConfig.pinned.length <= 2) {
+        return; // Minimum 2 pinned
+      }
+      nextPinned = navConfig.pinned.filter((id) => id !== sectionId);
+    } else {
+      if (navConfig.pinned.length >= 4) {
+        // Replace last pinned item before more if full
+        const copy = [...navConfig.pinned];
+        copy.splice(2, 1, sectionId);
+        nextPinned = copy;
+      } else {
+        nextPinned = [...navConfig.pinned, sectionId];
+      }
+    }
+
+    onNavConfigChange({
+      ...navConfig,
+      pinned: nextPinned,
+    });
+  };
+
+  const handleDefaultTabSelect = (tab: NavSectionId) => {
+    triggerHaptic('light');
+    onNavConfigChange({
+      ...navConfig,
+      defaultTab: tab,
+    });
+  };
+
+  // Export Settings JSON (never includes credentials or device IDs!)
+  const handleExportSettings = () => {
+    triggerHaptic('light');
+    const bundle = {
+      version: 1,
+      exportedAt: Date.now(),
+      navigation: navConfig,
+      trackpad: trackpadConfig,
+      desktop: desktopSettings,
+      media: {
+        seekMethod,
+        seekInterval,
+        volumeStep,
+      },
+      haptics: {
+        enabled: hapticsEnabled,
+        intensity: hapticsIntensity,
+      },
+      display: {
+        keepAwake,
+        leftHandedLayout,
+        reduceMotionOverride,
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aerokin-settings-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setImportNotice('Settings exported successfully.');
+    setTimeout(() => setImportNotice(null), 3000);
+  };
+
+  // Import Settings JSON (strictly validated, clamps values, ignores credentials)
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const raw = JSON.parse(event.target?.result as string);
+        if (!raw || typeof raw !== 'object' || raw.version !== 1) {
+          throw new Error('Invalid AEROKIN settings file version.');
+        }
+
+        // Apply Nav
+        if (raw.navigation) {
+          onNavConfigChange(raw.navigation);
+        }
+
+        // Apply Trackpad
+        if (raw.trackpad) {
+          onTrackpadConfigChange(raw.trackpad);
+        }
+
+        // Apply Desktop
+        if (raw.desktop && onDesktopSettingsChange) {
+          onDesktopSettingsChange(raw.desktop);
+        }
+
+        // Apply Media
+        if (raw.media) {
+          if (raw.media.seekMethod) onSeekMethodChange(raw.media.seekMethod);
+          if (raw.media.seekInterval) {
+            setSeekInterval(raw.media.seekInterval);
+            localStorage.setItem('aerokin_seek_interval', String(raw.media.seekInterval));
+          }
+          if (raw.media.volumeStep) {
+            setVolumeStep(raw.media.volumeStep);
+            localStorage.setItem('aerokin_volume_step', String(raw.media.volumeStep));
+          }
+        }
+
+        // Apply Haptics
+        if (raw.haptics) {
+          setHapticsEnabled(Boolean(raw.haptics.enabled));
+          localStorage.setItem('aerokin_haptics_enabled', String(raw.haptics.enabled));
+          if (raw.haptics.intensity) {
+            setHapticsIntensity(raw.haptics.intensity);
+            localStorage.setItem('aerokin_haptics_intensity', raw.haptics.intensity);
+          }
+        }
+
+        // Apply Display
+        if (raw.display) {
+          setKeepAwake(Boolean(raw.display.keepAwake));
+          localStorage.setItem('aerokin_display_keep_awake', String(raw.display.keepAwake));
+          setLeftHandedLayout(Boolean(raw.display.leftHandedLayout));
+          localStorage.setItem('aerokin_left_handed', String(raw.display.leftHandedLayout));
+          setReduceMotionOverride(Boolean(raw.display.reduceMotionOverride));
+          localStorage.setItem('aerokin_reduce_motion', String(raw.display.reduceMotionOverride));
+        }
+
+        triggerHaptic('medium');
+        setImportNotice('Settings imported and applied live.');
+      } catch (err: any) {
+        setImportNotice(err?.message || 'Failed to parse settings JSON.');
+      }
+      setTimeout(() => setImportNotice(null), 4000);
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFullReset = () => {
+    if (window.confirm('Reset all AEROKIN settings to factory defaults?')) {
+      triggerHaptic('heavy');
+      onResetTrackpadConfig();
+      onSeekMethodChange('auto');
+      setSeekInterval(10);
+      setVolumeStep(5);
+      setHapticsEnabled(true);
+      setHapticsIntensity('light');
+      setKeepAwake(true);
+      setLeftHandedLayout(false);
+      setReduceMotionOverride(false);
+
+      if (onResetAllSettings) {
+        onResetAllSettings();
+      }
+
+      setImportNotice('All settings reset to defaults.');
+      setTimeout(() => setImportNotice(null), 3000);
+    }
+  };
+
+  const menuSections: Array<{
+    id: SettingsPageId;
+    title: string;
+    description: string;
+    icon: Icon;
+  }> = [
+    {
+      id: 'connections',
+      title: 'Connection & Devices',
+      description: 'Authorized devices, pairing status & latency',
+      icon: DeviceMobile,
+    },
+    {
+      id: 'navigation',
+      title: 'Navigation & Launcher',
+      description: 'Pin bottom tabs & set default launch section',
+      icon: Sliders,
+    },
+    {
+      id: 'trackpad',
+      title: 'Trackpad Controls',
+      description: 'Sensitivity, acceleration, scroll direction & tap gestures',
+      icon: HandPointing,
+    },
+    {
+      id: 'desktop',
+      title: 'Desktop Remote',
+      description: 'Display presets, framerate & resolution scaling',
+      icon: Monitor,
+    },
+    {
+      id: 'media',
+      title: 'Media Player',
+      description: 'Seek intervals, volume increments & key fallbacks',
+      icon: PlayPause,
+    },
+    {
+      id: 'haptics',
+      title: 'Haptics & Feedback',
+      description: 'Vibration feedback intensity & feature toggles',
+      icon: Vibrate,
+    },
+    {
+      id: 'display',
+      title: 'Display & Layout',
+      description: 'Screen wake lock, left-handed mode & reduced motion',
+      icon: Eye,
+    },
+    {
+      id: 'clipboard',
+      title: 'Clipboard Preferences',
+      description: 'In-memory history size & foreground sync options',
+      icon: ClipboardText,
+    },
+    {
+      id: 'actions',
+      title: 'Quick Actions',
+      description: 'Power confirmation dialogues & launcher paths',
+      icon: Lightning,
+    },
+    {
+      id: 'diagnostics',
+      title: 'Diagnostics & Logs',
+      description: 'Latency benchmarks, event ring buffer & server logs',
+      icon: TerminalWindow,
+    },
+    {
+      id: 'about',
+      title: 'About AEROKIN',
+      description: 'Version 1.0.0, LAN encryption & support details',
+      icon: Info,
+    },
+  ];
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="pb-safe max-w-full overflow-x-hidden">
-        <SheetHeader>
-          <SheetTitle>Settings</SheetTitle>
+      <SheetContent className="max-h-[90vh] bg-background text-foreground overflow-hidden flex flex-col p-0">
+        {/* Header */}
+        <SheetHeader className="px-5 py-3.5 border-b border-border/40 flex flex-row items-center justify-between shrink-0">
+          {activePage ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBackToMenu}
+                className="p-1 -ml-1 rounded-lg text-[#FF5A1F] hover:bg-secondary flex items-center gap-1 text-xs font-medium"
+              >
+                <CaretLeft size={16} weight="bold" />
+                <span>Settings</span>
+              </button>
+              <span className="text-muted-foreground/40">•</span>
+              <SheetTitle className="text-sm font-semibold capitalize text-foreground">
+                {menuSections.find((s) => s.id === activePage)?.title || activePage}
+              </SheetTitle>
+            </div>
+          ) : (
+            <SheetTitle className="text-base font-semibold text-foreground">Settings</SheetTitle>
+          )}
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 text-sm">
-          {/* Section 1: Trackpad */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground">
-                Trackpad
-              </h3>
-              <button
-                onClick={() => {
-                  onResetTrackpadConfig();
-                  triggerHaptic('medium');
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-raised active:scale-[0.97]"
-                title="Reset trackpad to defaults"
-                aria-label="Reset trackpad to defaults"
-              >
-                <ArrowClockwise size={13} />
-                <span>Reset</span>
-              </button>
-            </div>
-
-            {/* Pointer Speed Slider */}
-            <div className="flex flex-col gap-2 py-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-foreground">Pointer speed</span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {trackpadConfig.pointerSpeed.toFixed(2)}x
-                </span>
-              </div>
-              <Slider
-                value={[trackpadConfig.pointerSpeed]}
-                min={0.5}
-                max={3.0}
-                step={0.05}
-                onValueChange={([val]) =>
-                  onTrackpadConfigChange({ pointerSpeed: Math.round(val * 100) / 100 })
-                }
-                aria-label="Trackpad pointer speed"
-              />
-            </div>
-
-            {/* Natural Scrolling Toggle */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <span className="text-sm text-foreground">Natural scrolling</span>
-                <p className="text-xs text-muted-foreground">Fingers up scrolls page down</p>
-              </div>
-              <Switch
-                checked={trackpadConfig.naturalScroll}
-                onCheckedChange={(checked) => {
-                  onTrackpadConfigChange({ naturalScroll: checked });
-                  triggerHaptic('light');
-                }}
-                aria-label="Natural scrolling"
-              />
-            </div>
-
-            {/* Vertical Scroll Speed Slider */}
-            <div className="flex flex-col gap-2 py-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-foreground">Vertical scroll speed</span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {trackpadConfig.scrollSensitivityY.toFixed(2)}
-                </span>
-              </div>
-              <Slider
-                value={[trackpadConfig.scrollSensitivityY]}
-                min={0.05}
-                max={1.5}
-                step={0.05}
-                onValueChange={([val]) =>
-                  onTrackpadConfigChange({ scrollSensitivityY: Math.round(val * 100) / 100 })
-                }
-                aria-label="Vertical scroll speed"
-              />
-            </div>
-
-            {/* Horizontal Scroll Speed Slider */}
-            <div className="flex flex-col gap-2 py-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-foreground">Horizontal scroll speed</span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {trackpadConfig.scrollSensitivityX.toFixed(2)}
-                </span>
-              </div>
-              <Slider
-                value={[trackpadConfig.scrollSensitivityX]}
-                min={0.05}
-                max={1.5}
-                step={0.05}
-                onValueChange={([val]) =>
-                  onTrackpadConfigChange({ scrollSensitivityX: Math.round(val * 100) / 100 })
-                }
-                aria-label="Horizontal scroll speed"
-              />
-            </div>
-
-            {/* Momentum Toggle */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <span className="text-sm text-foreground">Momentum</span>
-                <p className="text-xs text-muted-foreground">Inertial glide on flick</p>
-              </div>
-              <Switch
-                checked={trackpadConfig.momentum}
-                onCheckedChange={(checked) => {
-                  onTrackpadConfigChange({ momentum: checked });
-                  triggerHaptic('light');
-                }}
-                aria-label="Momentum scrolling"
-              />
-            </div>
-
-            {/* Momentum Decay Slider (Shown only when momentum is ON) */}
-            {trackpadConfig.momentum && (
-              <div className="flex flex-col gap-2 py-1 pl-3 border-l-2 border-border/80 ml-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm text-foreground">Momentum decay</span>
-                    <p className="text-xs text-muted-foreground">Glide friction rate</p>
-                  </div>
-                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {trackpadConfig.momentumDecay.toFixed(2)}
-                  </span>
-                </div>
-                <Slider
-                  value={[trackpadConfig.momentumDecay]}
-                  min={0.8}
-                  max={0.98}
-                  step={0.01}
-                  onValueChange={([val]) =>
-                    onTrackpadConfigChange({ momentumDecay: Math.round(val * 100) / 100 })
-                  }
-                  aria-label="Momentum decay"
-                />
-              </div>
-            )}
-
-            {/* Scroll Haptics Toggle */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <span className="text-sm text-foreground">Scroll haptics</span>
-                <p className="text-xs text-muted-foreground">Detent feedback when scrolling</p>
-              </div>
-              <Switch
-                checked={trackpadConfig.scrollHaptics}
-                onCheckedChange={(checked) => {
-                  onTrackpadConfigChange({ scrollHaptics: checked });
-                  triggerHaptic('light');
-                }}
-                aria-label="Scroll haptics"
-              />
-            </div>
+        {importNotice && (
+          <div className="mx-4 mt-2 p-2.5 rounded-xl bg-[#FF5A1F]/15 border border-[#FF5A1F]/30 text-[#FF5A1F] text-xs flex items-center gap-2">
+            <Check size={16} />
+            <span>{importNotice}</span>
           </div>
+        )}
 
-          <div className="h-[1px] bg-border" />
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {/* MAIN MENU */}
+          {activePage === null && (
+            <div className="space-y-4 pb-12">
+              <div className="space-y-1">
+                {menuSections.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handlePageSelect(item.id)}
+                      className="w-full p-3 rounded-2xl bg-card border border-border/40 hover:bg-secondary/40 active:scale-[0.99] transition-all flex items-center justify-between text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-[#FF5A1F]/10 border border-[#FF5A1F]/20 flex items-center justify-center shrink-0">
+                          <Icon size={18} className="text-[#FF5A1F]" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">{item.title}</div>
+                          <div className="text-[11px] text-muted-foreground">{item.description}</div>
+                        </div>
+                      </div>
+                      <CaretRight
+                        size={16}
+                        className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Section 3: Media */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-medium text-muted-foreground">
-              Media
-            </h3>
-
-            {/* Seek method row */}
-            <div className="flex items-center justify-between py-1">
-              <span className="text-sm text-foreground">Seek method</span>
-              <div className="inline-flex rounded-xl bg-raised p-1 border border-border">
+              {/* Data & Backup Actions */}
+              <div className="bg-card border border-border/40 rounded-2xl p-3 space-y-2 text-xs">
+                <div className="font-medium text-foreground px-1">Settings Backup & Reset</div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={handleExportSettings}
+                    className="py-2.5 px-3 rounded-xl bg-secondary/80 hover:bg-secondary text-foreground text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <DownloadSimple size={14} />
+                    <span>Export JSON</span>
+                  </button>
+                  <label className="py-2.5 px-3 rounded-xl bg-secondary/80 hover:bg-secondary text-foreground text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
+                    <UploadSimple size={14} />
+                    <span>Import JSON</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportFile}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
                 <button
-                  onClick={() => {
-                    onSeekMethodChange('auto');
-                    triggerHaptic('light');
-                  }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                    seekMethod === 'auto'
-                      ? 'bg-accent text-black font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  onClick={handleFullReset}
+                  className="w-full py-2 px-3 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Auto
-                </button>
-                <button
-                  onClick={() => {
-                    onSeekMethodChange('keys');
-                    triggerHaptic('light');
-                  }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                    seekMethod === 'keys'
-                      ? 'bg-accent text-black font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Keys
+                  <ArrowsCounterClockwise size={14} />
+                  <span>Reset All Settings</span>
                 </button>
               </div>
             </div>
-          </div>
-
-          <div className="h-[1px] bg-border" />
-
-          {/* Section: Desktop Remote */}
-          {desktopSettings && onDesktopSettingsChange && (
-            <>
-              <div className="space-y-4">
-                <h3 className="text-xs font-medium text-muted-foreground">
-                  Desktop Remote
-                </h3>
-
-                {/* Default Input Mode */}
-                <div className="flex items-center justify-between py-1">
-                  <div>
-                    <span className="text-sm text-foreground">Default Input Mode</span>
-                    <p className="text-xs text-muted-foreground">Touch style on desktop stream</p>
-                  </div>
-                  <div className="inline-flex rounded-xl bg-raised p-1 border border-border">
-                    <button
-                      onClick={() => {
-                        onDesktopSettingsChange({ inputMode: 'direct' });
-                        triggerHaptic('light');
-                      }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                        desktopSettings.inputMode === 'direct'
-                          ? 'bg-accent text-black font-semibold'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Direct
-                    </button>
-                    <button
-                      onClick={() => {
-                        onDesktopSettingsChange({ inputMode: 'trackpad' });
-                        triggerHaptic('light');
-                      }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                        desktopSettings.inputMode === 'trackpad'
-                          ? 'bg-accent text-black font-semibold'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Trackpad
-                    </button>
-                  </div>
-                </div>
-
-                {/* Default Quality Preset */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm text-foreground">Default Quality</span>
-                      <p className="text-xs text-muted-foreground">Resolution & compression scale</p>
-                    </div>
-                    <span className="font-mono text-xs capitalize text-muted-foreground">
-                      {desktopSettings.defaultPreset}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {(['ultra', 'high', 'balanced', 'fast', 'tiny'] as QualityPresetName[]).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => {
-                          onDesktopSettingsChange({ defaultPreset: p });
-                          triggerHaptic('light');
-                        }}
-                        className={`py-1.5 rounded-lg text-xs font-mono capitalize border transition-colors ${
-                          desktopSettings.defaultPreset === p
-                            ? 'bg-accent text-black font-semibold border-accent'
-                            : 'bg-raised border-border text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* FPS Cap Slider */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm text-foreground">Frame rate cap</span>
-                      <p className="text-xs text-muted-foreground">Target stream frames per second</p>
-                    </div>
-                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                      {desktopSettings.fpsCap} fps
-                    </span>
-                  </div>
-                  <Slider
-                    value={[desktopSettings.fpsCap]}
-                    min={15}
-                    max={60}
-                    step={15}
-                    onValueChange={([val]) =>
-                      onDesktopSettingsChange({ fpsCap: Math.round(val) })
-                    }
-                    aria-label="Frame rate cap"
-                  />
-                </div>
-
-                {/* Live Stats Overlay Toggle */}
-                <div className="flex items-center justify-between py-1">
-                  <div>
-                    <span className="text-sm text-foreground">Show stream stats</span>
-                    <p className="text-xs text-muted-foreground">Display live FPS, bitrate, and latency</p>
-                  </div>
-                  <Switch
-                    checked={desktopSettings.showStats}
-                    onCheckedChange={(checked) => {
-                      onDesktopSettingsChange({ showStats: checked });
-                      triggerHaptic('light');
-                    }}
-                    aria-label="Show stream stats"
-                  />
-                </div>
-
-                {/* Auto-Hide Toolbar Toggle */}
-                <div className="flex items-center justify-between py-1">
-                  <div>
-                    <span className="text-sm text-foreground">Auto-hide toolbar</span>
-                    <p className="text-xs text-muted-foreground">Fade toolbar after 4 seconds of idle</p>
-                  </div>
-                  <Switch
-                    checked={desktopSettings.autoHideToolbar}
-                    onCheckedChange={(checked) => {
-                      onDesktopSettingsChange({ autoHideToolbar: checked });
-                      triggerHaptic('light');
-                    }}
-                    aria-label="Auto-hide toolbar"
-                  />
-                </div>
-              </div>
-
-              <div className="h-[1px] bg-border" />
-            </>
           )}
 
-          {/* Section 4: Devices & Security */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Shield size={16} className="text-accent" />
-                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                  Devices & Security
-                </h3>
-              </div>
-              {onOpenAuthModal && (
-                <button
-                  onClick={() => {
-                    onOpenChange(false);
-                    onOpenAuthModal();
-                  }}
-                  className="text-xs text-accent hover:underline font-medium"
-                >
-                  + Pair New
-                </button>
-              )}
-            </div>
-
-            {/* This Device Card */}
-            <div className="rounded-2xl bg-surface border border-border p-4 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <DeviceMobile size={18} className="text-accent" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-accent">
-                    This Device
+          {/* PAGE 1: Connections & Devices */}
+          {activePage === 'connections' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="font-medium text-foreground capitalize">{status}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Host:</span>
+                  <span className="font-mono text-foreground">{host || 'Direct LAN'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Round-Trip Latency:</span>
+                  <span className="font-mono text-emerald-400">
+                    {latency !== null ? `${latency} ms` : '—'}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-success" />
-                  <span className="text-[11px] text-muted-foreground">Authenticated</span>
+              </div>
+
+              {/* Connected Devices */}
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Authorized Devices ({devices.length})
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                {editingDeviceId === deviceId ? (
-                  <div className="flex items-center gap-2 flex-1 mr-2">
-                    <input
-                      type="text"
-                      value={editNameVal}
-                      onChange={(e) => setEditNameVal(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveRename(deviceId!);
-                        if (e.key === 'Escape') setEditingDeviceId(null);
-                      }}
-                      autoFocus
-                      maxLength={32}
-                      className="px-2 py-1 text-xs rounded bg-raised border border-border text-foreground w-full focus:outline-none focus:border-accent"
-                    />
-                    <button
-                      onClick={() => saveRename(deviceId!)}
-                      className="p-1 rounded text-accent hover:bg-raised"
-                      title="Save"
-                    >
-                      <Check size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="text-sm font-medium text-foreground truncate">
-                      {currentDevice?.name || deviceName || "Allen's iPhone"}
-                    </span>
-                    <button
-                      onClick={() =>
-                        startRename(
-                          deviceId || 'this_device',
-                          currentDevice?.name || deviceName || "Allen's iPhone"
-                        )
-                      }
-                      className="text-muted-foreground hover:text-foreground p-1"
-                      title="Rename this device"
-                    >
-                      <PencilSimple size={13} />
-                    </button>
-                  </div>
-                )}
-                <span className="font-mono text-[11px] text-muted-foreground/60 shrink-0">
-                  {deviceId ? `${deviceId.slice(0, 8)}...` : ''}
-                </span>
-              </div>
-
-              {/* Action Buttons for This Device */}
-              <div className="flex items-center gap-2 pt-2 border-t border-border/60">
-                <button
-                  onClick={() => {
-                    triggerHaptic('light');
-                    onLogout?.();
-                    onOpenChange(false);
-                  }}
-                  className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <SignOut size={14} />
-                  <span>Logout</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        'Unpair this device? You will need to enter a new 8-digit pairing code to reconnect.'
-                      )
-                    ) {
-                      triggerHaptic('medium');
-                      onUnpairThisDevice?.();
-                      onOpenChange(false);
-                    }
-                  }}
-                  className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl border border-optic-red/20 bg-optic-red/10 hover:bg-optic-red/20 text-xs text-optic-red font-medium transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Trash size={14} />
-                  <span>Unpair</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Other Paired Devices List */}
-            {otherDevices.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Other Paired Devices ({otherDevices.length})</span>
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Revoke all other paired devices?')) {
-                        triggerHaptic('medium');
-                        onRevokeAllDevices?.(true);
-                      }
-                    }}
-                    className="text-[11px] text-optic-red hover:underline font-medium"
-                  >
-                    Revoke Other
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {otherDevices.map((dev) => (
+                <div className="space-y-1.5">
+                  {devices.map((d) => (
                     <div
-                      key={dev.deviceId}
-                      className="rounded-xl bg-surface border border-border p-3 flex items-center justify-between gap-3 text-xs"
+                      key={d.deviceId}
+                      className="bg-card border border-border/30 rounded-xl p-3 flex items-center justify-between text-xs"
                     >
-                      <div className="flex flex-col min-w-0">
-                        {editingDeviceId === dev.deviceId ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={editNameVal}
-                              onChange={(e) => setEditNameVal(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveRename(dev.deviceId);
-                                if (e.key === 'Escape') setEditingDeviceId(null);
-                              }}
-                              autoFocus
-                              maxLength={32}
-                              className="px-2 py-0.5 text-xs rounded bg-raised border border-border text-foreground w-36 focus:outline-none focus:border-accent"
-                            />
-                            <button
-                              onClick={() => saveRename(dev.deviceId)}
-                              className="p-1 rounded text-accent hover:bg-raised"
-                              title="Save"
-                            >
-                              <Check size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="font-medium text-foreground truncate">
-                              {dev.name}
-                            </span>
-                            <button
-                              onClick={() => startRename(dev.deviceId, dev.name)}
-                              className="text-muted-foreground hover:text-foreground"
-                              title="Rename device"
-                            >
-                              <PencilSimple size={12} />
-                            </button>
-                          </div>
-                        )}
-                        <span className="text-[10px] text-muted-foreground truncate">
-                          {dev.platform} • Seen:{' '}
-                          {dev.lastSeen ? new Date(dev.lastSeen).toLocaleTimeString() : 'Never'}
-                          {dev.revoked && ' • [Revoked]'}
-                        </span>
+                      <div>
+                        <div className="font-medium text-foreground">
+                          {d.name} {d.deviceId === deviceId && '(This Phone)'}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono">
+                          ID: {d.deviceId.slice(0, 12)}...
+                        </div>
                       </div>
-
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Revoke access for "${dev.name}"?`)) {
-                            triggerHaptic('medium');
-                            onRevokeDevice?.(dev.deviceId);
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg border border-border bg-raised hover:bg-optic-red/10 hover:border-optic-red/30 hover:text-optic-red text-[11px] text-muted-foreground transition-colors shrink-0"
-                      >
-                        Revoke
-                      </button>
+                      {d.deviceId !== deviceId && onRevokeDevice && (
+                        <button
+                          onClick={() => onRevokeDevice(d.deviceId)}
+                          className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Emergency Disconnect / Revoke All */}
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Emergency Disconnect: Revoke ALL paired devices immediately? All clients will be disconnected.'
-                    )
-                  ) {
-                    triggerHaptic('heavy');
-                    onRevokeAllDevices?.(false);
-                    onOpenChange(false);
+              {onUnpairThisDevice && (
+                <button
+                  onClick={onUnpairThisDevice}
+                  className="w-full py-2.5 px-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium hover:bg-destructive/20 transition-colors"
+                >
+                  Unpair This Phone
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* PAGE 2: Navigation & Launcher */}
+          {activePage === 'navigation' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3">
+                <div>
+                  <div className="text-xs font-semibold text-foreground">
+                    Pinned Bottom Tabs ({navConfig.pinned.length}/4)
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Select up to 4 sections for instant bottom bar access. Others remain in More launcher.
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 divide-y divide-border/20 pt-1">
+                  {ALL_NAV_SECTIONS.filter((s) => s.id !== 'more').map((sec) => {
+                    const isPinned = navConfig.pinned.includes(sec.id);
+                    return (
+                      <div
+                        key={sec.id}
+                        className="flex items-center justify-between pt-2 first:pt-0 text-xs"
+                      >
+                        <div>
+                          <div className="font-medium text-foreground">{sec.label}</div>
+                          <div className="text-[11px] text-muted-foreground">{sec.description}</div>
+                        </div>
+                        <button
+                          onClick={() => handleTogglePin(sec.id)}
+                          className={`px-3 py-1 rounded-lg font-medium text-xs transition-colors ${
+                            isPinned
+                              ? 'bg-[#FF5A1F] text-white'
+                              : 'bg-secondary text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {isPinned ? 'Pinned' : 'Pin'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Default Tab Selection */}
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-semibold text-foreground">Default Tab on Launch</div>
+                <div className="text-[11px] text-muted-foreground">
+                  The screen AEROKIN opens automatically when launched.
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  {navConfig.pinned.map((tabId) => (
+                    <button
+                      key={tabId}
+                      onClick={() => handleDefaultTabSelect(tabId)}
+                      className={`p-2.5 rounded-xl border text-xs font-medium capitalize transition-all ${
+                        navConfig.defaultTab === tabId
+                          ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                          : 'border-border/40 bg-secondary/40 text-foreground hover:bg-secondary'
+                      }`}
+                    >
+                      {tabId}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PAGE 3: Trackpad */}
+          {activePage === 'trackpad' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-foreground">Pointer Speed</span>
+                  <span className="font-mono text-muted-foreground">
+                    {trackpadConfig.pointerSpeed.toFixed(1)}x
+                  </span>
+                </div>
+                <Slider
+                  value={[trackpadConfig.pointerSpeed]}
+                  min={0.5}
+                  max={3.0}
+                  step={0.1}
+                  onValueChange={([val]) => onTrackpadConfigChange({ pointerSpeed: val })}
+                />
+              </div>
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-foreground">Scroll Sensitivity</span>
+                  <span className="font-mono text-muted-foreground">
+                    {trackpadConfig.scrollSensitivityY.toFixed(2)}x
+                  </span>
+                </div>
+                <Slider
+                  value={[trackpadConfig.scrollSensitivityY]}
+                  min={0.05}
+                  max={1.5}
+                  step={0.05}
+                  onValueChange={([val]) =>
+                    onTrackpadConfigChange({ scrollSensitivityX: val, scrollSensitivityY: val })
                   }
-                }}
-                className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-optic-red/20 bg-optic-red/5 hover:bg-optic-red/15 text-xs text-optic-red font-semibold transition-colors flex items-center justify-center gap-1.5"
+                />
+              </div>
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">Natural Scrolling</span>
+                  <Switch
+                    checked={trackpadConfig.naturalScroll}
+                    onCheckedChange={(checked) => onTrackpadConfigChange({ naturalScroll: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                  <span className="font-medium text-foreground">Scroll Haptics (Detents)</span>
+                  <Switch
+                    checked={trackpadConfig.scrollHaptics}
+                    onCheckedChange={(checked) => onTrackpadConfigChange({ scrollHaptics: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                  <span className="font-medium text-foreground">Momentum Scrolling</span>
+                  <Switch
+                    checked={trackpadConfig.momentum}
+                    onCheckedChange={(checked) => onTrackpadConfigChange({ momentum: checked })}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={onResetTrackpadConfig}
+                className="w-full py-2 px-3 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium transition-colors"
               >
-                <Trash size={14} />
-                <span>Revoke All Devices</span>
+                Reset Trackpad Settings
               </button>
             </div>
-          </div>
+          )}
 
-          {/* Section 5: Diagnostics & Logs */}
-          <div className="space-y-4 pt-4 border-t border-border/80">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Pulse size={14} className="text-accent" />
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Diagnostics & Logs
-                </h3>
+          {/* PAGE 4: Desktop Remote */}
+          {activePage === 'desktop' && desktopSettings && onDesktopSettingsChange && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-medium text-foreground">Default Quality Preset</div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {(['balanced', 'fast', 'high', 'ultra', 'tiny', 'low'] as QualityPresetName[]).map(
+                    (p) => (
+                      <button
+                        key={p}
+                        onClick={() => onDesktopSettingsChange({ defaultPreset: p })}
+                        className={`p-2 rounded-xl border text-xs font-medium capitalize transition-all ${
+                          desktopSettings.defaultPreset === p
+                            ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                            : 'border-border/40 bg-secondary/40 text-foreground'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                    status === 'connected'
-                      ? 'bg-optic-green/10 text-optic-green border-optic-green/30'
-                      : status === 'reconnecting'
-                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                      : 'bg-muted/20 text-muted-foreground border-border'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      status === 'connected'
-                        ? 'bg-optic-green'
-                        : status === 'reconnecting'
-                        ? 'bg-amber-500'
-                        : 'bg-muted-foreground'
-                    }`}
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-foreground">Framerate Cap</span>
+                  <span className="font-mono text-muted-foreground">{desktopSettings.fpsCap} FPS</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[30, 60].map((fps) => (
+                    <button
+                      key={fps}
+                      onClick={() => onDesktopSettingsChange({ fpsCap: fps })}
+                      className={`p-2 rounded-xl border text-xs font-medium transition-all ${
+                        desktopSettings.fpsCap === fps
+                          ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                          : 'border-border/40 bg-secondary/40 text-foreground'
+                      }`}
+                    >
+                      {fps} FPS
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">Show Real-time Stream Stats</span>
+                  <Switch
+                    checked={desktopSettings.showStats}
+                    onCheckedChange={(checked) => onDesktopSettingsChange({ showStats: checked })}
                   />
-                  {status}
-                </span>
-                {latency !== null && (
-                  <span className="font-mono text-[11px] text-muted-foreground bg-surface px-1.5 py-0.5 rounded border border-border">
-                    {latency}ms
-                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                  <span className="font-medium text-foreground">Auto-Hide Toolbar</span>
+                  <Switch
+                    checked={desktopSettings.autoHideToolbar}
+                    onCheckedChange={(checked) => onDesktopSettingsChange({ autoHideToolbar: checked })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PAGE 5: Media Player */}
+          {activePage === 'media' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-medium text-foreground">Seek Interval</div>
+                <div className="grid grid-cols-4 gap-2 pt-1">
+                  {[5, 10, 15, 30].map((sec) => (
+                    <button
+                      key={sec}
+                      onClick={() => {
+                        setSeekInterval(sec);
+                        localStorage.setItem('aerokin_seek_interval', String(sec));
+                        triggerHaptic('light');
+                      }}
+                      className={`py-2 rounded-xl border text-xs font-medium font-mono transition-all ${
+                        seekInterval === sec
+                          ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                          : 'border-border/40 bg-secondary/40 text-foreground'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-medium text-foreground">Seek Method</div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => onSeekMethodChange('auto')}
+                    className={`py-2 rounded-xl border text-xs font-medium transition-all ${
+                      seekMethod === 'auto'
+                        ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                        : 'border-border/40 bg-secondary/40 text-foreground'
+                    }`}
+                  >
+                    Auto (SMTC Native)
+                  </button>
+                  <button
+                    onClick={() => onSeekMethodChange('keys')}
+                    className={`py-2 rounded-xl border text-xs font-medium transition-all ${
+                      seekMethod === 'keys'
+                        ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                        : 'border-border/40 bg-secondary/40 text-foreground'
+                    }`}
+                  >
+                    Hotkeys (VLC Alt+Arrow)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PAGE 6: Haptics */}
+          {activePage === 'haptics' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-foreground">Master Haptics</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Vibration feedback on touches & button presses.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={hapticsEnabled}
+                    onCheckedChange={(checked) => {
+                      setHapticsEnabled(checked);
+                      localStorage.setItem('aerokin_haptics_enabled', String(checked));
+                      if (checked) triggerHaptic('light');
+                    }}
+                  />
+                </div>
+
+                {hapticsEnabled && (
+                  <div className="border-t border-border/20 pt-3 space-y-2">
+                    <div className="font-medium text-foreground">Haptic Intensity</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['light', 'medium', 'heavy'] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          onClick={() => {
+                            setHapticsIntensity(lvl);
+                            localStorage.setItem('aerokin_haptics_intensity', lvl);
+                            triggerHaptic(lvl);
+                          }}
+                          className={`py-2 rounded-xl border text-xs font-medium capitalize transition-all ${
+                            hapticsIntensity === lvl
+                              ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                              : 'border-border/40 bg-secondary/40 text-foreground'
+                          }`}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
+          )}
 
-            {/* Diagnostic Details Grid */}
-            <div className="rounded-xl bg-surface border border-border p-3.5 space-y-2 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Host:</span>
-                <span className="font-mono text-foreground">{host || 'Not connected'}</span>
+          {/* PAGE 7: Display & Layout */}
+          {activePage === 'display' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-foreground">Screen Wake Lock</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Keep phone screen awake while connected.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={keepAwake}
+                    onCheckedChange={(checked) => {
+                      setKeepAwake(checked);
+                      localStorage.setItem('aerokin_display_keep_awake', String(checked));
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                  <div>
+                    <div className="font-medium text-foreground">Left-Handed Layout</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Invert toolbar icons for thumb access.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={leftHandedLayout}
+                    onCheckedChange={(checked) => {
+                      setLeftHandedLayout(checked);
+                      localStorage.setItem('aerokin_left_handed', String(checked));
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                  <div>
+                    <div className="font-medium text-foreground">Reduce Motion Override</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Disable smooth transitions for maximum battery saving.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={reduceMotionOverride}
+                    onCheckedChange={(checked) => {
+                      setReduceMotionOverride(checked);
+                      localStorage.setItem('aerokin_reduce_motion', String(checked));
+                    }}
+                  />
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Device ID:</span>
-                <span className="font-mono text-foreground">
-                  {deviceId ? `${deviceId.slice(0, 10)}...` : 'Unknown'}
-                </span>
+            </div>
+          )}
+
+          {/* PAGE 8: Clipboard */}
+          {activePage === 'clipboard' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-medium text-foreground">Clipboard Security Standard</div>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Clipboard contents are never logged anywhere on PC or mobile. Text is size-limited
+                  to 100 KB and stored only in volatile memory.
+                </p>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Stream:</span>
-                <span className="font-mono text-foreground">
-                  {desktopStats
-                    ? `${desktopStats.fps} fps · ${(desktopStats.bitrateKbps / 1000).toFixed(1)} Mbps · ${desktopStats.droppedFrames} drop`
-                    : 'Inactive'}
-                </span>
+            </div>
+          )}
+
+          {/* PAGE 9: Quick Actions */}
+          {activePage === 'actions' && (
+            <div className="space-y-4">
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="font-medium text-foreground">Safety Whitelist Model</div>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Every PC action is a fixed enum in code. Dangerous actions (Shutdown, Restart) trigger
+                  a 10-second cancelable countdown on the PC dashboard.
+                </p>
               </div>
-              {lastCloseCode !== null && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Last Close:</span>
-                  <span className="font-mono text-foreground text-[11px]">
-                    {lastCloseCode} {lastCloseReason ? `(${lastCloseReason})` : ''}
-                  </span>
-                </div>
-              )}
             </div>
+          )}
 
-            {/* Diagnostics Actions */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={async () => {
-                  triggerHaptic('light');
-                  const report = formatDiagnosticsReport(
-                    { status, host, deviceId: deviceId ?? null, latency, desktopStats, lastCloseCode, lastCloseReason },
-                    events
-                  );
-                  try {
-                    await navigator.clipboard.writeText(report);
-                    setCopiedDiag(true);
-                    setTimeout(() => setCopiedDiag(false), 2000);
-                  } catch (err) {
-                    console.error('Failed to copy diagnostics', err);
-                  }
-                }}
-                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
-                title="Copy full diagnostics report"
-              >
-                {copiedDiag ? <Check size={13} className="text-optic-green" /> : <Copy size={13} />}
-                <span>{copiedDiag ? 'Copied' : 'Copy'}</span>
-              </button>
+          {/* PAGE 10: Diagnostics */}
+          {activePage === 'diagnostics' && (
+            <div className="space-y-4">
+              {onRunLatencyTest && (
+                <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
+                  <div className="font-medium text-foreground">Live Round-Trip Latency Benchmark</div>
+                  <button
+                    onClick={async () => {
+                      setTestingLatency(true);
+                      try {
+                        const res = await onRunLatencyTest();
+                        setLatencyBenchResult(res);
+                      } finally {
+                        setTestingLatency(false);
+                      }
+                    }}
+                    disabled={testingLatency}
+                    className="w-full py-2 px-3 rounded-xl bg-secondary text-foreground font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                  >
+                    {testingLatency ? 'Sampling 20 pings...' : 'Run 20-Sample Latency Benchmark'}
+                  </button>
 
-              <button
-                onClick={async () => {
-                  triggerHaptic('light');
-                  const report = formatDiagnosticsReport(
-                    { status, host, deviceId: deviceId ?? null, latency, desktopStats, lastCloseCode, lastCloseReason },
-                    events
-                  );
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({
-                        title: 'AeroKin Diagnostics Report',
-                        text: report,
-                      });
-                    } catch {}
-                  } else {
-                    try {
-                      await navigator.clipboard.writeText(report);
-                      setCopiedDiag(true);
-                      setTimeout(() => setCopiedDiag(false), 2000);
-                    } catch {}
-                  }
-                }}
-                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-1.5"
-                title="Share diagnostics report"
-              >
-                <ShareNetwork size={13} />
-                <span>Share</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  triggerHaptic('medium');
-                  diagnosticsLogger.clear();
-                  setEvents([]);
-                }}
-                className="min-h-[40px] px-2 py-1.5 rounded-xl border border-border bg-raised hover:bg-border text-xs text-muted-foreground hover:text-optic-red transition-colors flex items-center justify-center gap-1.5"
-                title="Clear local event logs"
-              >
-                <Trash size={13} />
-                <span>Clear</span>
-              </button>
-            </div>
-
-            {/* Run Latency Test Button in Drawer */}
-            <div className="pt-1">
-              <button
-                onClick={async () => {
-                  triggerHaptic('light');
-                  if (onRunLatencyTest) {
-                    setTestingLatency(true);
-                    try {
-                      const res = await onRunLatencyTest();
-                      setLatencyBenchResult(res);
-                      setTimeout(() => setLatencyBenchResult(null), 8000);
-                    } catch {}
-                    setTestingLatency(false);
-                  }
-                }}
-                disabled={testingLatency || status !== 'connected'}
-                className="w-full min-h-[40px] px-3 py-2 rounded-xl border border-border bg-raised hover:bg-border text-xs text-foreground font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Pulse size={14} className={testingLatency ? 'animate-spin text-accent' : 'text-accent'} />
-                <span>{testingLatency ? 'Running Latency Benchmark (10 pings)...' : 'Run Latency Benchmark'}</span>
-              </button>
-              {latencyBenchResult && (
-                <div className="mt-2 p-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent font-mono text-xs flex justify-between items-center">
-                  <span>min: {latencyBenchResult.min}ms</span>
-                  <span>avg: {latencyBenchResult.avg}ms</span>
-                  <span>max: {latencyBenchResult.max}ms</span>
-                  <span className="font-semibold">p95: {latencyBenchResult.p95}ms</span>
-                </div>
-              )}
-            </div>
-
-            {/* Expandable Client Ring Buffer Log */}
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              <button
-                onClick={() => setShowEventLog((v) => !v)}
-                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs text-foreground hover:bg-raised transition-colors"
-              >
-                <span className="font-medium flex items-center gap-1.5">
-                  Client Event Log
-                  <span className="font-mono text-[10px] text-muted-foreground bg-raised px-1.5 py-0.5 rounded border border-border">
-                    {events.length}
-                  </span>
-                </span>
-                {showEventLog ? <CaretUp size={14} /> : <CaretDown size={14} />}
-              </button>
-
-              {showEventLog && (
-                <div className="p-2.5 border-t border-border bg-black/40 max-h-48 overflow-y-auto space-y-1.5 font-mono text-[11px]">
-                  {events.length === 0 ? (
-                    <div className="text-muted-foreground text-center py-2 text-xs">No client events logged yet</div>
-                  ) : (
-                    events
-                      .slice()
-                      .reverse()
-                      .map((ev) => (
-                        <div key={ev.id} className="flex items-start gap-1.5 leading-snug break-all">
-                          <span className="text-muted-foreground shrink-0 text-[10px]">
-                            {new Date(ev.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </span>
-                          <span
-                            className={`text-[9px] px-1 py-0.2 rounded shrink-0 font-sans uppercase font-semibold ${
-                              ev.level === 'error'
-                                ? 'bg-optic-red/20 text-optic-red'
-                                : ev.level === 'warn'
-                                ? 'bg-amber-500/20 text-amber-500'
-                                : 'bg-surface text-muted-foreground border border-border'
-                            }`}
-                          >
-                            {ev.category}
-                          </span>
-                          <span className="text-foreground/90">{ev.message}</span>
-                        </div>
-                      ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Expandable Server Agent Logs */}
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              <button
-                onClick={() => {
-                  setShowAgentLogs((v) => !v);
-                  if (!showAgentLogs && onRequestAgentLogs) {
-                    setFetchingLogs(true);
-                    onRequestAgentLogs(50);
-                    setTimeout(() => setFetchingLogs(false), 800);
-                  }
-                }}
-                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs text-foreground hover:bg-raised transition-colors"
-              >
-                <span className="font-medium flex items-center gap-1.5">
-                  <TerminalWindow size={14} className="text-muted-foreground" />
-                  Agent Server Logs
-                  {agentLogs && agentLogs.length > 0 && (
-                    <span className="font-mono text-[10px] text-muted-foreground bg-raised px-1.5 py-0.5 rounded border border-border">
-                      {agentLogs.length}
-                    </span>
-                  )}
-                </span>
-                <div className="flex items-center gap-2">
-                  {fetchingLogs && <span className="text-[10px] text-accent animate-pulse">Loading...</span>}
-                  {showAgentLogs ? <CaretUp size={14} /> : <CaretDown size={14} />}
-                </div>
-              </button>
-
-              {showAgentLogs && (
-                <div className="p-2.5 border-t border-border bg-black/40 max-h-48 overflow-y-auto space-y-1 font-mono text-[11px]">
-                  {agentLogs && agentLogs.length > 0 ? (
-                    agentLogs.map((log: any, idx: number) => (
-                      <div key={log.id || idx} className="text-foreground/80 leading-snug break-all flex items-start gap-1.5">
-                        <span className="text-muted-foreground shrink-0 text-[10px]">
-                          {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour12: false }) : ''}
-                        </span>
-                        <span
-                          className={`text-[9px] px-1 py-0.2 rounded shrink-0 uppercase font-sans font-semibold ${
-                            log.level === 'error'
-                              ? 'bg-optic-red/20 text-optic-red'
-                              : log.level === 'warn'
-                              ? 'bg-amber-500/20 text-amber-500'
-                              : 'bg-surface text-muted-foreground border border-border'
-                          }`}
-                        >
-                          {log.category || 'server'}
-                        </span>
-                        <span>{log.message}</span>
+                  {latencyBenchResult && (
+                    <div className="grid grid-cols-4 gap-2 pt-1 text-center font-mono text-[11px]">
+                      <div className="bg-muted/40 p-1.5 rounded-lg">
+                        <div className="text-muted-foreground text-[10px]">MIN</div>
+                        <div className="text-foreground">{latencyBenchResult.min}ms</div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-muted-foreground text-center py-2 text-xs">
-                      {fetchingLogs ? 'Requesting server logs...' : 'No server logs received yet'}
+                      <div className="bg-muted/40 p-1.5 rounded-lg">
+                        <div className="text-muted-foreground text-[10px]">AVG</div>
+                        <div className="text-emerald-400 font-bold">{latencyBenchResult.avg}ms</div>
+                      </div>
+                      <div className="bg-muted/40 p-1.5 rounded-lg">
+                        <div className="text-muted-foreground text-[10px]">P95</div>
+                        <div className="text-foreground">{latencyBenchResult.p95}ms</div>
+                      </div>
+                      <div className="bg-muted/40 p-1.5 rounded-lg">
+                        <div className="text-muted-foreground text-[10px]">MAX</div>
+                        <div className="text-foreground">{latencyBenchResult.max}ms</div>
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
-          </div>
+          )}
+
+          {/* PAGE 11: About */}
+          {activePage === 'about' && (
+            <div className="space-y-4 text-xs">
+              <div className="bg-card border border-border/40 rounded-2xl p-4 text-center space-y-1.5">
+                <div className="text-base font-bold text-foreground">AEROKIN</div>
+                <div className="text-xs text-[#FF5A1F] font-mono">Version 1.0.0 (Production)</div>
+                <p className="text-muted-foreground text-[11px] pt-1">
+                  Air-mouse, precision trackpad, desktop remote and presentation remote.
+                </p>
+              </div>
+
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                  <Shield size={14} className="text-emerald-400" />
+                  <span>Strict LAN Isolation</span>
+                </div>
+                <p>
+                  No internet access, cloud relay, STUN/TURN, or third-party telemetry. All communications
+                  stay 100% on your local Wi-Fi network.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

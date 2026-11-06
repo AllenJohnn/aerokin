@@ -20,10 +20,24 @@ import {
   saveDesktopSettings,
 } from './types/desktop';
 import {
+  NavConfig,
+  NavSectionId,
+  loadNavConfig,
+  saveNavConfig,
+  DEFAULT_NAV_CONFIG,
+} from './engine/navigationConfig';
+import {
   HandPointing,
   PlayPause,
   Gear,
   Monitor,
+  Lightning,
+  Cpu,
+  ClipboardText,
+  Camera,
+  Presentation,
+  SquaresFour,
+  CaretLeft,
 } from '@phosphor-icons/react';
 
 // Code-split heavy views using React.lazy for faster initial mobile bundle
@@ -36,6 +50,37 @@ const MediaTab = lazy(() =>
 const SettingsDrawer = lazy(() =>
   import('./components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer }))
 );
+const ScreenshotTab = lazy(() =>
+  import('./components/ScreenshotTab').then((m) => ({ default: m.ScreenshotTab }))
+);
+const SystemTab = lazy(() =>
+  import('./components/SystemTab').then((m) => ({ default: m.SystemTab }))
+);
+const ClipboardTab = lazy(() =>
+  import('./components/ClipboardTab').then((m) => ({ default: m.ClipboardTab }))
+);
+const QuickActionsTab = lazy(() =>
+  import('./components/QuickActionsTab').then((m) => ({ default: m.QuickActionsTab }))
+);
+const PresentTab = lazy(() =>
+  import('./components/PresentTab').then((m) => ({ default: m.PresentTab }))
+);
+const MoreLauncher = lazy(() =>
+  import('./components/MoreLauncher').then((m) => ({ default: m.MoreLauncher }))
+);
+
+const NAV_ITEM_DEFS: Record<NavSectionId, { label: string; icon: React.ComponentType<any> }> = {
+  desktop: { label: 'Desktop', icon: Monitor },
+  trackpad: { label: 'Trackpad', icon: HandPointing },
+  media: { label: 'Media', icon: PlayPause },
+  actions: { label: 'Actions', icon: Lightning },
+  system: { label: 'System', icon: Cpu },
+  clipboard: { label: 'Clipboard', icon: ClipboardText },
+  screenshot: { label: 'Capture', icon: Camera },
+  present: { label: 'Present', icon: Presentation },
+  settings: { label: 'Settings', icon: Gear },
+  more: { label: 'More', icon: SquaresFour },
+};
 
 const STORAGE_SEEK_METHOD_KEY = 'aerokin_seek_method';
 
@@ -102,10 +147,36 @@ export const App: React.FC = () => {
     return window.matchMedia('(min-width: 768px) and (pointer: fine)').matches;
   });
 
-  // 5. Navigation Tabs (Desktop, Trackpad, Media)
-  const [activeTab, setActiveTab] = useState<'desktop' | 'trackpad' | 'media'>('trackpad');
+  // 5. Navigation Config & Tabs (Desktop, Trackpad, Media, More, and pinned sub-views)
+  const [navConfig, setNavConfig] = useState<NavConfig>(() => loadNavConfig());
+  const [activeTab, setActiveTab] = useState<NavSectionId>(() => {
+    const initial = loadNavConfig();
+    return initial.defaultTab || 'trackpad';
+  });
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+
+  const handleNavConfigChange = (newConfig: NavConfig) => {
+    setNavConfig(newConfig);
+    saveNavConfig(newConfig);
+  };
+
+  const handleResetAllSettings = () => {
+    handleResetTrackpadConfig();
+    handleSeekMethodChange('auto');
+    handleDesktopSettingsChange({
+      defaultPreset: 'balanced',
+      fpsCap: 30,
+      inputMode: 'direct',
+      showStats: false,
+      autoHideToolbar: true,
+    });
+    handleNavConfigChange({
+      version: 1,
+      pinned: ['desktop', 'trackpad', 'media', 'more'],
+      defaultTab: 'trackpad',
+    });
+  };
 
   // 6. WebSocket Connection Engine
   const {
@@ -160,17 +231,41 @@ export const App: React.FC = () => {
     agentLogs,
     requestAgentLogs,
     runLatencyTest,
+    requestScreenshot,
+    lastScreenshot,
+    subscribeStats,
+    unsubscribeStats,
+    systemStats,
+    getClipboard,
+    setClipboard,
+    setClipboardAndPaste,
+    clearClipboardHistory,
+    lastClipboardText,
+    lastClipboardLength,
+    clipboardError,
+    executeQuickAction,
+    requestLauncherList,
+    lastActionResult,
+    launcherEntries,
+    featureFlags,
   } = useAerokinSocket();
 
-  const tabs = [
-    { id: 'desktop', label: 'Desktop', icon: Monitor },
-    { id: 'trackpad', label: 'Trackpad', icon: HandPointing },
-    { id: 'media', label: 'Media', icon: PlayPause },
-  ] as const;
-
-  const handleTabChange = (newTabId: 'desktop' | 'trackpad' | 'media') => {
+  const handleTabChange = (newTabId: NavSectionId) => {
     triggerHaptic('light');
+    if (newTabId === 'settings') {
+      setShowSettingsDrawer(true);
+      return;
+    }
     setActiveTab(newTabId);
+  };
+
+  const handleSelectMoreSection = (section: NavSectionId) => {
+    triggerHaptic('light');
+    if (section === 'settings') {
+      setShowSettingsDrawer(true);
+      return;
+    }
+    setActiveTab(section);
   };
 
   // Render Desktop Dashboard if on /dashboard route or on PC desktop screen (agent-served only)
@@ -332,6 +427,8 @@ export const App: React.FC = () => {
         <SettingsDrawer
           isOpen={showSettingsDrawer}
           onOpenChange={setShowSettingsDrawer}
+          navConfig={navConfig}
+          onNavConfigChange={handleNavConfigChange}
           trackpadConfig={trackpadConfig}
           onTrackpadConfigChange={handleTrackpadConfigChange}
           onResetTrackpadConfig={handleResetTrackpadConfig}
@@ -347,6 +444,7 @@ export const App: React.FC = () => {
           onLogout={logout}
           onUnpairThisDevice={unpairThisDevice}
           onOpenAuthModal={() => setShowAuthModal(true)}
+          onResetAllSettings={handleResetAllSettings}
         />
       </div>
     );
@@ -389,15 +487,34 @@ export const App: React.FC = () => {
       {/* Top Bar: logo mark left, small connection status center-left, settings icon right */}
       <header className="flex items-center justify-between px-gutter h-13 min-h-[52px] border-b border-border bg-bg z-30">
         <div className="flex items-center gap-3">
-          {/* Logo mark (no wordmark under 400px) */}
-          <div className="flex items-center flex-shrink-0">
-            <div className="min-[400px]:hidden">
-              <AerokinLogo size={24} />
+          {/* Subview Back Button OR Logo */}
+          {!navConfig.pinned.includes(activeTab) && activeTab !== 'more' ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setActiveTab('more');
+                }}
+                className="flex items-center gap-1 text-xs text-[#FF5A1F] hover:underline font-medium min-h-[44px] min-w-[44px] -ml-2 px-2 active:opacity-70 transition-opacity"
+                aria-label="Back to More menu"
+              >
+                <CaretLeft size={18} weight="bold" />
+                <span>More</span>
+              </button>
+              <span className="text-sm font-semibold text-foreground truncate max-w-[160px]">
+                {NAV_ITEM_DEFS[activeTab]?.label || 'Tool'}
+              </span>
             </div>
-            <div className="hidden min-[400px]:block">
-              <AerokinLogo size={24} withWordmark />
+          ) : (
+            <div className="flex items-center flex-shrink-0">
+              <div className="min-[400px]:hidden">
+                <AerokinLogo size={24} />
+              </div>
+              <div className="hidden min-[400px]:block">
+                <AerokinLogo size={24} withWordmark />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Small connection status: dot + latency / status */}
           <button
@@ -514,26 +631,155 @@ export const App: React.FC = () => {
               </Suspense>
             </motion.div>
           )}
+
+          {activeTab === 'more' && (
+            <motion.div
+              key="more"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading More Tools...</div>}>
+                <MoreLauncher
+                  onSelectSection={handleSelectMoreSection}
+                  systemSummary={systemStats ? `${systemStats.cpu.totalPercent.toFixed(0)}% CPU • ${(systemStats.ram.usedBytes / 1e9).toFixed(1)} GB RAM` : undefined}
+                  clipboardCount={lastClipboardLength ?? undefined}
+                  activeWindow={nowPlaying?.app}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'screenshot' && (
+            <motion.div
+              key="screenshot"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Screenshot Tool...</div>}>
+                <ScreenshotTab
+                  onRequestScreenshot={requestScreenshot}
+                  lastScreenshot={lastScreenshot}
+                  monitors={desktopMonitors}
+                  onSendToPcClipboard={setClipboard}
+                  featureEnabled={featureFlags.screenshot}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'system' && (
+            <motion.div
+              key="system"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading System Stats...</div>}>
+                <SystemTab
+                  stats={systemStats}
+                  onSubscribe={subscribeStats}
+                  onUnsubscribe={unsubscribeStats}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'clipboard' && (
+            <motion.div
+              key="clipboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Clipboard Sync...</div>}>
+                <ClipboardTab
+                  onGetPcClipboard={getClipboard}
+                  onSetPcClipboard={setClipboard}
+                  onSetPcClipboardAndPaste={setClipboardAndPaste}
+                  onClearHistory={clearClipboardHistory}
+                  pcClipboardText={lastClipboardText}
+                  pcClipboardLength={lastClipboardLength}
+                  clipboardError={clipboardError}
+                  featureEnabled={featureFlags.clipboard}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'actions' && (
+            <motion.div
+              key="actions"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Quick Actions...</div>}>
+                <QuickActionsTab
+                  onExecuteAction={executeQuickAction}
+                  onRequestLauncherList={requestLauncherList}
+                  lastActionResult={lastActionResult}
+                  launcherEntries={launcherEntries}
+                  onNavigateToScreenshot={() => setActiveTab('screenshot')}
+                  featureEnabled={featureFlags.quickActions}
+                  launcherEnabled={featureFlags.launcher}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+
+          {activeTab === 'present' && (
+            <motion.div
+              key="present"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col overflow-hidden"
+            >
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Presentation Remote...</div>}>
+                <PresentTab
+                  onSendKey={sendKey}
+                  onSendMove={sendMove}
+                />
+              </Suspense>
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
-      {/* Tab bar: 2 equal tabs (Trackpad, Media), icon above short label, spring-sliding indicator */}
+      {/* Dynamic Bottom Nav: Up to 4 pinned tabs */}
       <nav className="px-gutter pt-1 pb-safe flex justify-center z-20 bg-bg border-t border-border">
         <div className="relative flex items-center w-full max-w-sm h-14">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+          {navConfig.pinned.map((tabId: NavSectionId) => {
+            const def = NAV_ITEM_DEFS[tabId];
+            if (!def) return null;
+            const Icon = def.icon;
+            const isTabActive =
+              activeTab === tabId || (!navConfig.pinned.includes(activeTab) && tabId === 'more');
+
             return (
               <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
+                key={tabId}
+                onClick={() => handleTabChange(tabId)}
                 className={`relative flex-1 flex flex-col items-center justify-center py-1.5 h-12 rounded-xl transition-colors z-10 cursor-pointer min-h-[48px] ${
-                  isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  isTabActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
-                aria-selected={isActive}
+                aria-selected={isTabActive}
                 role="tab"
               >
-                {isActive && (
+                {isTabActive && (
                   <motion.div
                     layoutId="activeTabIndicator"
                     transition={{ type: 'spring', stiffness: 400, damping: 34 }}
@@ -543,11 +789,11 @@ export const App: React.FC = () => {
                 <Icon
                   size={20}
                   className={`z-10 transition-colors ${
-                    isActive ? 'text-accent' : 'text-muted-foreground'
+                    isTabActive ? 'text-accent' : 'text-muted-foreground'
                   }`}
                 />
                 <span className="z-10 text-[11px] font-medium leading-tight mt-0.5 whitespace-nowrap">
-                  {tab.label}
+                  {def.label}
                 </span>
               </button>
             );
@@ -560,6 +806,8 @@ export const App: React.FC = () => {
         <SettingsDrawer
           isOpen={showSettingsDrawer}
           onOpenChange={setShowSettingsDrawer}
+          navConfig={navConfig}
+          onNavConfigChange={handleNavConfigChange}
           trackpadConfig={trackpadConfig}
           onTrackpadConfigChange={handleTrackpadConfigChange}
           onResetTrackpadConfig={handleResetTrackpadConfig}
@@ -586,6 +834,7 @@ export const App: React.FC = () => {
           agentLogs={agentLogs}
           onRequestAgentLogs={requestAgentLogs}
           onRunLatencyTest={runLatencyTest}
+          onResetAllSettings={handleResetAllSettings}
         />
       </Suspense>
 

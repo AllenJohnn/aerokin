@@ -23,7 +23,36 @@ import {
   Desktop,
   MusicNotes,
   X,
+  Cpu,
+  HardDrive,
+  Power,
+  Lightning,
+  ClipboardText,
+  Camera,
+  RocketLaunch,
+  ArrowUp,
+  ArrowDown,
+  ListChecks,
 } from '@phosphor-icons/react';
+
+export interface FeatureFlags {
+  clipboard: boolean;
+  screenshot: boolean;
+  quickActions: boolean;
+  launcher: boolean;
+}
+
+export interface CountdownState {
+  active: boolean;
+  action: 'shutdown' | 'restart' | 'sign_out' | null;
+  secondsRemaining: number;
+}
+
+export interface RecentAction {
+  action: string;
+  time: number;
+  success: boolean;
+}
 
 export interface EnrichedDevice {
   deviceId: string;
@@ -84,6 +113,22 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   const [desktopStream, setDesktopStream] = useState<any>(null);
   const [mediaStatus, setMediaStatus] = useState<any>(null);
 
+  // Features, Actions & System Telemetry State
+  const [features, setFeatures] = useState<FeatureFlags>({
+    clipboard: true,
+    screenshot: true,
+    quickActions: true,
+    launcher: true,
+  });
+  const [countdownState, setCountdownState] = useState<CountdownState>({
+    active: false,
+    action: null,
+    secondsRemaining: 0,
+  });
+  const [recentActions, setRecentActions] = useState<RecentAction[]>([]);
+  const [clipboardSharedCount, setClipboardSharedCount] = useState<number>(0);
+  const [systemTelemetry, setSystemTelemetry] = useState<any>(null);
+
   // QR Code data URLs
   const [pairQrUrl, setPairQrUrl] = useState<string | null>(null);
   const [trustQrUrl, setTrustQrUrl] = useState<string | null>(null);
@@ -138,6 +183,36 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
           if (data.pc) setPcStats(data.pc);
           if (data.desktop) setDesktopStream(data.desktop);
           if (data.media) setMediaStatus(data.media);
+          if (data.features) setFeatures(data.features);
+          if (data.actions) {
+            if (data.actions.countdown) setCountdownState(data.actions.countdown);
+            if (Array.isArray(data.actions.recent)) setRecentActions(data.actions.recent);
+          }
+          if (typeof data.clipboardSharedCount === 'number') {
+            setClipboardSharedCount(data.clipboardSharedCount);
+          }
+          if (data.systemStats) setSystemTelemetry(data.systemStats);
+        } catch {}
+      });
+
+      sse.addEventListener('features_update', (e) => {
+        try {
+          const f = JSON.parse(e.data);
+          if (f) setFeatures(f);
+        } catch {}
+      });
+
+      sse.addEventListener('countdown_update', (e) => {
+        try {
+          const c = JSON.parse(e.data);
+          if (c) setCountdownState(c);
+        } catch {}
+      });
+
+      sse.addEventListener('system_stats', (e) => {
+        try {
+          const s = JSON.parse(e.data);
+          if (s) setSystemTelemetry(s);
         } catch {}
       });
 
@@ -242,6 +317,76 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Periodic poll for stats & actions (every 3s)
+  useEffect(() => {
+    const fetchPoll = () => {
+      fetch('/api/dashboard/stats')
+        .then((r) => r.json())
+        .then((s) => {
+          if (s && !s.error) setSystemTelemetry(s);
+        })
+        .catch(() => {});
+
+      fetch('/api/dashboard/actions')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.recent) setRecentActions(d.recent);
+          if (d.countdown) setCountdownState(d.countdown);
+        })
+        .catch(() => {});
+    };
+
+    fetchPoll();
+    const interval = setInterval(fetchPoll, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Tick shutdown countdown if active
+  useEffect(() => {
+    if (!countdownState.active || countdownState.secondsRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setCountdownState((prev) => {
+        if (!prev.active || prev.secondsRemaining <= 0) return prev;
+        return {
+          ...prev,
+          secondsRemaining: Math.max(0, prev.secondsRemaining - 1),
+        };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdownState.active, countdownState.secondsRemaining]);
+
+  // Cancel shutdown action
+  const handleCancelCountdown = async () => {
+    try {
+      const res = await fetch('/api/dashboard/actions/cancel', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setCountdownState({ active: false, action: null, secondsRemaining: 0 });
+      }
+    } catch {}
+  };
+
+  // Toggle feature flag
+  const handleToggleFeature = async (key: keyof FeatureFlags) => {
+    const nextVal = !features[key];
+    const updated = { ...features, [key]: nextVal };
+    setFeatures(updated);
+    try {
+      const res = await fetch('/api/dashboard/features', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      const data = await res.json();
+      if (data.flags) {
+        setFeatures(data.flags);
+      }
+    } catch {
+      setFeatures(features);
+    }
+  };
 
   // 3. Generate QR Codes
   useEffect(() => {
@@ -490,6 +635,67 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
             </button>
           </div>
         </header>
+
+        {/* Active Dangerous Action Countdown Banner (Shutdown / Restart / Sign Out) */}
+        <AnimatePresence>
+          {countdownState.active && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              className="rounded-2xl border-2 border-rose-500 bg-rose-950/60 backdrop-blur-md p-5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-4">
+                <div className="relative w-12 h-12 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-12 h-12 transform -rotate-90">
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="rgba(244,63,94,0.2)"
+                      strokeWidth="3"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="#f43f5e"
+                      strokeWidth="3"
+                      fill="transparent"
+                      strokeDasharray={125.6}
+                      strokeDashoffset={125.6 * (1 - countdownState.secondsRemaining / 10)}
+                      className="transition-all duration-1000 ease-linear"
+                    />
+                  </svg>
+                  <span className="absolute font-mono text-xs font-bold text-rose-400">
+                    {countdownState.secondsRemaining}s
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Warning size={18} className="text-rose-400 animate-pulse" />
+                    <h3 className="text-sm font-bold text-rose-200 uppercase tracking-wide">
+                      System Action Requested: {countdownState.action?.replace('_', ' ')}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-rose-300/80 mt-0.5">
+                    10-second cancelable delay in progress from remote phone. Cancel immediately to prevent system termination.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCancelCountdown}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold shadow-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <X size={15} />
+                <span>Abort Action ({countdownState.secondsRemaining}s)</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Floating / Prominent Pairing Approval Request (State B) */}
         <AnimatePresence>
@@ -1001,6 +1207,271 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
             )}
           </div>
         )}
+
+        {/* System Telemetry & Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+          {/* 1. System Telemetry Card (7 cols) */}
+          <div className="md:col-span-7 rounded-2xl bg-surface border border-border p-6 flex flex-col gap-5 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Cpu size={18} className="text-[#FF5A1F]" />
+                <h3 className="text-sm font-semibold text-foreground">System Telemetry</h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-raised border border-border text-muted-foreground">
+                Agent CPU: {systemTelemetry?.agentCpuPercent != null ? `${systemTelemetry.agentCpuPercent.toFixed(2)}%` : '<0.02%'}
+              </span>
+            </div>
+
+            {systemTelemetry ? (
+              <div className="flex flex-col gap-4 text-xs font-mono">
+                {/* CPU & RAM Quick Bars */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 rounded-xl bg-raised border border-border/60 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>CPU TOTAL</span>
+                      <span className="text-foreground font-semibold">
+                        {systemTelemetry.cpu?.totalPercent != null ? `${systemTelemetry.cpu.totalPercent.toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#FF5A1F] rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, systemTelemetry.cpu?.totalPercent || 0)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      {systemTelemetry.cpu?.cores?.length || 0} logical cores
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-raised border border-border/60 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>RAM USAGE</span>
+                      <span className="text-foreground font-semibold">
+                        {systemTelemetry.memory?.usedPercent != null ? `${systemTelemetry.memory.usedPercent.toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-400 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, systemTelemetry.memory?.usedPercent || 0)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      {systemTelemetry.memory ? `${(systemTelemetry.memory.usedBytes / 1e9).toFixed(1)} / ${(systemTelemetry.memory.totalBytes / 1e9).toFixed(1)} GB` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Storage & Network */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase text-muted-foreground">Storage Drives</span>
+                    {systemTelemetry.disks && systemTelemetry.disks.length > 0 ? (
+                      systemTelemetry.disks.map((d: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px] bg-raised px-2.5 py-1.5 rounded-lg border border-border/40">
+                          <span className="font-semibold text-foreground">{d.mount}</span>
+                          <span className="text-muted-foreground">
+                            {d.usedGb} / {d.totalGb} GB ({d.percent}%)
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground text-[11px]">Primary drive active</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase text-muted-foreground">Network I/O</span>
+                    <div className="bg-raised p-2.5 rounded-lg border border-border/40 flex flex-col gap-1 text-[11px]">
+                      <div className="flex items-center justify-between text-emerald-400">
+                        <span className="flex items-center gap-1"><ArrowDown size={11} /> DOWN</span>
+                        <span>{systemTelemetry.network?.rxRateKbps != null ? `${systemTelemetry.network.rxRateKbps.toFixed(1)} KB/s` : '0.0 KB/s'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-blue-400">
+                        <span className="flex items-center gap-1"><ArrowUp size={11} /> UP</span>
+                        <span>{systemTelemetry.network?.txRateKbps != null ? `${systemTelemetry.network.txRateKbps.toFixed(1)} KB/s` : '0.0 KB/s'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* GPU & Thermal honest reporting */}
+                <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>GPU Engine: <strong className="text-foreground">{systemTelemetry.gpu?.available ? `${systemTelemetry.gpu.utilization}%` : 'Not available'}</strong></span>
+                  <span>Hardware Thermal: <strong className="text-foreground">{systemTelemetry.temperatures?.available ? `${systemTelemetry.temperatures.main}°C` : 'Not available (driver-free)'}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-muted-foreground font-mono">
+                Awaiting telemetry stream from PC agent...
+              </div>
+            )}
+          </div>
+
+          {/* 2. Security & Features Panel (5 cols) */}
+          <div className="md:col-span-5 rounded-2xl bg-surface border border-border p-6 flex flex-col gap-5 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-emerald-400" />
+                <h3 className="text-sm font-semibold text-foreground">Features & Security</h3>
+              </div>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase">Enforced</span>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Loopback management control. Disabled features are rejected by the server at the protocol boundary.
+            </p>
+
+            <div className="flex flex-col gap-3 text-xs">
+              {/* Clipboard Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-raised border border-border/60">
+                <div className="flex items-center gap-2.5">
+                  <ClipboardText size={16} className="text-[#FF5A1F]" />
+                  <div>
+                    <div className="font-semibold text-foreground">Clipboard Sync</div>
+                    <div className="text-[10px] text-muted-foreground">Text-only, max 100 KB, zero logs</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFeature('clipboard')}
+                  className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    features.clipboard ? 'bg-[#FF5A1F]' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-black shadow transition-transform ${
+                      features.clipboard ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Screenshot Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-raised border border-border/60">
+                <div className="flex items-center gap-2.5">
+                  <Camera size={16} className="text-[#FF5A1F]" />
+                  <div>
+                    <div className="font-semibold text-foreground">Screenshot Capture</div>
+                    <div className="text-[10px] text-muted-foreground">Native Win32 BitBlt, 8 MB limit</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFeature('screenshot')}
+                  className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    features.screenshot ? 'bg-[#FF5A1F]' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-black shadow transition-transform ${
+                      features.screenshot ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Quick Actions Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-raised border border-border/60">
+                <div className="flex items-center gap-2.5">
+                  <Lightning size={16} className="text-[#FF5A1F]" />
+                  <div>
+                    <div className="font-semibold text-foreground">Quick Actions</div>
+                    <div className="text-[10px] text-muted-foreground">Lock, sleep, volume, safe inputs</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFeature('quickActions')}
+                  className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    features.quickActions ? 'bg-[#FF5A1F]' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-black shadow transition-transform ${
+                      features.quickActions ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Launcher Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-raised border border-border/60">
+                <div className="flex items-center gap-2.5">
+                  <RocketLaunch size={16} className="text-[#FF5A1F]" />
+                  <div>
+                    <div className="font-semibold text-foreground">App Launcher</div>
+                    <div className="text-[10px] text-muted-foreground">launcher.json allow-list only</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFeature('launcher')}
+                  className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    features.launcher ? 'bg-[#FF5A1F]' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-black shadow transition-transform ${
+                      features.launcher ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Clipboard Shared Counter Notice (Part 4) */}
+              <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+                <span>Clipboard shared: <strong className="text-foreground">{clipboardSharedCount} items</strong></span>
+                <span className="text-[10px] text-emerald-400">Zero log leakage</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Recent Remote Actions List */}
+        <div className="rounded-2xl bg-surface border border-border p-6 flex flex-col gap-4 shadow-sm">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <ListChecks size={18} className="text-[#FF5A1F]" />
+              <h3 className="text-sm font-semibold text-foreground">Recent Remote Actions</h3>
+            </div>
+            {countdownState.active && (
+              <button
+                onClick={handleCancelCountdown}
+                className="px-3 py-1 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <X size={14} />
+                <span>Cancel {countdownState.action?.replace('_', ' ')} ({countdownState.secondsRemaining}s)</span>
+              </button>
+            )}
+          </div>
+
+          {recentActions.length === 0 ? (
+            <div className="py-4 text-center text-xs text-muted-foreground font-mono">
+              No recent actions executed from mobile controllers.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {recentActions.slice(0, 9).map((act, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl bg-raised border border-border/50 flex items-center justify-between text-xs font-mono"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        act.success ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}
+                    />
+                    <span className="text-foreground font-medium uppercase text-[11px]">
+                      {act.action.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(act.time).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Logs Section (Collapsible Drawer) */}
         <div className="border border-border rounded-2xl bg-surface overflow-hidden flex flex-col">
