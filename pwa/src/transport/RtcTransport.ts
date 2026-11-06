@@ -89,6 +89,9 @@ export class RtcMessageReassembler {
 
     let record = this.pending.get(messageId);
     if (!record) {
+      if (totalChunks <= 0 || totalChunks > 10000) {
+        return null;
+      }
       record = {
         totalChunks,
         receivedCount: 0,
@@ -99,7 +102,7 @@ export class RtcMessageReassembler {
       this.pending.set(messageId, record);
     }
 
-    if (chunkIndex < totalChunks && !record.chunks[chunkIndex]) {
+    if (chunkIndex < record.totalChunks && !record.chunks[chunkIndex]) {
       record.chunks[chunkIndex] = payload;
       record.receivedCount++;
       record.totalBytes += payload.byteLength;

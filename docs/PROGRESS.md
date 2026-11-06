@@ -6,10 +6,36 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 15 (Rigorous Testing - DataChannel Fuzz, Synthetic Network Jitter, Bounded Soak, Chaos Proof).
-- **Exact Next Step**: Add synthetic DataChannel chunking, out-of-order, packet-drop and corruption fuzz test suite in `server/test/transport-rtc.test.ts` or new test file, execute bounded load verification under S8 guidelines, commit and tag `stable-p15`.
+- **Current Milestone**: Part 16 (Documentation & Root README Rewrite).
+- **Exact Next Step**: Completely rewrite root `README.md` with zero 3rd-party tool requirements, self-hosted architecture diagram, iPhone Chrome-Remote-Desktop workflow, quickstart guides, and security invariants. Commit and tag `stable-p16`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 15: Rigorous Testing (Fuzz, Soak, E2E, Chaos) (Completed)
+- **15.1 WebRTC DataChannel Fuzz & Chaos Suite (`transport-rtc.test.ts`)**:
+  - Implemented comprehensive stress and fuzz test suite covering 10 scenarios:
+    1. Small payload fast-path (<56KB) with zero fragmentation.
+    2. Large payload fragmentation (150KB) and byte-identical reassembly.
+    3. Out-of-order chunk assembly and re-sequencing.
+    4. Truncated packet rejection (<12 bytes) without exceptions.
+    5. Out-of-bounds `chunkIndex` protection (`chunkIndex >= record.totalChunks`).
+    6. Excessive `totalChunks` safeguard (`totalChunks > 10000`).
+    7. Idempotent chunk duplication and replay protection.
+    8. 5 concurrent interleaved messages in randomized chunk order under high load.
+    9. Fuzz testing: 500 pseudo-random binary garbage payloads rejected without crashes.
+    10. Stale incomplete message pruning (>15s TTL).
+  - Hardened `RtcMessageReassembler` in both `server/src/transport/RtcTransport.ts` and `pwa/src/transport/RtcTransport.ts`.
+- **15.2 Bounded Load & Streaming Benchmark (`bench:desktop --synthetic`)**:
+  - Executed bounded 9-second synthetic benchmark complying with Rule S8 (isolated PIDs, no real desktop capture):
+    - `high` (1080p H.264 `h264_nvenc`): 28.4 fps, 3.16 Mbps, p50 31ms, p95 35ms, 0.4% CPU.
+    - `balanced` (1440x810 H.264 `h264_nvenc`): 29.3 fps, 1.87 Mbps, p50 31ms, p95 46ms, 1.2% CPU.
+    - `balanced` (1440x810 MJPEG): 35.0 fps, 13.35 Mbps, p50 31ms, p95 47ms, 2.6% CPU.
+  - Zero background process leaks or lingering tasks.
+- **15.3 Verification**:
+  - All 84 PWA tests, 10 signaling tests, and 240 server tests passing cleanly.
+  - Safety check `pnpm run safety:check` passing with 0 violations.
 
 ---
 
@@ -370,8 +396,8 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | COMPLETED | Tagged `stable-p12`. Authenticated file drop to PC, physical keyboard chords, extended shortcut chips. |
 | **Part 13** | Engineering Quality + Performance | COMPLETED | Tagged `stable-p13`. Reconnect jitter, device map cleanup on revocation, backpressure drop verified. |
 | **Part 14** | Dashboard Polish & Remote Cards | COMPLETED | Tagged `stable-p14`. Remote WebRTC Status Card, LAN/Remote QR toggle, 1-click copy. |
-| **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | IN PROGRESS | |
-| **Part 16** | Documentation & Root README Rewrite | PENDING | |
+| **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | COMPLETED | Tagged `stable-p15`. 10 DataChannel fuzz/chaos tests, bounded synthetic benchmark. |
+| **Part 16** | Documentation & Root README Rewrite | IN PROGRESS | |
 | **Part 17** | Final UI Sweep & Verification | PENDING | |
 
 ---
