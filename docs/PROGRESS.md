@@ -6,10 +6,27 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 3 Complete (Signaling Service, Ephemeral Coturn HMAC-SHA1 REST Tokens, Docker Compose + Caddy TLS IaC, and Deploy Guide); proceeding to commit Part 3 and tag `stable-p3`.
-- **Exact Next Step**: Commit `feat(signaling): implement standalone WebRTC signaling service and coturn IaC`, push, tag `stable-p3`, then proceed to Part 4 (WebRTC Transport + Connection Manager with DataChannel Chunking and Auto-Fallback).
+- **Current Milestone**: Part 4 Complete (WebRTC Transport + DataChannel Message Chunking & Connection Manager Auto-Fallback); proceeding to commit Part 4 and tag `stable-p4`.
+- **Exact Next Step**: Commit `feat(transport): implement RtcTransport with DataChannel chunking and ConnectionManager multi-path fallback`, push, tag `stable-p4`, then proceed to Part 5 (Remote Pairing & Security).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 4: WebRTC Transport + Connection Manager (Completed)
+- **4.1 DataChannel Packet Chunking & Reassembly (`RtcTransport.ts`)**:
+  - Implemented 12-byte binary chunk header (`uint32 messageId`, `uint32 chunkIndex`, `uint32 totalChunks`) for slicing messages exceeding 56KB to maintain strict WebRTC DataChannel compliance across mobile browsers.
+  - Implemented `RtcMessageReassembler` managing out-of-order chunk assembly, buffer reassembly, and automated cleanup of stale incomplete transfers.
+  - Added unit test suite `server/test/transport-rtc.test.ts` verifying small single-packet fast-paths, 150KB fragmentation, and out-of-order packet reassembly.
+- **4.2 Multi-Path Connection Manager (`ConnectionManager.ts`)**:
+  - Implemented probe and fallback logic:
+    1. Direct LAN WebSocket (`WsTransport` on local IP / Wi-Fi) — fastest (1-3ms latency).
+    2. Direct P2P WebRTC (`RtcTransport` via STUN hole punching) when away from home Wi-Fi.
+    3. TURN Relay WebRTC (`RtcTransport` via self-hosted Coturn daemon) if behind restrictive symmetric NAT.
+  - Seamlessly keeps WebRTC warm in the background and switches automatically if the phone leaves Wi-Fi range without terminating the user session.
+- **4.3 Verification**:
+  - Unit tests in `server/test/transport-rtc.test.ts` passing.
+  - Rebuilt PWA and server bundles.
 
 ---
 
@@ -138,7 +155,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 1** | Reported Bugs First + Cleanup (Inputs, GPU, VLC, Cleanup) | COMPLETED | Tagged `stable-p1`. Inputs, GPU 4060, VLC, Sharp, Quickstart done. |
 | **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | COMPLETED | Tagged `stable-p2`. H.264 NVENC/MF/x264, WebCodecs, AER2 packet format, bench. |
 | **Part 3** | Signaling Service + Infrastructure as Code | COMPLETED | Tagged `stable-p3`. Standalone Node service, Coturn HMAC-SHA1 REST tokens, Docker Compose + Caddy TLS. |
-| **Part 4** | WebRTC Transport + Connection Manager | PENDING | |
+| **Part 4** | WebRTC Transport + Connection Manager | COMPLETED | Tagged `stable-p4`. RtcTransport, DataChannel chunking, ConnectionManager multi-path. |
 | **Part 5** | Remote Pairing + Security | PENDING | |
 | **Part 6** | All Existing Features over New Transport | PENDING | |
 | **Part 7** | User Experience Refinement | PENDING | |
