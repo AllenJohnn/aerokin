@@ -65,7 +65,7 @@ export interface ServerConfig {
 export interface ActivityEvent {
   id: string;
   time: number;
-  type: 'move' | 'click' | 'button' | 'scroll' | 'media' | 'ping' | 'connect' | 'disconnect';
+  type: 'move' | 'click' | 'button' | 'scroll' | 'media' | 'ping' | 'connect' | 'disconnect' | 'security' | 'system';
   summary: string;
 }
 
@@ -87,6 +87,9 @@ export function startServer(config: ServerConfig): {
   clipboardService: ClipboardService;
   screenshotService: ScreenshotService;
   quickActionService: QuickActionService;
+  signalingClient: SignalingClient | null;
+  isInputPaused: () => boolean;
+  setInputPaused: (paused: boolean) => void;
   revokeDevice: (deviceId: string) => void;
   revokeAll: (exceptDeviceId?: string) => void;
   broadcastDevices: () => void;

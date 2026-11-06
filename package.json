@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "safety:check": "node scripts/safety-check.mjs"
+    "safety:check": "node scripts/safety-check.mjs",
+    "build": "pnpm --filter @aerokin/design-system run build && pnpm --filter aerokin-signaling run build && pnpm --filter aerokin-server run build && pnpm --filter aerokin-pwa run build"
   }
 }
