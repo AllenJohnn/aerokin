@@ -6,8 +6,8 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 7 Complete (User Experience Refinement: Trackpad Precision, Mobile Keyboard, Modifiers, Smooth Pinch/Pan); proceeding to commit Part 7 and tag `stable-p7`.
-- **Exact Next Step**: Commit `feat(ux): refine trackpad gestures, virtual modifier bar, shortcut chips, and smooth desktop pinch zoom`, push, tag `stable-p7`, then proceed to Part 8 (Design System & Picture Perfect Pass).
+- **Current Milestone**: Part 8 (Design System & "Picture Perfect" UI Pass - True-black OLED `#000000`, surface `#0A0A0A`, accent `#FF5A1F`, typography audit, anti-generic SaaS cleanup).
+- **Exact Next Step**: Audit and enforce design system tokens across design-system and PWA components, commit and tag `stable-p8`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
