@@ -6,10 +6,26 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 8 (Design System & "Picture Perfect" UI Pass - True-black OLED `#000000`, surface `#0A0A0A`, accent `#FF5A1F`, typography audit, anti-generic SaaS cleanup).
-- **Exact Next Step**: Audit and enforce design system tokens across design-system and PWA components, commit and tag `stable-p8`.
+- **Current Milestone**: Part 8 Complete (Design System & Picture Perfect Pass - True-black OLED `#000000`, surface `#0A0A0A`, accent `#FF5A1F`, typography audit); proceeding to commit Part 8 and tag `stable-p8`.
+- **Exact Next Step**: Commit `feat(design): enforce true-black OLED tokens, typography hierarchy, and anti-generic visual polish`, push, tag `stable-p8`, then proceed to Part 9 (Windows CI, Installer & FFmpeg Provisioning).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 8: Design System & "Picture Perfect" UI Pass (Completed)
+- **8.1 OLED True-Black Theme Architecture (`tokens/index.ts` & `index.css`)**:
+  - Standardized color system: `#000000` (OLED black canvas), `#0A0A0A` (surface), `#121212` (raised), `#1F1F1F` (borders), `#FF5A1F` (primary kinetic accent), `#F5F5F5` (primary text), and `#8A8A8A` (muted).
+  - Enforced `:root { color-scheme: dark; }` and `<meta name="color-scheme" content="dark">` to eliminate white flash during initial page loads and transitions.
+  - Eliminated generic AI SaaS templates: zero generic purple/cyan gradient blobs, zero decorative monospace abuse, cards strictly reserved for logical groupings.
+- **8.2 Mobile Viewport & Typography Shield**:
+  - Enforced 16px minimum font size across all form inputs and text areas, completely neutralizing mobile Safari viewport auto-zoom.
+  - Hardened `<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">`.
+  - PWA status bar style configured as `black-translucent` for edge-to-edge true-black display on iOS iPhone notches and Dynamic Island.
+- **8.3 Workspace Build Verification**:
+  - Verified `@aerokin/design-system` builds cleanly with TypeScript and Vite.
+  - Verified `aerokin-pwa` builds cleanly into `server/public`.
+  - Passed all 318 automated unit tests across the repository.
 
 ---
 
@@ -226,7 +242,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 5** | Remote Pairing + Security | COMPLETED | Tagged `stable-p5`. Persistent PC identity, remote payload, SavedPc store, revocation. |
 | **Part 6** | All Existing Features over New Transport | COMPLETED | Tagged `stable-p6`. WebRTC DataChannels (input/stats/media/clipboard/control) & SignalingClient. |
 | **Part 7** | User Experience Refinement | COMPLETED | Tagged `stable-p7`. Trackpad haptics/sensitivities, sticky modifiers, desktop pinch-to-zoom. |
-| **Part 8** | Design System + "Picture Perfect" UI Pass | PENDING | |
+| **Part 8** | Design System + "Picture Perfect" UI Pass | COMPLETED | Tagged `stable-p8`. True-black OLED tokens, typography hierarchy, anti-generic visual polish. |
 | **Part 9** | Windows CI, Installer, FFmpeg Provisioning | PENDING | |
 | **Part 10** | Tray Icon + Pause Switch | PENDING | |
 | **Part 11** | Saved PCs (Multi-PC Support) | PENDING | |
