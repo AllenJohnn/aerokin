@@ -1,9 +1,4 @@
-import {
-  Connection,
-  ConnectionState,
-  ConnectionMode,
-  ChannelName,
-} from './Connection';
+import { Connection, ConnectionState, ConnectionMode, ChannelName } from './Connection';
 import { WsTransport } from './WsTransport';
 import { RtcTransport } from './RtcTransport';
 
@@ -21,7 +16,10 @@ export class ConnectionManager implements Connection {
   private options: ConnectionManagerOptions;
   private activeTransport: Connection | null = null;
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>();
-  private messageHandlers = new Map<ChannelName, Set<(data: ArrayBuffer | string | Uint8Array) => void>>();
+  private messageHandlers = new Map<
+    ChannelName,
+    Set<(data: ArrayBuffer | string | Uint8Array) => void>
+  >();
   private currentMode: ConnectionMode = 'lan_direct';
   private currentState: ConnectionState = 'connecting';
   private currentLatency = 0;

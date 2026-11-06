@@ -47,8 +47,12 @@ export function getOrCreateCert(lanIp: string, certsDir: string): SslCredentials
 
   // If IP has changed, notify user about iPhone re-trusting certificate
   if (ipChanged && cachedIp) {
-    console.log(`\n[AEROKIN] LAN IP changed from ${cachedIp} to ${lanIp}. Regenerating SSL certificate...`);
-    console.log('[AEROKIN] NOTE: Your iPhone will need to re-trust the certificate when connecting to the new IP.\n');
+    console.log(
+      `\n[AEROKIN] LAN IP changed from ${cachedIp} to ${lanIp}. Regenerating SSL certificate...`
+    );
+    console.log(
+      '[AEROKIN] NOTE: Your iPhone will need to re-trust the certificate when connecting to the new IP.\n'
+    );
   }
 
   // Ensure directory exists

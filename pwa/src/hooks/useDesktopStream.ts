@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  DesktopStats,
-  DesktopStreamState,
-  MonitorInfo,
-} from '../types/desktop';
+import { DesktopStats, DesktopStreamState, MonitorInfo } from '../types/desktop';
 import { CanvasFrameSink, DecodedFrame } from '../transport/FrameSink';
 
 export interface UseDesktopStreamOptions {
@@ -24,7 +20,9 @@ export interface UseDesktopStreamReturn {
   zoom: number;
   pan: { x: number; y: number };
   setZoom: (z: number | ((prev: number) => number)) => void;
-  setPan: (p: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => void;
+  setPan: (
+    p: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })
+  ) => void;
   resetZoomPan: () => void;
   toNormalizedMonitorCoords: (clientX: number, clientY: number) => { x: number; y: number } | null;
   reconnectStream: () => void;
@@ -117,8 +115,12 @@ export function useDesktopStream({
 
     const cw = canvas.width;
     const ch = canvas.height;
-    const bw = 'displayWidth' in frame ? (frame as VideoFrame).displayWidth : (frame as ImageBitmap).width;
-    const bh = 'displayHeight' in frame ? (frame as VideoFrame).displayHeight : (frame as ImageBitmap).height;
+    const bw =
+      'displayWidth' in frame ? (frame as VideoFrame).displayWidth : (frame as ImageBitmap).width;
+    const bh =
+      'displayHeight' in frame
+        ? (frame as VideoFrame).displayHeight
+        : (frame as ImageBitmap).height;
 
     // Calculate aspect ratio fit (letterboxing / pillarboxing)
     const canvasAspect = cw / (ch || 1);
@@ -297,7 +299,13 @@ export function useDesktopStream({
           codec = view.getUint8(16) === 1 ? 'h264' : 'mjpeg';
           isKeyframe = view.getUint8(17) === 1;
           payloadOffset = 20;
-        } else if (m0 === 0x41 && m1 === 0x45 && m2 === 0x52 && m3 === 0x4f && buf.byteLength >= 16) {
+        } else if (
+          m0 === 0x41 &&
+          m1 === 0x45 &&
+          m2 === 0x52 &&
+          m3 === 0x4f &&
+          buf.byteLength >= 16
+        ) {
           // 'AERO' v1 legacy header (16 bytes)
           seq = view.getUint32(4, true);
           serverTimestamp = view.getUint32(8, true);
@@ -327,7 +335,9 @@ export function useDesktopStream({
           isKeyframe,
         });
 
-        const totalLatency = Math.round(netLatency + (lastDecodeTimeRef.current || 0) + (lastPaintTimeRef.current || 0));
+        const totalLatency = Math.round(
+          netLatency + (lastDecodeTimeRef.current || 0) + (lastPaintTimeRef.current || 0)
+        );
         lastLatencyRef.current = totalLatency;
 
         latencySamplesRef.current.push(totalLatency);

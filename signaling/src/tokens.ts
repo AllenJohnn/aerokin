@@ -7,10 +7,7 @@ export const SIGNALING_PROTOCOL_PURPOSE = 'aerokin-signaling-v1';
  * The raw device credential is never transmitted to the signaling server.
  */
 export function deriveSignalingToken(credential: string): string {
-  return crypto
-    .createHmac('sha256', credential)
-    .update(SIGNALING_PROTOCOL_PURPOSE)
-    .digest('hex');
+  return crypto.createHmac('sha256', credential).update(SIGNALING_PROTOCOL_PURPOSE).digest('hex');
 }
 
 /**

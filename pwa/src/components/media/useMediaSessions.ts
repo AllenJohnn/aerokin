@@ -9,11 +9,7 @@ export interface UseMediaSessionsOptions {
   onSeekTo?: (position: number) => void;
 }
 
-export function useMediaSessions({
-  nowPlaying,
-  sessions,
-  onSeekTo,
-}: UseMediaSessionsOptions) {
+export function useMediaSessions({ nowPlaying, sessions, onSeekTo }: UseMediaSessionsOptions) {
   // 1. Seek Interval Selection (5, 10, 15, 30s)
   const [seekInterval, setSeekIntervalState] = useState<SeekInterval>(() => {
     if (typeof window === 'undefined') return 10;
@@ -39,18 +35,21 @@ export function useMediaSessions({
     (nowPlaying.id ? sessions.find((s) => s.id === nowPlaying.id) : undefined);
 
   // 3. Capabilities Model
-  const capabilities = activeSession?.capabilities || (nowPlaying as any).capabilities || {
-    canPlay: true,
-    canPause: true,
-    canTogglePlayPause: true,
-    canNext: nowPlaying.canNext ?? true,
-    canPrev: nowPlaying.canPrev ?? true,
-    canSeek: nowPlaying.canSeek ?? false,
-    canSetPosition: nowPlaying.canSeek ?? false,
-  };
+  const capabilities = activeSession?.capabilities ||
+    (nowPlaying as any).capabilities || {
+      canPlay: true,
+      canPause: true,
+      canTogglePlayPause: true,
+      canNext: nowPlaying.canNext ?? true,
+      canPrev: nowPlaying.canPrev ?? true,
+      canSeek: nowPlaying.canSeek ?? false,
+      canSetPosition: nowPlaying.canSeek ?? false,
+    };
 
   const duration = nowPlaying.duration ?? 0;
-  const canSeek = Boolean(capabilities.canSeek || capabilities.canSetPosition || nowPlaying.canSeek) && duration > 0;
+  const canSeek =
+    Boolean(capabilities.canSeek || capabilities.canSetPosition || nowPlaying.canSeek) &&
+    duration > 0;
   const canNext = capabilities.canNext ?? true;
   const canPrev = capabilities.canPrev ?? true;
 

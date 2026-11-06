@@ -3,11 +3,7 @@ import readline from 'node:readline';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import {
-  NowPlayingData,
-  MediaSessionItem,
-  DEFAULT_CAPABILITIES,
-} from './types.js';
+import { NowPlayingData, MediaSessionItem, DEFAULT_CAPABILITIES } from './types.js';
 import { RunningProcessMediaInfo } from './ProcessMediaDetector.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,8 +34,7 @@ export class SmtcAdapter {
 
   constructor(options: SmtcAdapterOptions = {}) {
     this.scriptPath =
-      options.scriptPath ||
-      path.resolve(__dirname, '../../scripts/media-sidecar.ps1');
+      options.scriptPath || path.resolve(__dirname, '../../scripts/media-sidecar.ps1');
 
     if (options.autoStart !== false && process.platform === 'win32') {
       this.start();
@@ -127,7 +122,8 @@ export class SmtcAdapter {
       return {
         sessions: d.sessions || [],
         nowPlaying: d.nowPlaying || { status: 'none', capabilities: DEFAULT_CAPABILITIES },
-        volume: typeof d.volume === 'number' ? Math.max(0, Math.min(100, Math.round(d.volume))) : 50,
+        volume:
+          typeof d.volume === 'number' ? Math.max(0, Math.min(100, Math.round(d.volume))) : 50,
         muted: Boolean(d.muted),
       };
     }

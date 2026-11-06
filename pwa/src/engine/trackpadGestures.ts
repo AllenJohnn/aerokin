@@ -98,16 +98,24 @@ export function validateTrackpadConfig(raw: unknown): TrackpadConfig {
   const configVersion = CURRENT_TRACKPAD_CONFIG_VERSION;
 
   const naturalScroll =
-    typeof obj.naturalScroll === 'boolean' ? obj.naturalScroll : DEFAULT_TRACKPAD_CONFIG.naturalScroll;
+    typeof obj.naturalScroll === 'boolean'
+      ? obj.naturalScroll
+      : DEFAULT_TRACKPAD_CONFIG.naturalScroll;
 
   let scrollSensitivityY = DEFAULT_TRACKPAD_CONFIG.scrollSensitivityY;
   if (typeof obj.scrollSensitivityY === 'number' && Number.isFinite(obj.scrollSensitivityY)) {
-    scrollSensitivityY = Math.min(1.5, Math.max(0.05, Math.round(obj.scrollSensitivityY * 100) / 100));
+    scrollSensitivityY = Math.min(
+      1.5,
+      Math.max(0.05, Math.round(obj.scrollSensitivityY * 100) / 100)
+    );
   }
 
   let scrollSensitivityX = DEFAULT_TRACKPAD_CONFIG.scrollSensitivityX;
   if (typeof obj.scrollSensitivityX === 'number' && Number.isFinite(obj.scrollSensitivityX)) {
-    scrollSensitivityX = Math.min(1.5, Math.max(0.05, Math.round(obj.scrollSensitivityX * 100) / 100));
+    scrollSensitivityX = Math.min(
+      1.5,
+      Math.max(0.05, Math.round(obj.scrollSensitivityX * 100) / 100)
+    );
   }
 
   let pointerSpeed = DEFAULT_POINTER_SPEED;

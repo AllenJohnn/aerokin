@@ -36,10 +36,7 @@ export const SheetContent = React.forwardRef<
 ));
 SheetContent.displayName = 'SheetContent';
 
-export const SheetHeader = ({
-  className = '',
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+export const SheetHeader = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={`flex flex-col space-y-1.5 text-left px-5 py-4 border-b border-border ${className}`}
     {...props}

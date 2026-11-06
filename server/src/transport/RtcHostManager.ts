@@ -1,14 +1,6 @@
 import { PeerConnection, DataChannel } from 'node-datachannel';
-import {
-  Connection,
-  ConnectionState,
-  ConnectionMode,
-  ChannelName,
-} from './Connection.js';
-import {
-  chunkDataChannelMessage,
-  RtcMessageReassembler,
-} from './RtcTransport.js';
+import { Connection, ConnectionState, ConnectionMode, ChannelName } from './Connection.js';
+import { chunkDataChannelMessage, RtcMessageReassembler } from './RtcTransport.js';
 import { DeviceStore } from '../device-store.js';
 import { SignalingClient } from './SignalingClient.js';
 
@@ -27,7 +19,10 @@ export class RtcHostSession implements Connection {
   private deviceStore: DeviceStore;
   private channels = new Map<ChannelName, DataChannel>();
   private reassembler = new RtcMessageReassembler();
-  private messageHandlers = new Map<ChannelName, Set<(data: ArrayBuffer | string | Uint8Array) => void>>();
+  private messageHandlers = new Map<
+    ChannelName,
+    Set<(data: ArrayBuffer | string | Uint8Array) => void>
+  >();
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>();
   private nextMessageId = 1;
 
@@ -308,14 +303,9 @@ export class RtcHostManager {
         iceServers: formattedIceServers,
       });
 
-      const session = new RtcHostSession(
-        peerId,
-        pc,
-        this.options.deviceStore,
-        (authedSession) => {
-          this.options.onClientAuthenticated?.(authedSession);
-        }
-      );
+      const session = new RtcHostSession(peerId, pc, this.options.deviceStore, (authedSession) => {
+        this.options.onClientAuthenticated?.(authedSession);
+      });
 
       this.sessions.set(peerId, session);
 

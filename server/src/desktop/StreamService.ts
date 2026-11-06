@@ -165,11 +165,7 @@ export class StreamService {
   /**
    * Attaches an incoming authenticated WebSocket connection for desktop streaming.
    */
-  public handleStreamSocket(
-    ws: WebSocket,
-    deviceId: string,
-    clientIp: string
-  ): void {
+  public handleStreamSocket(ws: WebSocket, deviceId: string, clientIp: string): void {
     // Single active viewer policy: if existing stream socket is connected, close it cleanly
     if (this.activeWs && this.activeWs !== ws) {
       try {
@@ -252,7 +248,11 @@ export class StreamService {
     } catch (err: any) {
       const msg = err?.message || 'Failed to start screen capture';
       this.transitionState('error', msg);
-      return { ok: false, monitor: this.selectedMonitor || MonitorService.getMonitor(), error: msg };
+      return {
+        ok: false,
+        monitor: this.selectedMonitor || MonitorService.getMonitor(),
+        error: msg,
+      };
     } finally {
       this.isStarting = false;
       if (this.pendingStartOptions) {
@@ -384,14 +384,16 @@ export class StreamService {
       if (changed && this.selectedMonitor && this.state === 'active') {
         console.log(`[DesktopStream] Adaptive quality adjusted active tier to: ${activeTier}`);
         const adaptedConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
-        this.captureAdapter.start({
-          monitor: this.selectedMonitor,
-          fps: adaptedConfig.fps,
-          scale: adaptedConfig.scale,
-          quality: adaptedConfig.jpegQuality,
-        }).catch((err) => {
-          console.warn('[DesktopStream] Failed to adapt capture tier:', err);
-        });
+        this.captureAdapter
+          .start({
+            monitor: this.selectedMonitor,
+            fps: adaptedConfig.fps,
+            scale: adaptedConfig.scale,
+            quality: adaptedConfig.jpegQuality,
+          })
+          .catch((err) => {
+            console.warn('[DesktopStream] Failed to adapt capture tier:', err);
+          });
       }
 
       const currentStats = this.getStats();
@@ -419,7 +421,9 @@ export class StreamService {
 
       console.log('\n======================================================');
       console.log('  ✦ AEROKIN: REMOTE DESKTOP VIEWING ACTIVE ✦');
-      console.log(`  Viewer: ${this.activeDeviceId || 'Mobile Client'} (${this.activeClientIp || 'LAN'})`);
+      console.log(
+        `  Viewer: ${this.activeDeviceId || 'Mobile Client'} (${this.activeClientIp || 'LAN'})`
+      );
       console.log(
         `  Display: ${this.selectedMonitor?.name || 'Primary'} (${this.selectedMonitor?.bounds.width}x${this.selectedMonitor?.bounds.height})`
       );

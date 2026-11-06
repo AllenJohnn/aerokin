@@ -4,6 +4,17 @@
   "type": "module",
   "scripts": {
     "safety:check": "node scripts/safety-check.mjs",
-    "build": "pnpm --filter @aerokin/design-system run build && pnpm --filter aerokin-signaling run build && pnpm --filter aerokin-server run build && pnpm --filter aerokin-pwa run build"
+    "lint": "eslint .",
+    "format:check": "prettier --check \"server/src/**/*.{ts,js}\" \"pwa/src/**/*.{ts,tsx}\" \"signaling/src/**/*.{ts,js}\"",
+    "format": "prettier --write \"server/src/**/*.{ts,js}\" \"pwa/src/**/*.{ts,tsx}\" \"signaling/src/**/*.{ts,js}\"",
+    "build": "pnpm --filter @aerokin/design-system run build && pnpm --filter aerokin-signaling run build && pnpm --filter aerokin-server run build && pnpm --filter aerokin-pwa run build",
+    "test": "pnpm --filter aerokin-signaling test && pnpm --filter aerokin-pwa test && pnpm --filter aerokin-server test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^5.1.0",
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.72.1"
   }
 }

@@ -195,7 +195,9 @@ export const PresentTab: React.FC<PresentTabProps> = ({ onSendKey, onSendMove })
           <button
             onClick={toggleTimer}
             className={`p-2.5 rounded-xl text-white transition-colors ${
-              timerRunning ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'
+              timerRunning
+                ? 'bg-amber-600 hover:bg-amber-500'
+                : 'bg-emerald-600 hover:bg-emerald-500'
             }`}
           >
             {timerRunning ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}

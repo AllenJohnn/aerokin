@@ -15,12 +15,7 @@ import koffi from 'koffi';
 import { serverLogger } from '../logger.js';
 
 export type PowerAction =
-  | 'shutdown'
-  | 'restart'
-  | 'sign_out'
-  | 'sleep'
-  | 'lock'
-  | 'cancel_shutdown';
+  'shutdown' | 'restart' | 'sign_out' | 'sleep' | 'lock' | 'cancel_shutdown';
 
 export interface PowerActionOptions {
   delaySeconds?: number;
@@ -81,7 +76,10 @@ export class RealPowerActionExecutor implements PowerActionExecutor {
     }
   }
 
-  public async execute(action: PowerAction, options?: PowerActionOptions): Promise<PowerActionResult> {
+  public async execute(
+    action: PowerAction,
+    options?: PowerActionOptions
+  ): Promise<PowerActionResult> {
     if (process.platform !== 'win32') {
       return {
         success: true,
@@ -149,7 +147,12 @@ export class RealPowerActionExecutor implements PowerActionExecutor {
               resolve({ success: false, action, executed: true, error: err?.message });
             }
           } else {
-            resolve({ success: false, action, executed: true, error: 'LockWorkStation API unavailable' });
+            resolve({
+              success: false,
+              action,
+              executed: true,
+              error: 'LockWorkStation API unavailable',
+            });
           }
           break;
         }
@@ -166,7 +169,12 @@ export class RealPowerActionExecutor implements PowerActionExecutor {
         }
 
         default:
-          resolve({ success: false, action, executed: false, error: `Unknown power action: ${action}` });
+          resolve({
+            success: false,
+            action,
+            executed: false,
+            error: `Unknown power action: ${action}`,
+          });
       }
     });
   }
@@ -181,7 +189,10 @@ export class RealPowerActionExecutor implements PowerActionExecutor {
  * Safely blocks all real calls, logs warnings, and returns success to callers.
  */
 export class NoOpPowerActionExecutor implements PowerActionExecutor {
-  public async execute(action: PowerAction, _options?: PowerActionOptions): Promise<PowerActionResult> {
+  public async execute(
+    action: PowerAction,
+    _options?: PowerActionOptions
+  ): Promise<PowerActionResult> {
     serverLogger.warn('actions', `power action blocked (dry run): ${action}`);
     return {
       success: true,
@@ -214,7 +225,10 @@ export interface RecordedPowerAction {
 export class RecordingPowerActionExecutor implements PowerActionExecutor {
   public recorded: RecordedPowerAction[] = [];
 
-  public async execute(action: PowerAction, options?: PowerActionOptions): Promise<PowerActionResult> {
+  public async execute(
+    action: PowerAction,
+    options?: PowerActionOptions
+  ): Promise<PowerActionResult> {
     this.recorded.push({
       action,
       options,

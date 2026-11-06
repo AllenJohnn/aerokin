@@ -27,7 +27,8 @@ async function main() {
   serverLogger.hookConsole();
 
   const lanIp = getLocalIPv4();
-  const legacyToken = process.env.AEROKIN_LEGACY_TOKEN === '1' ? getOrCreateToken(CERTS_DIR) : undefined;
+  const legacyToken =
+    process.env.AEROKIN_LEGACY_TOKEN === '1' ? getOrCreateToken(CERTS_DIR) : undefined;
   const noQr =
     process.argv.includes('--no-qr') ||
     process.env.AEROKIN_NO_QR === '1' ||
@@ -82,7 +83,9 @@ async function main() {
 
   console.log('===================================================================');
   console.log(`>>> OPEN THE AEROKIN PC DASHBOARD:  https://localhost:${HTTPS_PORT}/dashboard  <<<`);
-  console.log(`>>> (or via mDNS:                  https://aerokin.local:${HTTPS_PORT}/dashboard) <<<`);
+  console.log(
+    `>>> (or via mDNS:                  https://aerokin.local:${HTTPS_PORT}/dashboard) <<<`
+  );
   console.log('===================================================================\n');
 
   const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
@@ -285,6 +288,7 @@ async function main() {
         case 'quit': {
           console.log('Shutting down server...');
           process.exit(0);
+          break;
         }
 
         default: {

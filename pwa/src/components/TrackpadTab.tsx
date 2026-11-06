@@ -252,9 +252,7 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
             showHint ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <p className="text-sm font-medium text-foreground">
-            Precision trackpad
-          </p>
+          <p className="text-sm font-medium text-foreground">Precision trackpad</p>
           <p className="text-xs text-muted-foreground mt-1">
             1-finger move · 2-finger scroll · Tap to click
           </p>

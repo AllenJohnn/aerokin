@@ -23,9 +23,7 @@ export const MediaSettings: React.FC<MediaSettingsProps> = ({
   onOpenSettingsDrawer,
 }) => {
   // Normalize 0..1 floating volume to 0..100 integer percent
-  const normalizedVolume = Math.round(
-    volume <= 1.0 && volume > 0 ? volume * 100 : volume
-  );
+  const normalizedVolume = Math.round(volume <= 1.0 && volume > 0 ? volume * 100 : volume);
 
   return (
     <div className="w-full rounded-2xl bg-surface border border-border p-4 shadow-sm flex flex-col gap-3">
@@ -68,7 +66,9 @@ export const MediaSettings: React.FC<MediaSettingsProps> = ({
           className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors cursor-pointer"
           title="Configure media seek method in settings"
         >
-          <span className="text-[11px] text-muted-foreground/70 uppercase tracking-wider">Method:</span>
+          <span className="text-[11px] text-muted-foreground/70 uppercase tracking-wider">
+            Method:
+          </span>
           <span className="font-mono font-medium text-foreground uppercase">
             {seekMethod === 'auto' ? 'Auto (SMTC)' : 'App Keys'}
           </span>

@@ -145,9 +145,7 @@ export function synthesizeProcessSessions(
   processes: RunningProcessMediaInfo[],
   existingSessions: MediaSessionItem[] = []
 ): MediaSessionItem[] {
-  const existingApps = new Set(
-    existingSessions.map((s) => s.app.toLowerCase())
-  );
+  const existingApps = new Set(existingSessions.map((s) => s.app.toLowerCase()));
 
   const synthesized: MediaSessionItem[] = [];
 
@@ -155,7 +153,10 @@ export function synthesizeProcessSessions(
     const parsed = parseMediaWindowTitle(proc.processName, proc.windowTitle);
 
     // If this app is already represented in SMTC, skip duplicate synthesis
-    if (existingApps.has(parsed.appName.toLowerCase()) || existingApps.has(proc.processName.toLowerCase())) {
+    if (
+      existingApps.has(parsed.appName.toLowerCase()) ||
+      existingApps.has(proc.processName.toLowerCase())
+    ) {
       continue;
     }
 
@@ -181,7 +182,11 @@ export function synthesizeProcessSessions(
  * Ctrl+Alt+Left/Right: long jump (5m)
  * Note: Until confirmed on Allen's PC, verified is false.
  */
-export function mapSeekSecondsToVlcHotkey(seconds: number): { key: string; verified: boolean; label: string } {
+export function mapSeekSecondsToVlcHotkey(seconds: number): {
+  key: string;
+  verified: boolean;
+  label: string;
+} {
   const abs = Math.abs(seconds);
   const isFwd = seconds >= 0;
 

@@ -311,7 +311,12 @@ export async function handleAbsClick(
   if (button !== 'left' && button !== 'right' && button !== 'middle') return false;
 
   const backend = getInputBackend();
-  if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
+  if (
+    normX !== undefined &&
+    normY !== undefined &&
+    Number.isFinite(normX) &&
+    Number.isFinite(normY)
+  ) {
     const monitor = MonitorService.getMonitor(monitorId);
     const virtual = MonitorService.getVirtualDesktopBounds();
     const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
@@ -353,7 +358,12 @@ export async function handleAbsButton(
   if (state !== 'down' && state !== 'up') return false;
 
   const backend = getInputBackend();
-  if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
+  if (
+    normX !== undefined &&
+    normY !== undefined &&
+    Number.isFinite(normX) &&
+    Number.isFinite(normY)
+  ) {
     const monitor = MonitorService.getMonitor(monitorId);
     const virtual = MonitorService.getVirtualDesktopBounds();
     const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);

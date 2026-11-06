@@ -285,7 +285,8 @@ export const ScreenshotTab: React.FC<ScreenshotTabProps> = ({
             >
               {monitors.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name || `Display ${m.id}`} ({m.bounds?.width || 1920}x{m.bounds?.height || 1080})
+                  {m.name || `Display ${m.id}`} ({m.bounds?.width || 1920}x
+                  {m.bounds?.height || 1080})
                 </option>
               ))}
             </select>

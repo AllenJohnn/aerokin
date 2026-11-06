@@ -171,7 +171,12 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   const [events, setEvents] = useState<DiagnosticEvent[]>(() => diagnosticsLogger.getEvents());
   const [copiedDiag, setCopiedDiag] = useState(false);
   const [testingLatency, setTestingLatency] = useState(false);
-  const [latencyBenchResult, setLatencyBenchResult] = useState<{ min: number; avg: number; max: number; p95: number } | null>(null);
+  const [latencyBenchResult, setLatencyBenchResult] = useState<{
+    min: number;
+    avg: number;
+    max: number;
+    p95: number;
+  } | null>(null);
   const [fetchingLogs, setFetchingLogs] = useState(false);
 
   // Import / Export Notice
@@ -490,7 +495,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                         </div>
                         <div>
                           <div className="text-xs font-semibold text-foreground">{item.title}</div>
-                          <div className="text-[11px] text-muted-foreground">{item.description}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {item.description}
+                          </div>
                         </div>
                       </div>
                       <CaretRight
@@ -672,7 +679,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     Pinned Bottom Tabs ({navConfig.pinned.length}/4)
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
-                    Select up to 4 sections for instant bottom bar access. Others remain in More launcher.
+                    Select up to 4 sections for instant bottom bar access. Others remain in More
+                    launcher.
                   </div>
                 </div>
 
@@ -771,14 +779,18 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   <span className="font-medium text-foreground">Natural Scrolling</span>
                   <Switch
                     checked={trackpadConfig.naturalScroll}
-                    onCheckedChange={(checked) => onTrackpadConfigChange({ naturalScroll: checked })}
+                    onCheckedChange={(checked) =>
+                      onTrackpadConfigChange({ naturalScroll: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
                   <span className="font-medium text-foreground">Scroll Haptics (Detents)</span>
                   <Switch
                     checked={trackpadConfig.scrollHaptics}
-                    onCheckedChange={(checked) => onTrackpadConfigChange({ scrollHaptics: checked })}
+                    onCheckedChange={(checked) =>
+                      onTrackpadConfigChange({ scrollHaptics: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
@@ -805,28 +817,30 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
                 <div className="font-medium text-foreground">Default Quality Preset</div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  {(['balanced', 'fast', 'high', 'ultra', 'tiny', 'low'] as QualityPresetName[]).map(
-                    (p) => (
-                      <button
-                        key={p}
-                        onClick={() => onDesktopSettingsChange({ defaultPreset: p })}
-                        className={`p-2 rounded-xl border text-xs font-medium capitalize transition-all ${
-                          desktopSettings.defaultPreset === p
-                            ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
-                            : 'border-border/40 bg-secondary/40 text-foreground'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
+                  {(
+                    ['balanced', 'fast', 'high', 'ultra', 'tiny', 'low'] as QualityPresetName[]
+                  ).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => onDesktopSettingsChange({ defaultPreset: p })}
+                      className={`p-2 rounded-xl border text-xs font-medium capitalize transition-all ${
+                        desktopSettings.defaultPreset === p
+                          ? 'border-[#FF5A1F] bg-[#FF5A1F]/10 text-[#FF5A1F]'
+                          : 'border-border/40 bg-secondary/40 text-foreground'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-foreground">Framerate Cap</span>
-                  <span className="font-mono text-muted-foreground">{desktopSettings.fpsCap} FPS</span>
+                  <span className="font-mono text-muted-foreground">
+                    {desktopSettings.fpsCap} FPS
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[30, 60].map((fps) => (
@@ -857,7 +871,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   <span className="font-medium text-foreground">Auto-Hide Toolbar</span>
                   <Switch
                     checked={desktopSettings.autoHideToolbar}
-                    onCheckedChange={(checked) => onDesktopSettingsChange({ autoHideToolbar: checked })}
+                    onCheckedChange={(checked) =>
+                      onDesktopSettingsChange({ autoHideToolbar: checked })
+                    }
                   />
                 </div>
               </div>
@@ -939,7 +955,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   </div>
                   <div className="flex items-center justify-between py-1">
                     <span>VLC Seek Shortcut</span>
-                    <span className="font-mono text-foreground font-medium">Alt+Left / Alt+Right</span>
+                    <span className="font-mono text-foreground font-medium">
+                      Alt+Left / Alt+Right
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1069,8 +1087,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
                 <div className="font-medium text-foreground">Safety Whitelist Model</div>
                 <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Every PC action is a fixed enum in code. Dangerous actions (Shutdown, Restart) trigger
-                  a 10-second cancelable countdown on the PC dashboard.
+                  Every PC action is a fixed enum in code. Dangerous actions (Shutdown, Restart)
+                  trigger a 10-second cancelable countdown on the PC dashboard.
                 </p>
               </div>
             </div>
@@ -1081,7 +1099,9 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             <div className="space-y-4">
               {onRunLatencyTest && (
                 <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
-                  <div className="font-medium text-foreground">Live Round-Trip Latency Benchmark</div>
+                  <div className="font-medium text-foreground">
+                    Live Round-Trip Latency Benchmark
+                  </div>
                   <button
                     onClick={async () => {
                       setTestingLatency(true);
@@ -1140,8 +1160,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   <span>Strict LAN Isolation</span>
                 </div>
                 <p>
-                  No internet access, cloud relay, STUN/TURN, or third-party telemetry. All communications
-                  stay 100% on your local Wi-Fi network.
+                  No internet access, cloud relay, STUN/TURN, or third-party telemetry. All
+                  communications stay 100% on your local Wi-Fi network.
                 </p>
               </div>
             </div>

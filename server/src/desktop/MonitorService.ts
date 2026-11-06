@@ -26,7 +26,9 @@ if (isWin) {
     user32 = koffi.load('user32.dll');
 
     try {
-      SetProcessDpiAwarenessContextFn = user32.func('bool __stdcall SetProcessDpiAwarenessContext(intptr_t value)');
+      SetProcessDpiAwarenessContextFn = user32.func(
+        'bool __stdcall SetProcessDpiAwarenessContext(intptr_t value)'
+      );
       // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is ((DPI_AWARENESS_CONTEXT)-4)
       SetProcessDpiAwarenessContextFn(-4);
     } catch {}
@@ -48,13 +50,21 @@ if (isWin) {
       szDevice: koffi.array('uint16', 32),
     });
 
-    GetMonitorInfoWFn = user32.func('bool __stdcall GetMonitorInfoW(intptr_t hMonitor, _Inout_ MONITORINFOEXW *lpmi)');
-    MonitorEnumProc = koffi.proto('bool __stdcall MonitorEnumProc(intptr_t hMonitor, intptr_t hdcMonitor, RECT *lprcMonitor, intptr_t dwData)');
-    EnumDisplayMonitorsFn = user32.func('bool __stdcall EnumDisplayMonitors(intptr_t hdc, intptr_t lprcClip, MonitorEnumProc *lpfnEnum, intptr_t dwData)');
+    GetMonitorInfoWFn = user32.func(
+      'bool __stdcall GetMonitorInfoW(intptr_t hMonitor, _Inout_ MONITORINFOEXW *lpmi)'
+    );
+    MonitorEnumProc = koffi.proto(
+      'bool __stdcall MonitorEnumProc(intptr_t hMonitor, intptr_t hdcMonitor, RECT *lprcMonitor, intptr_t dwData)'
+    );
+    EnumDisplayMonitorsFn = user32.func(
+      'bool __stdcall EnumDisplayMonitors(intptr_t hdc, intptr_t lprcClip, MonitorEnumProc *lpfnEnum, intptr_t dwData)'
+    );
 
     try {
       shcore = koffi.load('shcore.dll');
-      GetDpiForMonitorFn = shcore.func('int __stdcall GetDpiForMonitor(intptr_t hmonitor, int dpiType, _Out_ uint32_t *dpiX, _Out_ uint32_t *dpiY)');
+      GetDpiForMonitorFn = shcore.func(
+        'int __stdcall GetDpiForMonitor(intptr_t hmonitor, int dpiType, _Out_ uint32_t *dpiX, _Out_ uint32_t *dpiY)'
+      );
     } catch {}
   } catch (err) {
     console.warn('[MonitorService] Failed to load user32/shcore bindings:', err);

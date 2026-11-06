@@ -41,8 +41,7 @@ export class FrameDeduplicator {
     }
 
     const isIdentical =
-      this.lastFrameBuffer.length === jpegBytes.length &&
-      this.lastFrameBuffer.equals(jpegBytes);
+      this.lastFrameBuffer.length === jpegBytes.length && this.lastFrameBuffer.equals(jpegBytes);
 
     if (!isIdentical) {
       this.lastFrameBuffer = Buffer.from(jpegBytes);

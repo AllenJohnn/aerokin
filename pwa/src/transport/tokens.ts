@@ -7,7 +7,8 @@ export const SIGNALING_PROTOCOL_PURPOSE = 'aerokin-signaling-v1';
 export async function deriveSignalingToken(credential: string): Promise<string> {
   const enc = new TextEncoder();
   const keyData = enc.encode(credential);
-  const cryptoObj = typeof window !== 'undefined' && window.crypto ? window.crypto : (globalThis as any).crypto;
+  const cryptoObj =
+    typeof window !== 'undefined' && window.crypto ? window.crypto : (globalThis as any).crypto;
   if (!cryptoObj || !cryptoObj.subtle) {
     throw new Error('WebCrypto subtle is required for signaling token derivation');
   }

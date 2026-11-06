@@ -36,8 +36,17 @@ jobs:
       - name: Enforce S1-S5 Safety Invariants
         run: pnpm run safety:check
 
+      - name: Code Formatting Check (Prettier)
+        run: pnpm run format:check
+
+      - name: Static Code Analysis (ESLint)
+        run: pnpm run lint
+
       - name: Typecheck Design System
         run: pnpm --filter @aerokin/design-system exec tsc --noEmit
+
+      - name: Typecheck Signaling
+        run: pnpm --filter aerokin-signaling exec tsc --noEmit
 
       - name: Typecheck Server
         run: pnpm --filter aerokin-server exec tsc --noEmit
@@ -48,14 +57,17 @@ jobs:
       - name: Run Signaling Tests
         run: pnpm --filter aerokin-signaling test
 
-      - name: Run Server Tests
-        run: pnpm --filter aerokin-server test
+      - name: Run Server Tests & Coverage
+        run: pnpm --filter aerokin-server test --coverage
 
       - name: Run PWA Tests
         run: pnpm --filter aerokin-pwa test
 
       - name: Build Design System
         run: pnpm --filter @aerokin/design-system build
+
+      - name: Build Signaling Service
+        run: pnpm --filter aerokin-signaling build
 
       - name: Build PWA Client
         run: pnpm --filter aerokin-pwa build

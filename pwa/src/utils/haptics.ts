@@ -5,7 +5,9 @@
 
 let hapticElement: HTMLInputElement | null = null;
 
-export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'detent' | 'success' | 'alert' = 'light'): void {
+export function triggerHaptic(
+  type: 'light' | 'medium' | 'heavy' | 'detent' | 'success' | 'alert' = 'light'
+): void {
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       if (type === 'detent') {

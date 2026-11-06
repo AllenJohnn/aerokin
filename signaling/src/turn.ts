@@ -34,18 +34,12 @@ export function generateTurnCredentials(options: TurnOptions): TurnCredentialsRe
   const username = `${expiryTimestamp}:${usernamePrefix}`;
 
   // HMAC-SHA1 calculation
-  const credential = crypto
-    .createHmac('sha1', secret)
-    .update(username)
-    .digest('base64');
+  const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
 
   const iceServers: IceServerConfig[] = [
     // 1. STUN server (NAT discovery, free, zero relay cost)
     {
-      urls: [
-        `stun:${turnHost}:${udpPort}`,
-        `stun:${turnHost}:${tcpPort}`,
-      ],
+      urls: [`stun:${turnHost}:${udpPort}`, `stun:${turnHost}:${tcpPort}`],
     },
     // 2. TURN UDP (fastest relay fallback if direct P2P is blocked)
     {
@@ -98,10 +92,7 @@ export function verifyTurnCredentials(
     return false;
   }
 
-  const expected = crypto
-    .createHmac('sha1', secret)
-    .update(username)
-    .digest('base64');
+  const expected = crypto.createHmac('sha1', secret).update(username).digest('base64');
 
   try {
     const credBuf = Buffer.from(credential);

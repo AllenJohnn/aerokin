@@ -8,10 +8,7 @@ export interface PlayerSelectorProps {
   onSelectSession: (sessionId: string) => void;
 }
 
-export const PlayerSelector: React.FC<PlayerSelectorProps> = ({
-  sessions,
-  onSelectSession,
-}) => {
+export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ sessions, onSelectSession }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +36,10 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({
   const formatAppName = (s: MediaSessionItem) => {
     if (s.title && s.title.trim()) return s.title;
     if (s.app && s.app.trim()) {
-      return s.app.replace(/\.exe$/i, '').replace(/([A-Z])/g, ' $1').trim();
+      return s.app
+        .replace(/\.exe$/i, '')
+        .replace(/([A-Z])/g, ' $1')
+        .trim();
     }
     return s.id;
   };
@@ -64,7 +64,10 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({
           <span className="truncate max-w-[140px] text-xs">
             {activeSession ? formatAppName(activeSession) : 'Select Player'}
           </span>
-          <CaretDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          <CaretDown
+            size={12}
+            className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          />
         </button>
       </div>
 

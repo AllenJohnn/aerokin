@@ -37,7 +37,11 @@ class DiagnosticsLogger {
   private counter = 0;
   private listeners: Array<() => void> = [];
 
-  public log(level: DiagnosticLevel, category: DiagnosticCategory, rawMessage: string): DiagnosticEvent {
+  public log(
+    level: DiagnosticLevel,
+    category: DiagnosticCategory,
+    rawMessage: string
+  ): DiagnosticEvent {
     const cleanMessage = redactClientSecrets(rawMessage);
     const event: DiagnosticEvent = {
       id: `diag_${Date.now()}_${++this.counter}`,
@@ -93,7 +97,10 @@ export interface DiagnosticsSummaryInfo {
   lastCloseReason?: string | null;
 }
 
-export function formatDiagnosticsReport(info: DiagnosticsSummaryInfo, events = diagnosticsLogger.getEvents()): string {
+export function formatDiagnosticsReport(
+  info: DiagnosticsSummaryInfo,
+  events = diagnosticsLogger.getEvents()
+): string {
   const lines: string[] = [
     '=== AEROKIN DIAGNOSTICS REPORT ===',
     `Timestamp: ${new Date().toISOString()}`,
@@ -110,7 +117,9 @@ export function formatDiagnosticsReport(info: DiagnosticsSummaryInfo, events = d
   }
 
   if (info.lastCloseCode !== undefined && info.lastCloseCode !== null) {
-    lines.push(`Last Close Code: ${info.lastCloseCode} (${info.lastCloseReason || 'No reason provided'})`);
+    lines.push(
+      `Last Close Code: ${info.lastCloseCode} (${info.lastCloseReason || 'No reason provided'})`
+    );
   }
 
   lines.push('\n--- RECENT CLIENT EVENTS (Last 300) ---');
@@ -119,7 +128,9 @@ export function formatDiagnosticsReport(info: DiagnosticsSummaryInfo, events = d
   } else {
     for (const ev of events) {
       const time = new Date(ev.timestamp).toLocaleTimeString();
-      lines.push(`[${time}] [${ev.level.toUpperCase()}] [${ev.category.toUpperCase()}] ${ev.message}`);
+      lines.push(
+        `[${time}] [${ev.level.toUpperCase()}] [${ev.category.toUpperCase()}] ${ev.message}`
+      );
     }
   }
 

@@ -26,7 +26,12 @@ export interface InputBackend {
   getCursorPosition(): Point | null;
   moveRelative(dx: number, dy: number): boolean;
   setCursorPosition(x: number, y: number): boolean;
-  moveAbsolute(virtualNormX: number, virtualNormY: number, screenX?: number, screenY?: number): boolean;
+  moveAbsolute(
+    virtualNormX: number,
+    virtualNormY: number,
+    screenX?: number,
+    screenY?: number
+  ): boolean;
   click(button: 'left' | 'right' | 'middle'): boolean;
   clickAbsolute(
     button: 'left' | 'right' | 'middle',
@@ -47,7 +52,11 @@ export interface InputBackend {
   ): boolean;
   scroll(wheelDy: number, wheelDx: number): boolean;
   key(keyName: string, state: 'down' | 'up' | 'tap'): Promise<boolean>;
-  keyWithModifiers(key: string, action: 'down' | 'up' | 'tap', modifiers: string[]): Promise<boolean>;
+  keyWithModifiers(
+    key: string,
+    action: 'down' | 'up' | 'tap',
+    modifiers: string[]
+  ): Promise<boolean>;
   keyCombo(combo: string): Promise<boolean>;
   sendUnicodeChar(char: string): Promise<boolean>;
   typeText(text: string): Promise<boolean>;
@@ -129,7 +138,11 @@ export class RealInputBackend implements InputBackend {
     return Win32Input.key(keyName, state);
   }
 
-  public async keyWithModifiers(key: string, action: 'down' | 'up' | 'tap', modifiers: string[]): Promise<boolean> {
+  public async keyWithModifiers(
+    key: string,
+    action: 'down' | 'up' | 'tap',
+    modifiers: string[]
+  ): Promise<boolean> {
     return Win32Input.keyWithModifiers(key, action, modifiers);
   }
 

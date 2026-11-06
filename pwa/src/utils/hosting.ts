@@ -254,14 +254,16 @@ export function validateHost(input: unknown): HostValidationResult {
       };
     }
   } else {
-    const isHostname = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
-      hostPart
-    );
+    const isHostname =
+      /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+        hostPart
+      );
 
     if (!isHostname) {
       return {
         valid: false,
-        error: 'Invalid host. Must be a valid IPv4 address or hostname (e.g. 192.168.1.50 or aerokin.local).',
+        error:
+          'Invalid host. Must be a valid IPv4 address or hostname (e.g. 192.168.1.50 or aerokin.local).',
       };
     }
   }
@@ -305,8 +307,16 @@ export function consumeConnectionFragment(): UrlConnectionParams {
 
     const rawHost = hashParams.get('host') || searchParams.get('host');
     const rawCode = hashParams.get('code') || searchParams.get('code');
-    const rawPcId = hashParams.get('agent') || hashParams.get('pcId') || searchParams.get('agent') || searchParams.get('pcId');
-    const rawSignaling = hashParams.get('signal') || hashParams.get('signaling') || searchParams.get('signal') || searchParams.get('signaling');
+    const rawPcId =
+      hashParams.get('agent') ||
+      hashParams.get('pcId') ||
+      searchParams.get('agent') ||
+      searchParams.get('pcId');
+    const rawSignaling =
+      hashParams.get('signal') ||
+      hashParams.get('signaling') ||
+      searchParams.get('signal') ||
+      searchParams.get('signaling');
 
     if (rawHost) {
       const validated = validateHost(rawHost);
@@ -321,14 +331,24 @@ export function consumeConnectionFragment(): UrlConnectionParams {
       localStorage.setItem(STORAGE_TOKEN_KEY, code);
     }
 
-    if (rawPcId && (rawPcId.trim().startsWith('pc_') || rawPcId.trim().startsWith('pc-') || rawPcId.trim().startsWith('agent_'))) {
+    if (
+      rawPcId &&
+      (rawPcId.trim().startsWith('pc_') ||
+        rawPcId.trim().startsWith('pc-') ||
+        rawPcId.trim().startsWith('agent_'))
+    ) {
       pcId = rawPcId.trim();
       localStorage.setItem(STORAGE_PC_ID_KEY, pcId);
     }
 
     if (rawSignaling && rawSignaling.trim().length > 0) {
       let resolvedSig = rawSignaling.trim();
-      if (!resolvedSig.startsWith('ws://') && !resolvedSig.startsWith('wss://') && !resolvedSig.startsWith('http://') && !resolvedSig.startsWith('https://')) {
+      if (
+        !resolvedSig.startsWith('ws://') &&
+        !resolvedSig.startsWith('wss://') &&
+        !resolvedSig.startsWith('http://') &&
+        !resolvedSig.startsWith('https://')
+      ) {
         resolvedSig = `wss://${resolvedSig}`;
       }
       signalingUrl = resolvedSig;

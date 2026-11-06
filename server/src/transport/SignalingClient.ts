@@ -68,7 +68,10 @@ export class SignalingClient {
           } else if (msg.type === 'offer') {
             this.options.onOffer?.(msg.senderPeerId || msg.sourcePeerId || msg.peerId, msg.sdp);
           } else if (msg.type === 'candidate') {
-            this.options.onCandidate?.(msg.senderPeerId || msg.sourcePeerId || msg.peerId, msg.candidate);
+            this.options.onCandidate?.(
+              msg.senderPeerId || msg.sourcePeerId || msg.peerId,
+              msg.candidate
+            );
           } else if (msg.type === 'peer_joined') {
             this.options.onPeerJoined?.(msg.peerId);
           } else if (msg.type === 'peer_left') {
@@ -109,7 +112,9 @@ export class SignalingClient {
   public removeClientToken(tokenHash: string): void {
     if (!tokenHash) return;
     if (this.options.clientTokenHashes) {
-      this.options.clientTokenHashes = this.options.clientTokenHashes.filter((h) => h !== tokenHash);
+      this.options.clientTokenHashes = this.options.clientTokenHashes.filter(
+        (h) => h !== tokenHash
+      );
     }
     this.send({
       type: 'remove_client_token',

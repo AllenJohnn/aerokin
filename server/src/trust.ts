@@ -42,11 +42,13 @@ async function main() {
       process.exit(1);
     }
   } else {
-    console.log('[Info] Non-Windows OS detected. Please import server/.certs/ca-cert.pem into your OS trust store.');
+    console.log(
+      '[Info] Non-Windows OS detected. Please import server/.certs/ca-cert.pem into your OS trust store.'
+    );
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[Fatal Error]', err);
   process.exit(1);
 });

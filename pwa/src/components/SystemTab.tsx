@@ -46,11 +46,7 @@ function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
-export const SystemTab: React.FC<SystemTabProps> = ({
-  stats,
-  onSubscribe,
-  onUnsubscribe,
-}) => {
+export const SystemTab: React.FC<SystemTabProps> = ({ stats, onSubscribe, onUnsubscribe }) => {
   // Sparkline history (last 60 samples)
   const [cpuHistory, setCpuHistory] = useState<number[]>([]);
   const [ramHistory, setRamHistory] = useState<number[]>([]);
@@ -105,7 +101,9 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           className="w-7 h-7 border-2 border-[#FF5A1F] border-t-transparent rounded-full mb-3"
         />
         <p className="text-sm font-medium text-foreground">Connecting to Hardware Telemetry...</p>
-        <p className="text-xs text-muted-foreground mt-1">Starting 1 Hz low-overhead agent sampler.</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Starting 1 Hz low-overhead agent sampler.
+        </p>
       </div>
     );
   }
@@ -222,11 +220,15 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           </div>
           <div className="flex items-center justify-between text-xs pt-1">
             <span className="text-muted-foreground flex items-center gap-1">↓ Down:</span>
-            <span className="font-mono font-medium text-foreground">{formatRate(network.downBytesPerSec)}</span>
+            <span className="font-mono font-medium text-foreground">
+              {formatRate(network.downBytesPerSec)}
+            </span>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground flex items-center gap-1">↑ Up:</span>
-            <span className="font-mono font-medium text-foreground">{formatRate(network.upBytesPerSec)}</span>
+            <span className="font-mono font-medium text-foreground">
+              {formatRate(network.upBytesPerSec)}
+            </span>
           </div>
         </div>
 
@@ -246,15 +248,17 @@ export const SystemTab: React.FC<SystemTabProps> = ({
               {power.hasBattery && power.batteryPercent !== null
                 ? `${power.batteryPercent}% ${power.isCharging ? '(Charging)' : ''}`
                 : power.acConnected
-                ? 'AC Power'
-                : 'Desktop PC'}
+                  ? 'AC Power'
+                  : 'Desktop PC'}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground flex items-center gap-1">
               <Clock size={12} /> Uptime:
             </span>
-            <span className="font-mono font-medium text-foreground">{formatUptime(uptimeSeconds)}</span>
+            <span className="font-mono font-medium text-foreground">
+              {formatUptime(uptimeSeconds)}
+            </span>
           </div>
         </div>
       </div>
@@ -299,9 +303,16 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           </div>
           <div className="space-y-1.5 divide-y divide-border/20 pt-1">
             {topProcesses.byRam.slice(0, 5).map((proc, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs pt-1.5 first:pt-0">
-                <span className="truncate max-w-[200px] text-foreground font-mono">{proc.name}</span>
-                <span className="font-mono text-muted-foreground text-[11px] shrink-0">{proc.value}</span>
+              <div
+                key={idx}
+                className="flex items-center justify-between text-xs pt-1.5 first:pt-0"
+              >
+                <span className="truncate max-w-[200px] text-foreground font-mono">
+                  {proc.name}
+                </span>
+                <span className="font-mono text-muted-foreground text-[11px] shrink-0">
+                  {proc.value}
+                </span>
               </div>
             ))}
           </div>
@@ -315,7 +326,7 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           <span className="font-mono text-muted-foreground/80">
             {gpu.available && gpu.utilizationPercent !== null
               ? `${gpu.utilizationPercent}%${(gpu as any).name ? ` (${(gpu as any).name})` : ''}`
-              : (gpu.note || 'not available')}
+              : gpu.note || 'not available'}
           </span>
         </div>
         <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
@@ -323,7 +334,7 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           <span className="font-mono text-muted-foreground/80">
             {temperature.available && temperature.celsius !== null
               ? `${temperature.celsius}°C${temperature.note ? ` (${temperature.note})` : ''}`
-              : (temperature.note || 'not available')}
+              : temperature.note || 'not available'}
           </span>
         </div>
       </div>

@@ -9,12 +9,7 @@
 
 export type ChannelName = 'input' | 'stats' | 'media' | 'clipboard' | 'control';
 
-export type ConnectionState =
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'failed'
-  | 'closed';
+export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'closed';
 
 export type ConnectionMode = 'lan_direct' | 'webrtc_direct' | 'webrtc_turn';
 
@@ -41,7 +36,10 @@ export interface Connection {
   mode: ConnectionMode;
 
   send(channel: ChannelName, data: ArrayBuffer | string | Uint8Array): void;
-  onMessage(channel: ChannelName, handler: (data: ArrayBuffer | string | Uint8Array) => void): () => void;
+  onMessage(
+    channel: ChannelName,
+    handler: (data: ArrayBuffer | string | Uint8Array) => void
+  ): () => void;
   onStateChange(handler: (state: ConnectionState) => void): () => void;
   close(): void;
 }

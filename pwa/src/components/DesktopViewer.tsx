@@ -106,7 +106,12 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
 
   const [isRunningLatencyTest, setIsRunningLatencyTest] = useState(false);
-  const [latencyTestResult, setLatencyTestResult] = useState<{ min: number; avg: number; max: number; p95: number } | null>(null);
+  const [latencyTestResult, setLatencyTestResult] = useState<{
+    min: number;
+    avg: number;
+    max: number;
+    p95: number;
+  } | null>(null);
 
   // RAF throttlers for mouse/touch pointer moves
   const pendingAbsMoveRef = useRef<{ x: number; y: number } | null>(null);
@@ -152,7 +157,9 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showStats, setShowStats] = useState(desktopSettings.showStats);
   const [inputMode, setInputMode] = useState<DesktopInputMode>(desktopSettings.inputMode);
-  const [activePreset, setActivePreset] = useState<QualityPresetName>(desktopSettings.defaultPreset);
+  const [activePreset, setActivePreset] = useState<QualityPresetName>(
+    desktopSettings.defaultPreset
+  );
   const [selectedMonitorId, setSelectedMonitorId] = useState<string | undefined>(
     desktopStatus.monitor?.id || monitors.find((m) => m.isPrimary)?.id || monitors[0]?.id
   );
@@ -527,7 +534,11 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
               absMoveRafIdRef.current = requestAnimationFrame(() => {
                 absMoveRafIdRef.current = null;
                 if (pendingAbsMoveRef.current) {
-                  sendAbsMove(pendingAbsMoveRef.current.x, pendingAbsMoveRef.current.y, selectedMonitorId);
+                  sendAbsMove(
+                    pendingAbsMoveRef.current.x,
+                    pendingAbsMoveRef.current.y,
+                    selectedMonitorId
+                  );
                   pendingAbsMoveRef.current = null;
                 }
               });
@@ -711,10 +722,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
       {/* Main Video/Canvas Viewport */}
       <div className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden bg-black">
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full object-contain pointer-events-none"
-        />
+        <canvas ref={canvasRef} className="w-full h-full object-contain pointer-events-none" />
 
         {/* State Badges / Overlays */}
         {streamState === 'connecting' && (
@@ -774,15 +782,49 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
                 <span>DESKTOP REMOTE STREAM</span>
               </div>
             </div>
-            <div>FPS: <span className="text-foreground">{stats.fps}</span></div>
-            <div>Latency (p50/p95): <span className="text-foreground">{stats.latencyP50 || stats.latencyMs || 0} / {stats.latencyP95 || stats.latencyMs || 0} ms</span></div>
-            <div>Decode / Paint: <span className="text-foreground">{stats.decodeMs || 0} / {stats.paintMs || 0} ms</span></div>
-            <div>Bitrate: <span className="text-foreground">{stats.bitrateKbps} kbps</span></div>
-            <div>Resolution: <span className="text-foreground">{stats.width}x{stats.height}</span></div>
-            <div>Tier: <span className="text-foreground capitalize">{stats.activeTier || activePreset}{stats.activeTier && stats.activeTier !== activePreset ? ' (adapted)' : ''}</span></div>
-            {stats.backend && <div>Backend: <span className="text-foreground">{stats.backend}</span></div>}
-            <div>Dropped: <span className="text-foreground">{stats.droppedFrames}</span></div>
-            <div>Zoom: <span className="text-foreground">{zoom.toFixed(1)}x</span></div>
+            <div>
+              FPS: <span className="text-foreground">{stats.fps}</span>
+            </div>
+            <div>
+              Latency (p50/p95):{' '}
+              <span className="text-foreground">
+                {stats.latencyP50 || stats.latencyMs || 0} /{' '}
+                {stats.latencyP95 || stats.latencyMs || 0} ms
+              </span>
+            </div>
+            <div>
+              Decode / Paint:{' '}
+              <span className="text-foreground">
+                {stats.decodeMs || 0} / {stats.paintMs || 0} ms
+              </span>
+            </div>
+            <div>
+              Bitrate: <span className="text-foreground">{stats.bitrateKbps} kbps</span>
+            </div>
+            <div>
+              Resolution:{' '}
+              <span className="text-foreground">
+                {stats.width}x{stats.height}
+              </span>
+            </div>
+            <div>
+              Tier:{' '}
+              <span className="text-foreground capitalize">
+                {stats.activeTier || activePreset}
+                {stats.activeTier && stats.activeTier !== activePreset ? ' (adapted)' : ''}
+              </span>
+            </div>
+            {stats.backend && (
+              <div>
+                Backend: <span className="text-foreground">{stats.backend}</span>
+              </div>
+            )}
+            <div>
+              Dropped: <span className="text-foreground">{stats.droppedFrames}</span>
+            </div>
+            <div>
+              Zoom: <span className="text-foreground">{zoom.toFixed(1)}x</span>
+            </div>
 
             <div className="pt-1.5 pointer-events-auto">
               <button
@@ -801,11 +843,14 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
                 disabled={isRunningLatencyTest}
                 className="w-full py-1 px-2 rounded-lg bg-raised hover:bg-border text-foreground font-medium text-[10px] border border-border transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
               >
-                <span>{isRunningLatencyTest ? 'Measuring (10 samples)...' : 'Run Latency Test'}</span>
+                <span>
+                  {isRunningLatencyTest ? 'Measuring (10 samples)...' : 'Run Latency Test'}
+                </span>
               </button>
               {latencyTestResult && (
                 <div className="mt-1 p-1 rounded bg-accent/10 border border-accent/30 text-accent text-[9px] leading-tight">
-                  RTT min: {latencyTestResult.min}ms · avg: {latencyTestResult.avg}ms · max: {latencyTestResult.max}ms · p95: {latencyTestResult.p95}ms
+                  RTT min: {latencyTestResult.min}ms · avg: {latencyTestResult.avg}ms · max:{' '}
+                  {latencyTestResult.max}ms · p95: {latencyTestResult.p95}ms
                 </div>
               )}
             </div>
@@ -950,19 +995,21 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
               {showPresetMenu && (
                 <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-surface border border-border rounded-xl p-1.5 shadow-xl min-w-[120px] z-40 space-y-1">
-                  {(['ultra', 'high', 'balanced', 'fast', 'tiny'] as QualityPresetName[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => handlePresetSelect(p)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono capitalize transition-colors ${
-                        activePreset === p
-                          ? 'bg-accent text-black font-semibold'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-raised'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                  {(['ultra', 'high', 'balanced', 'fast', 'tiny'] as QualityPresetName[]).map(
+                    (p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePresetSelect(p)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono capitalize transition-colors ${
+                          activePreset === p
+                            ? 'bg-accent text-black font-semibold'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-raised'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -1054,22 +1101,45 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
             {/* Second row: Navigation & Action Keys */}
             <div className="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar">
-              {['Esc', 'Tab', 'Enter', 'Backspace', 'Del', 'Space', 'Left', 'Up', 'Down', 'Right'].map(
-                (k) => (
-                  <button
-                    key={k}
-                    onClick={() => handleKeyTap(k)}
-                    className="px-2.5 py-1.5 rounded-lg bg-surface/70 border border-border/60 text-foreground text-[11px] font-mono hover:bg-raised active:scale-95 transition-transform shrink-0"
-                  >
-                    {k}
-                  </button>
-                )
-              )}
+              {[
+                'Esc',
+                'Tab',
+                'Enter',
+                'Backspace',
+                'Del',
+                'Space',
+                'Left',
+                'Up',
+                'Down',
+                'Right',
+              ].map((k) => (
+                <button
+                  key={k}
+                  onClick={() => handleKeyTap(k)}
+                  className="px-2.5 py-1.5 rounded-lg bg-surface/70 border border-border/60 text-foreground text-[11px] font-mono hover:bg-raised active:scale-95 transition-transform shrink-0"
+                >
+                  {k}
+                </button>
+              ))}
             </div>
 
             {/* Third row: Shortcut Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-              {['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+A', 'Ctrl+S', 'Alt+Tab', 'Win+D', 'Win+Tab', 'Win+E', 'Win+R', 'F5', 'F11', 'Alt+F4'].map((chip) => (
+              {[
+                'Ctrl+C',
+                'Ctrl+V',
+                'Ctrl+Z',
+                'Ctrl+A',
+                'Ctrl+S',
+                'Alt+Tab',
+                'Win+D',
+                'Win+Tab',
+                'Win+E',
+                'Win+R',
+                'F5',
+                'F11',
+                'Alt+F4',
+              ].map((chip) => (
                 <button
                   key={chip}
                   onClick={() => handleShortcutChip(chip)}
@@ -1093,8 +1163,8 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
           <div className="bg-surface border border-border rounded-2xl p-5 max-w-xs w-full text-center shadow-2xl">
             <h3 className="text-sm font-bold text-foreground mb-1.5">Close Active Window?</h3>
             <p className="text-xs text-muted-foreground mb-4">
-              Sending <code className="font-mono text-optic-red">Alt+F4</code> will immediately close
-              the current window on your PC.
+              Sending <code className="font-mono text-optic-red">Alt+F4</code> will immediately
+              close the current window on your PC.
             </p>
             <div className="flex gap-2">
               <button

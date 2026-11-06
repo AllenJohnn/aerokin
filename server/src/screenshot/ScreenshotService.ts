@@ -68,17 +68,27 @@ if (process.platform === 'win32') {
     ReleaseDCFn = user32.func('int __stdcall ReleaseDC(intptr_t hWnd, intptr_t hDC)');
     GetSystemMetricsFn = user32.func('int __stdcall GetSystemMetrics(int nIndex)');
     CreateCompatibleDCFn = gdi32.func('intptr_t __stdcall CreateCompatibleDC(intptr_t hDC)');
-    CreateCompatibleBitmapFn = gdi32.func('intptr_t __stdcall CreateCompatibleBitmap(intptr_t hDC, int cx, int cy)');
+    CreateCompatibleBitmapFn = gdi32.func(
+      'intptr_t __stdcall CreateCompatibleBitmap(intptr_t hDC, int cx, int cy)'
+    );
     SelectObjectFn = gdi32.func('intptr_t __stdcall SelectObject(intptr_t hDC, intptr_t h)');
-    BitBltFn = gdi32.func('bool __stdcall BitBlt(intptr_t hdc, int x, int y, int cx, int cy, intptr_t hdcSrc, int x1, int y1, uint32_t rop)');
+    BitBltFn = gdi32.func(
+      'bool __stdcall BitBlt(intptr_t hdc, int x, int y, int cx, int cy, intptr_t hdcSrc, int x1, int y1, uint32_t rop)'
+    );
     DeleteObjectFn = gdi32.func('bool __stdcall DeleteObject(intptr_t ho)');
     DeleteDCFn = gdi32.func('bool __stdcall DeleteDC(intptr_t hdc)');
-    GetDIBitsFn = gdi32.func('int __stdcall GetDIBits(intptr_t hdc, intptr_t hbm, uint start, uint cLines, _Out_ uint8_t *lpvBits, _Inout_ uint8_t *lpbmi, uint usage)');
+    GetDIBitsFn = gdi32.func(
+      'int __stdcall GetDIBits(intptr_t hdc, intptr_t hbm, uint start, uint cLines, _Out_ uint8_t *lpvBits, _Inout_ uint8_t *lpbmi, uint usage)'
+    );
 
-    OpenInputDesktopFn = user32.func('intptr_t __stdcall OpenInputDesktop(uint32_t dwFlags, bool fInherit, uint32_t dwDesiredAccess)');
+    OpenInputDesktopFn = user32.func(
+      'intptr_t __stdcall OpenInputDesktop(uint32_t dwFlags, bool fInherit, uint32_t dwDesiredAccess)'
+    );
     CloseDesktopFn = user32.func('bool __stdcall CloseDesktop(intptr_t hDesktop)');
     GetForegroundWindowFn = user32.func('intptr_t __stdcall GetForegroundWindow()');
-    GetWindowRectFn = user32.func('bool __stdcall GetWindowRect(intptr_t hWnd, _Out_ uint8_t *lpRect)');
+    GetWindowRectFn = user32.func(
+      'bool __stdcall GetWindowRect(intptr_t hWnd, _Out_ uint8_t *lpRect)'
+    );
     GetCursorInfoFn = user32.func('bool __stdcall GetCursorInfo(_Inout_ uint8_t *pci)');
     DrawIconFn = user32.func('bool __stdcall DrawIcon(intptr_t hDC, int X, int Y, intptr_t hIcon)');
   } catch (err) {
@@ -123,7 +133,13 @@ export class ScreenshotService {
       };
     }
 
-    if (!GetDCFn || !CreateCompatibleDCFn || !CreateCompatibleBitmapFn || !BitBltFn || !GetDIBitsFn) {
+    if (
+      !GetDCFn ||
+      !CreateCompatibleDCFn ||
+      !CreateCompatibleBitmapFn ||
+      !BitBltFn ||
+      !GetDIBitsFn
+    ) {
       return {
         success: false,
         error: 'Native Win32 GDI capture interfaces are unavailable.',
@@ -194,7 +210,17 @@ export class ScreenshotService {
       const hOld = SelectObjectFn(hdcMem, hBitmap);
 
       const SRCCOPY = 0x00cc0020;
-      const bltOk = BitBltFn(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
+      const bltOk = BitBltFn(
+        hdcMem,
+        0,
+        0,
+        captureW,
+        captureH,
+        hdcScreen,
+        captureX,
+        captureY,
+        SRCCOPY
+      );
 
       // 3. Optionally draw mouse cursor
       if (options.includeCursor && GetCursorInfoFn && DrawIconFn) {

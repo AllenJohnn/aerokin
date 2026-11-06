@@ -165,7 +165,10 @@ export class GpuStatsProvider {
       powerDrawWatts,
       clockMhz,
       source: 'nvidia-smi',
-      note: utilizationPercent !== null ? 'NVIDIA SMI sensor' : 'NVIDIA GPU present, utilization not supported',
+      note:
+        utilizationPercent !== null
+          ? 'NVIDIA SMI sensor'
+          : 'NVIDIA GPU present, utilization not supported',
     };
   }
 

@@ -103,7 +103,9 @@ export class ClipboardService {
   private readonly maxHistoryItems = 20;
 
   constructor(manager?: IClipboardManager) {
-    this.manager = manager || (process.platform === 'win32' ? new Win32ClipboardManager() : new MockClipboardManager());
+    this.manager =
+      manager ||
+      (process.platform === 'win32' ? new Win32ClipboardManager() : new MockClipboardManager());
   }
 
   public async getPcClipboard(): Promise<{ text: string; length: number }> {
@@ -113,9 +115,14 @@ export class ClipboardService {
     return { text, length: text.length };
   }
 
-  public async setPcClipboard(text: string): Promise<{ success: boolean; item?: ClipboardHistoryItem }> {
+  public async setPcClipboard(
+    text: string
+  ): Promise<{ success: boolean; item?: ClipboardHistoryItem }> {
     if (text.length > MAX_CLIPBOARD_TEXT_BYTES) {
-      serverLogger.warn('clipboard', `Rejected oversized clipboard text (${text.length} bytes > ${MAX_CLIPBOARD_TEXT_BYTES}).`);
+      serverLogger.warn(
+        'clipboard',
+        `Rejected oversized clipboard text (${text.length} bytes > ${MAX_CLIPBOARD_TEXT_BYTES}).`
+      );
       return { success: false };
     }
 
@@ -136,7 +143,10 @@ export class ClipboardService {
     }
 
     // Privacy-safe log: NEVER print text content!
-    serverLogger.info('clipboard', `Updated PC clipboard from phone. Length: ${text.length} chars. (shared: ${this.history.length} items)`);
+    serverLogger.info(
+      'clipboard',
+      `Updated PC clipboard from phone. Length: ${text.length} chars. (shared: ${this.history.length} items)`
+    );
 
     return { success: true, item };
   }

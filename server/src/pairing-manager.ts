@@ -23,7 +23,11 @@ export interface PendingApprovalRequest {
   expiresInSeconds: number;
 }
 
-export type ApprovalHandler = (name: string, platform: string, clientIp: string) => Promise<boolean>;
+export type ApprovalHandler = (
+  name: string,
+  platform: string,
+  clientIp: string
+) => Promise<boolean>;
 
 export class PairingManager extends EventEmitter {
   private activeCode: string | null = null;
@@ -153,13 +157,18 @@ export class PairingManager extends EventEmitter {
 
     if (this.failedAttemptsWindow.length >= 5) {
       this.lockoutUntilGlobal = now + 60_000;
-      console.warn('[Security] Global pairing lockout engaged for 60s due to repeated wrong attempts.');
+      console.warn(
+        '[Security] Global pairing lockout engaged for 60s due to repeated wrong attempts.'
+      );
     }
   }
 
   public getPendingApproval(): PendingApprovalRequest | null {
     if (!this.currentPendingApproval) return null;
-    const remaining = Math.max(0, Math.round((this.currentPendingApproval.expiresAt - Date.now()) / 1000));
+    const remaining = Math.max(
+      0,
+      Math.round((this.currentPendingApproval.expiresAt - Date.now()) / 1000)
+    );
     return {
       requestId: this.currentPendingApproval.requestId,
       name: this.currentPendingApproval.name,
@@ -206,7 +215,9 @@ export class PairingManager extends EventEmitter {
     clientIp: string
   ): Promise<boolean> {
     if (this.currentPendingApproval) {
-      console.warn('[Security] Another pairing approval is currently in progress. Denying concurrent attempt.');
+      console.warn(
+        '[Security] Another pairing approval is currently in progress. Denying concurrent attempt.'
+      );
       return false;
     }
 
@@ -244,11 +255,13 @@ export class PairingManager extends EventEmitter {
 
       // If custom approver is configured (e.g. terminal CLI in index.ts), trigger it
       if (this.customApprover) {
-        this.customApprover(name, platform, clientIp).then((approved) => {
-          this.respondApproval(requestId, approved, 'terminal');
-        }).catch(() => {
-          this.respondApproval(requestId, false, 'terminal');
-        });
+        this.customApprover(name, platform, clientIp)
+          .then((approved) => {
+            this.respondApproval(requestId, approved, 'terminal');
+          })
+          .catch(() => {
+            this.respondApproval(requestId, false, 'terminal');
+          });
       } else if (process.stdin.isTTY) {
         this.isPromptingApproval = true;
         const rl = readline.createInterface({
@@ -266,7 +279,9 @@ export class PairingManager extends EventEmitter {
           }
         );
       } else {
-        console.warn('[Security] Terminal is non-interactive. Awaiting dashboard approval or 30s timeout.');
+        console.warn(
+          '[Security] Terminal is non-interactive. Awaiting dashboard approval or 30s timeout.'
+        );
       }
     });
   }
@@ -330,7 +345,9 @@ export class PairingManager extends EventEmitter {
     }
 
     // Step 2: PC operator approval gate (30s timeout, default deny)
-    console.log(`[Pairing] Valid 8-digit code received from ${clientIp}. Awaiting PC operator approval...`);
+    console.log(
+      `[Pairing] Valid 8-digit code received from ${clientIp}. Awaiting PC operator approval...`
+    );
     const approved = await this.promptTerminalApproval(name, platform, clientIp);
 
     // Consume single-use code immediately regardless of outcome

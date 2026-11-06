@@ -73,12 +73,7 @@ export const QUALITY_PRESETS: Record<QualityPresetName, QualityPresetConfig> = {
   },
 };
 
-export type DesktopSessionState =
-  | 'stopped'
-  | 'starting'
-  | 'active'
-  | 'secure_screen'
-  | 'error';
+export type DesktopSessionState = 'stopped' | 'starting' | 'active' | 'secure_screen' | 'error';
 
 export type CaptureBackend = 'ddagrab' | 'gdigrab' | 'testsrc';
 export type VideoCodec = 'h264' | 'mjpeg';

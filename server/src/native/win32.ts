@@ -42,16 +42,28 @@ if (isWin) {
 
     GetCursorPosFn = user32.func('bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)');
     SetCursorPosFn = user32.func('bool __stdcall SetCursorPos(int X, int Y)');
-    mouseEventFn = user32.func('void __stdcall mouse_event(uint32_t dwFlags, uint32_t dx, uint32_t dy, uint32_t dwData, uintptr_t dwExtraInfo)');
-    SendInputFn = user32.func('uint __stdcall SendInput(uint cInputs, uint8_t *pInputs, int cbSize)');
+    mouseEventFn = user32.func(
+      'void __stdcall mouse_event(uint32_t dwFlags, uint32_t dx, uint32_t dy, uint32_t dwData, uintptr_t dwExtraInfo)'
+    );
+    SendInputFn = user32.func(
+      'uint __stdcall SendInput(uint cInputs, uint8_t *pInputs, int cbSize)'
+    );
     MapVirtualKeyWFn = user32.func('uint __stdcall MapVirtualKeyW(uint uCode, uint uMapType)');
 
     GetForegroundWindowFn = user32.func('intptr_t __stdcall GetForegroundWindow()');
-    GetWindowTextWFn = user32.func('int __stdcall GetWindowTextW(intptr_t hWnd, _Out_ uint16_t *lpString, int nMaxCount)');
-    GetWindowThreadProcessIdFn = user32.func('uint32_t __stdcall GetWindowThreadProcessId(intptr_t hWnd, _Out_ uint32_t *lpdwProcessId)');
+    GetWindowTextWFn = user32.func(
+      'int __stdcall GetWindowTextW(intptr_t hWnd, _Out_ uint16_t *lpString, int nMaxCount)'
+    );
+    GetWindowThreadProcessIdFn = user32.func(
+      'uint32_t __stdcall GetWindowThreadProcessId(intptr_t hWnd, _Out_ uint32_t *lpdwProcessId)'
+    );
 
-    OpenProcessFn = kernel32.func('intptr_t __stdcall OpenProcess(uint32_t dwDesiredAccess, bool bInheritHandle, uint32_t dwProcessId)');
-    QueryFullProcessImageNameWFn = kernel32.func('bool __stdcall QueryFullProcessImageNameW(intptr_t hProcess, uint32_t dwFlags, _Out_ uint16_t *lpExeName, _Inout_ uint32_t *lpdwSize)');
+    OpenProcessFn = kernel32.func(
+      'intptr_t __stdcall OpenProcess(uint32_t dwDesiredAccess, bool bInheritHandle, uint32_t dwProcessId)'
+    );
+    QueryFullProcessImageNameWFn = kernel32.func(
+      'bool __stdcall QueryFullProcessImageNameW(intptr_t hProcess, uint32_t dwFlags, _Out_ uint16_t *lpExeName, _Inout_ uint32_t *lpdwSize)'
+    );
     CloseHandleFn = kernel32.func('bool __stdcall CloseHandle(intptr_t hObject)');
   } catch (err) {
     console.warn('[Win32] Failed to initialize koffi user32/kernel32 bindings:', err);
@@ -514,7 +526,8 @@ export class Win32Input {
     // Get Title
     const titleBuf = new Uint16Array(512);
     const titleLen = GetWindowTextWFn(hwnd, titleBuf, 512);
-    const title = titleLen > 0 ? Buffer.from(titleBuf.buffer, 0, titleLen * 2).toString('utf16le') : '';
+    const title =
+      titleLen > 0 ? Buffer.from(titleBuf.buffer, 0, titleLen * 2).toString('utf16le') : '';
 
     // Get PID
     const pidHolder = [0];

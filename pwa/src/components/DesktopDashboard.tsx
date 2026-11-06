@@ -472,7 +472,11 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
     const pcId = webrtcStatus?.pcId || 'pc_host';
     const signaling = webrtcStatus?.signalingUrl;
-    const hostedBase = (window.location.origin.includes('localhost') ? 'https://app.aerokin.com' : window.location.origin).replace(/\/+$/, '');
+    const hostedBase = (
+      window.location.origin.includes('localhost')
+        ? 'https://app.aerokin.com'
+        : window.location.origin
+    ).replace(/\/+$/, '');
     const remotePayload = activeCode
       ? `${hostedBase}/#agent=${pcId}${signaling ? `&signal=${encodeURIComponent(signaling)}` : ''}&code=${activeCode}`
       : `${hostedBase}/#agent=${pcId}`;
@@ -618,10 +622,22 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
   // Connection Quality label & color
   const getConnectionQuality = (rtt: number | null) => {
-    if (rtt === null || rtt === undefined) return { label: 'Connecting', color: 'text-muted-foreground', bg: 'bg-muted/30' };
-    if (rtt < 12) return { label: 'Excellent', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
-    if (rtt < 30) return { label: 'Good', color: 'text-emerald-300', bg: 'bg-emerald-500/10 border-emerald-500/20' };
-    if (rtt < 60) return { label: 'Fair', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' };
+    if (rtt === null || rtt === undefined)
+      return { label: 'Connecting', color: 'text-muted-foreground', bg: 'bg-muted/30' };
+    if (rtt < 12)
+      return {
+        label: 'Excellent',
+        color: 'text-emerald-400',
+        bg: 'bg-emerald-500/10 border-emerald-500/30',
+      };
+    if (rtt < 30)
+      return {
+        label: 'Good',
+        color: 'text-emerald-300',
+        bg: 'bg-emerald-500/10 border-emerald-500/20',
+      };
+    if (rtt < 60)
+      return { label: 'Fair', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' };
     return { label: 'Weak', color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' };
   };
 
@@ -794,7 +810,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     </h3>
                   </div>
                   <p className="text-xs text-rose-300/80 mt-0.5">
-                    10-second cancelable delay in progress from remote phone. Cancel immediately to prevent system termination.
+                    10-second cancelable delay in progress from remote phone. Cancel immediately to
+                    prevent system termination.
                   </p>
                 </div>
               </div>
@@ -857,7 +874,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Client IP: <span className="font-mono text-foreground">{pendingApproval.clientIp}</span>. Authorize this device to control your PC?
+                    Client IP:{' '}
+                    <span className="font-mono text-foreground">{pendingApproval.clientIp}</span>.
+                    Authorize this device to control your PC?
                   </p>
                 </div>
               </div>
@@ -937,7 +956,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   {(pairMode === 'lan' ? pairQrUrl : remoteQrUrl) ? (
                     <img
                       src={pairMode === 'lan' ? pairQrUrl! : remoteQrUrl!}
-                      alt={pairMode === 'lan' ? 'LAN Pairing QR Code' : 'Remote WebRTC Pairing QR Code'}
+                      alt={
+                        pairMode === 'lan' ? 'LAN Pairing QR Code' : 'Remote WebRTC Pairing QR Code'
+                      }
                       className="w-44 h-44 object-contain"
                     />
                   ) : (
@@ -1008,7 +1029,11 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
                           title="Copy LAN URL"
                         >
-                          {copiedKey === 'lan_url' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                          {copiedKey === 'lan_url' ? (
+                            <Check size={14} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={14} />
+                          )}
                         </button>
                       </div>
 
@@ -1026,7 +1051,11 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
                           title="Copy mDNS URL"
                         >
-                          {copiedKey === 'mdns_url' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                          {copiedKey === 'mdns_url' ? (
+                            <Check size={14} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={14} />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -1050,22 +1079,34 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
                           title="Copy Remote Pairing URI"
                         >
-                          {copiedKey === 'remote_uri' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                          {copiedKey === 'remote_uri' ? (
+                            <Check size={14} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={14} />
+                          )}
                         </button>
                       </div>
 
                       {/* Host PC ID */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-[10px] text-muted-foreground uppercase">PC ID:</span>
-                          <span className="text-foreground font-semibold">{webrtcStatus?.pcId || 'pc_host'}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase">
+                            PC ID:
+                          </span>
+                          <span className="text-foreground font-semibold">
+                            {webrtcStatus?.pcId || 'pc_host'}
+                          </span>
                         </div>
                         <button
                           onClick={() => handleCopy(webrtcStatus?.pcId || 'pc_host', 'pc_id_copy')}
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
                           title="Copy Host PC ID"
                         >
-                          {copiedKey === 'pc_id_copy' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                          {copiedKey === 'pc_id_copy' ? (
+                            <Check size={14} className="text-emerald-400" />
+                          ) : (
+                            <Copy size={14} />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -1090,7 +1131,11 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <div className="px-4 pb-4 pt-2 border-t border-border flex flex-col sm:flex-row items-center gap-4 text-xs text-muted-foreground">
                     <div className="p-2 bg-white rounded-xl shadow-sm flex-shrink-0">
                       {trustQrUrl ? (
-                        <img src={trustQrUrl} alt="CA Profile QR" className="w-24 h-24 object-contain" />
+                        <img
+                          src={trustQrUrl}
+                          alt="CA Profile QR"
+                          className="w-24 h-24 object-contain"
+                        />
                       ) : (
                         <div className="w-24 h-24 flex items-center justify-center font-mono text-[10px] text-black">
                           Loading...
@@ -1098,12 +1143,31 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5 leading-relaxed">
-                      <p className="text-foreground font-medium">One-Time iOS Root CA Profile Install:</p>
+                      <p className="text-foreground font-medium">
+                        One-Time iOS Root CA Profile Install:
+                      </p>
                       <ol className="list-decimal list-inside space-y-1 text-[11px]">
-                        <li>Scan QR code with iPhone Camera to open <span className="font-mono text-foreground">http://{pcStats?.lanIp}:8080</span>.</li>
-                        <li>Tap <strong>Allow</strong> &rarr; Profile Downloaded.</li>
-                        <li>Open iOS <strong>Settings</strong> &rarr; Profile Downloaded &rarr; Install.</li>
-                        <li>Go to <strong>Settings &rarr; General &rarr; About &rarr; Certificate Trust Settings</strong> and enable Full Trust for AEROKIN CA.</li>
+                        <li>
+                          Scan QR code with iPhone Camera to open{' '}
+                          <span className="font-mono text-foreground">
+                            http://{pcStats?.lanIp}:8080
+                          </span>
+                          .
+                        </li>
+                        <li>
+                          Tap <strong>Allow</strong> &rarr; Profile Downloaded.
+                        </li>
+                        <li>
+                          Open iOS <strong>Settings</strong> &rarr; Profile Downloaded &rarr;
+                          Install.
+                        </li>
+                        <li>
+                          Go to{' '}
+                          <strong>
+                            Settings &rarr; General &rarr; About &rarr; Certificate Trust Settings
+                          </strong>{' '}
+                          and enable Full Trust for AEROKIN CA.
+                        </li>
                       </ol>
                     </div>
                   </div>
@@ -1146,7 +1210,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <div>
                     <span className="font-medium text-foreground">Add to Home Screen</span>
                     <p className="text-muted-foreground text-[11px] mt-0.5">
-                      In Safari, tap Share &rarr; Add to Home Screen for fullscreen trackpad & remote.
+                      In Safari, tap Share &rarr; Add to Home Screen for fullscreen trackpad &
+                      remote.
                     </p>
                   </div>
                 </div>
@@ -1163,7 +1228,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
               <div className="flex items-center gap-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-sm font-semibold text-foreground">
-                  {activeConnectedDevices.length} Connected Controller{activeConnectedDevices.length > 1 ? 's' : ''}
+                  {activeConnectedDevices.length} Connected Controller
+                  {activeConnectedDevices.length > 1 ? 's' : ''}
                 </span>
               </div>
 
@@ -1278,9 +1344,12 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                         <div className="flex items-center gap-2">
                           <Desktop size={16} className="text-[#FF5A1F]" />
                           <div>
-                            <span className="font-semibold text-foreground">Desktop Stream Active</span>
+                            <span className="font-semibold text-foreground">
+                              Desktop Stream Active
+                            </span>
                             <span className="font-mono text-[11px] text-muted-foreground ml-2">
-                              {desktopStream.stats?.fps || 0} fps • {desktopStream.stats?.bitrateKbps || 0} kbps
+                              {desktopStream.stats?.fps || 0} fps •{' '}
+                              {desktopStream.stats?.bitrateKbps || 0} kbps
                             </span>
                           </div>
                         </div>
@@ -1302,7 +1371,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                             {mediaStatus.nowPlaying.title}
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
-                            {mediaStatus.nowPlaying.artist || mediaStatus.nowPlaying.app || 'Now Playing'}
+                            {mediaStatus.nowPlaying.artist ||
+                              mediaStatus.nowPlaying.app ||
+                              'Now Playing'}
                           </div>
                         </div>
                       </div>
@@ -1370,7 +1441,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
               <div>
                 <span className="text-muted-foreground text-[10px] uppercase">Uptime</span>
-                <div className="text-foreground font-semibold mt-0.5">{formatUptime(pcStats.uptime)}</div>
+                <div className="text-foreground font-semibold mt-0.5">
+                  {formatUptime(pcStats.uptime)}
+                </div>
               </div>
             </div>
 
@@ -1383,7 +1456,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <BatteryFull size={16} />
                 )}
                 <span>PC Battery: {pcStats.power.batteryPercent}%</span>
-                {pcStats.power.isCharging && <span className="text-[10px] text-emerald-400">(Charging)</span>}
+                {pcStats.power.isCharging && (
+                  <span className="text-[10px] text-emerald-400">(Charging)</span>
+                )}
               </div>
             )}
           </div>
@@ -1401,7 +1476,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   Remote WebRTC & Internet Access
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Direct peer-to-peer control from your iPhone anywhere over the internet (No Tailscale / AnyDesk)
+                  Direct peer-to-peer control from your iPhone anywhere over the internet (No
+                  Tailscale / AnyDesk)
                 </p>
               </div>
             </div>
@@ -1412,8 +1488,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   webrtcStatus?.signalingConnected
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                     : webrtcStatus?.signalingUrl
-                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                    : 'bg-white/5 border-white/10 text-muted-foreground'
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                      : 'bg-white/5 border-white/10 text-muted-foreground'
                 }`}
               >
                 <span
@@ -1421,24 +1497,22 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     webrtcStatus?.signalingConnected
                       ? 'bg-emerald-400 animate-pulse'
                       : webrtcStatus?.signalingUrl
-                      ? 'bg-amber-400 animate-pulse'
-                      : 'bg-neutral-500'
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-neutral-500'
                   }`}
                 />
                 <span>
                   {webrtcStatus?.signalingConnected
                     ? 'Signaling Online'
                     : webrtcStatus?.signalingUrl
-                    ? 'Connecting...'
-                    : 'LAN-Only (Signaling Unset)'}
+                      ? 'Connecting...'
+                      : 'LAN-Only (Signaling Unset)'}
                 </span>
               </span>
 
               {webrtcStatus?.remotePairPayload && (
                 <button
-                  onClick={() =>
-                    handleCopy(webrtcStatus.remotePairPayload!, 'remote_payload_btn')
-                  }
+                  onClick={() => handleCopy(webrtcStatus.remotePairPayload!, 'remote_payload_btn')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-raised hover:bg-white/[0.08] text-xs text-foreground font-medium transition-colors"
                   title="Copy Remote Pairing Link"
                 >
@@ -1473,7 +1547,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   )}
                 </button>
               </div>
-              <div className="text-[10px] text-muted-foreground">Persistent hardware identifier</div>
+              <div className="text-[10px] text-muted-foreground">
+                Persistent hardware identifier
+              </div>
             </div>
 
             {/* Signaling Server */}
@@ -1481,15 +1557,18 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
               <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
                 Signaling Service
               </div>
-              <div className="font-mono text-xs text-foreground truncate" title={webrtcStatus?.signalingUrl || 'Self-hosted local'}>
+              <div
+                className="font-mono text-xs text-foreground truncate"
+                title={webrtcStatus?.signalingUrl || 'Self-hosted local'}
+              >
                 {webrtcStatus?.signalingUrl || 'Not configured'}
               </div>
               <div className="text-[10px] text-muted-foreground">
                 {webrtcStatus?.signalingConnected
                   ? 'WebSocket room ready'
                   : webrtcStatus?.signalingUrl
-                  ? 'Reconnecting...'
-                  : 'Set AEROKIN_SIGNALING_URL'}
+                    ? 'Reconnecting...'
+                    : 'Set AEROKIN_SIGNALING_URL'}
               </div>
             </div>
 
@@ -1499,11 +1578,16 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 NAT Traversal (STUN/TURN)
               </div>
               <div className="font-mono text-xs text-foreground font-semibold flex items-center gap-1.5">
-                <ShieldCheck size={14} className={webrtcStatus?.turnConfigured ? 'text-emerald-400' : 'text-neutral-400'} />
+                <ShieldCheck
+                  size={14}
+                  className={webrtcStatus?.turnConfigured ? 'text-emerald-400' : 'text-neutral-400'}
+                />
                 <span>{webrtcStatus?.turnConfigured ? 'Coturn HMAC-SHA1' : 'Standard STUN'}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                {webrtcStatus?.turnConfigured ? 'Direct P2P + Relay fallback' : 'P2P direct hole punching'}
+                {webrtcStatus?.turnConfigured
+                  ? 'Direct P2P + Relay fallback'
+                  : 'P2P direct hole punching'}
               </div>
             </div>
 
@@ -1530,7 +1614,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 <h3 className="text-sm font-semibold text-foreground">System Telemetry</h3>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-raised border border-border text-muted-foreground">
-                Agent CPU: {systemTelemetry?.agentCpuPercent != null ? `${systemTelemetry.agentCpuPercent.toFixed(2)}%` : '<0.02%'}
+                Agent CPU:{' '}
+                {systemTelemetry?.agentCpuPercent != null
+                  ? `${systemTelemetry.agentCpuPercent.toFixed(2)}%`
+                  : '<0.02%'}
               </span>
             </div>
 
@@ -1542,13 +1629,17 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                       <span>CPU TOTAL</span>
                       <span className="text-foreground font-semibold">
-                        {systemTelemetry.cpu?.totalPercent != null ? `${systemTelemetry.cpu.totalPercent.toFixed(1)}%` : '0%'}
+                        {systemTelemetry.cpu?.totalPercent != null
+                          ? `${systemTelemetry.cpu.totalPercent.toFixed(1)}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[#FF5A1F] rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(100, systemTelemetry.cpu?.totalPercent || 0)}%` }}
+                        style={{
+                          width: `${Math.min(100, systemTelemetry.cpu?.totalPercent || 0)}%`,
+                        }}
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground/80">
@@ -1560,17 +1651,23 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                       <span>RAM USAGE</span>
                       <span className="text-foreground font-semibold">
-                        {systemTelemetry.memory?.usedPercent != null ? `${systemTelemetry.memory.usedPercent.toFixed(1)}%` : '0%'}
+                        {systemTelemetry.memory?.usedPercent != null
+                          ? `${systemTelemetry.memory.usedPercent.toFixed(1)}%`
+                          : '0%'}
                       </span>
                     </div>
                     <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-emerald-400 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(100, systemTelemetry.memory?.usedPercent || 0)}%` }}
+                        style={{
+                          width: `${Math.min(100, systemTelemetry.memory?.usedPercent || 0)}%`,
+                        }}
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground/80">
-                      {systemTelemetry.memory ? `${(systemTelemetry.memory.usedBytes / 1e9).toFixed(1)} / ${(systemTelemetry.memory.totalBytes / 1e9).toFixed(1)} GB` : ''}
+                      {systemTelemetry.memory
+                        ? `${(systemTelemetry.memory.usedBytes / 1e9).toFixed(1)} / ${(systemTelemetry.memory.totalBytes / 1e9).toFixed(1)} GB`
+                        : ''}
                     </span>
                   </div>
                 </div>
@@ -1578,10 +1675,15 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 {/* Storage & Network */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase text-muted-foreground">Storage Drives</span>
+                    <span className="text-[10px] uppercase text-muted-foreground">
+                      Storage Drives
+                    </span>
                     {systemTelemetry.disks && systemTelemetry.disks.length > 0 ? (
                       systemTelemetry.disks.map((d: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between text-[11px] bg-raised px-2.5 py-1.5 rounded-lg border border-border/40">
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-[11px] bg-raised px-2.5 py-1.5 rounded-lg border border-border/40"
+                        >
                           <span className="font-semibold text-foreground">{d.mount}</span>
                           <span className="text-muted-foreground">
                             {d.usedGb} / {d.totalGb} GB ({d.percent}%)
@@ -1589,7 +1691,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                         </div>
                       ))
                     ) : (
-                      <span className="text-muted-foreground text-[11px]">Primary drive active</span>
+                      <span className="text-muted-foreground text-[11px]">
+                        Primary drive active
+                      </span>
                     )}
                   </div>
 
@@ -1597,12 +1701,24 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     <span className="text-[10px] uppercase text-muted-foreground">Network I/O</span>
                     <div className="bg-raised p-2.5 rounded-lg border border-border/40 flex flex-col gap-1 text-[11px]">
                       <div className="flex items-center justify-between text-emerald-400">
-                        <span className="flex items-center gap-1"><ArrowDown size={11} /> DOWN</span>
-                        <span>{systemTelemetry.network?.rxRateKbps != null ? `${systemTelemetry.network.rxRateKbps.toFixed(1)} KB/s` : '0.0 KB/s'}</span>
+                        <span className="flex items-center gap-1">
+                          <ArrowDown size={11} /> DOWN
+                        </span>
+                        <span>
+                          {systemTelemetry.network?.rxRateKbps != null
+                            ? `${systemTelemetry.network.rxRateKbps.toFixed(1)} KB/s`
+                            : '0.0 KB/s'}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-blue-400">
-                        <span className="flex items-center gap-1"><ArrowUp size={11} /> UP</span>
-                        <span>{systemTelemetry.network?.txRateKbps != null ? `${systemTelemetry.network.txRateKbps.toFixed(1)} KB/s` : '0.0 KB/s'}</span>
+                        <span className="flex items-center gap-1">
+                          <ArrowUp size={11} /> UP
+                        </span>
+                        <span>
+                          {systemTelemetry.network?.txRateKbps != null
+                            ? `${systemTelemetry.network.txRateKbps.toFixed(1)} KB/s`
+                            : '0.0 KB/s'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1610,23 +1726,57 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
                 {/* GPU & Thermal honest reporting */}
                 <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>GPU Engine: <strong className="text-foreground">{systemTelemetry.gpu?.available && (systemTelemetry.gpu.utilizationPercent !== null || systemTelemetry.gpu.utilization !== null) ? `${systemTelemetry.gpu.utilizationPercent ?? systemTelemetry.gpu.utilization}%${systemTelemetry.gpu.name ? ` (${systemTelemetry.gpu.name})` : ''}` : (systemTelemetry.gpu?.note || 'Not available')}</strong></span>
-                  <span>Hardware Thermal: <strong className="text-foreground">{systemTelemetry.temperature?.available && systemTelemetry.temperature.celsius !== null ? `${systemTelemetry.temperature.celsius}°C` : (systemTelemetry.temperatures?.available ? `${systemTelemetry.temperatures.main}°C` : (systemTelemetry.temperature?.note || 'Not available'))}</strong></span>
+                  <span>
+                    GPU Engine:{' '}
+                    <strong className="text-foreground">
+                      {systemTelemetry.gpu?.available &&
+                      (systemTelemetry.gpu.utilizationPercent !== null ||
+                        systemTelemetry.gpu.utilization !== null)
+                        ? `${systemTelemetry.gpu.utilizationPercent ?? systemTelemetry.gpu.utilization}%${systemTelemetry.gpu.name ? ` (${systemTelemetry.gpu.name})` : ''}`
+                        : systemTelemetry.gpu?.note || 'Not available'}
+                    </strong>
+                  </span>
+                  <span>
+                    Hardware Thermal:{' '}
+                    <strong className="text-foreground">
+                      {systemTelemetry.temperature?.available &&
+                      systemTelemetry.temperature.celsius !== null
+                        ? `${systemTelemetry.temperature.celsius}°C`
+                        : systemTelemetry.temperatures?.available
+                          ? `${systemTelemetry.temperatures.main}°C`
+                          : systemTelemetry.temperature?.note || 'Not available'}
+                    </strong>
+                  </span>
                 </div>
 
                 {/* Media Diagnostics Card */}
                 <div className="pt-2.5 border-t border-border/40 space-y-1.5 text-[11px]">
                   <div className="flex items-center justify-between font-semibold text-foreground">
-                    <span className="flex items-center gap-1.5"><MusicNotes size={13} className="text-[#FF5A1F]" /> Media Detection:</span>
+                    <span className="flex items-center gap-1.5">
+                      <MusicNotes size={13} className="text-[#FF5A1F]" /> Media Detection:
+                    </span>
                     <span className="font-mono text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">
-                      {mediaStatus?.nowPlaying?.status === 'playing' ? 'Active Playing' : 'Idle / Ready'}
+                      {mediaStatus?.nowPlaying?.status === 'playing'
+                        ? 'Active Playing'
+                        : 'Idle / Ready'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                    <div>SMTC Native Bridge: <strong className="text-foreground">Online</strong></div>
-                    <div>Process Fallback: <strong className="text-foreground">VLC / MPC-HC</strong></div>
-                    <div>Master Volume: <strong className="text-foreground">{mediaStatus?.volume != null ? `${mediaStatus.volume}%` : '50%'}</strong></div>
-                    <div>Seek Profile: <strong className="text-foreground">VLC (Alt+Arrow)</strong></div>
+                    <div>
+                      SMTC Native Bridge: <strong className="text-foreground">Online</strong>
+                    </div>
+                    <div>
+                      Process Fallback: <strong className="text-foreground">VLC / MPC-HC</strong>
+                    </div>
+                    <div>
+                      Master Volume:{' '}
+                      <strong className="text-foreground">
+                        {mediaStatus?.volume != null ? `${mediaStatus.volume}%` : '50%'}
+                      </strong>
+                    </div>
+                    <div>
+                      Seek Profile: <strong className="text-foreground">VLC (Alt+Arrow)</strong>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1644,11 +1794,14 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 <ShieldCheck size={18} className="text-emerald-400" />
                 <h3 className="text-sm font-semibold text-foreground">Features & Security</h3>
               </div>
-              <span className="text-[10px] font-mono text-muted-foreground uppercase">Enforced</span>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                Enforced
+              </span>
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Loopback management control. Disabled features are rejected by the server at the protocol boundary.
+              Loopback management control. Disabled features are rejected by the server at the
+              protocol boundary.
             </p>
 
             <div className="flex flex-col gap-3 text-xs">
@@ -1658,7 +1811,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <ClipboardText size={16} className="text-[#FF5A1F]" />
                   <div>
                     <div className="font-semibold text-foreground">Clipboard Sync</div>
-                    <div className="text-[10px] text-muted-foreground">Text-only, max 100 KB, zero logs</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Text-only, max 100 KB, zero logs
+                    </div>
                   </div>
                 </div>
                 <button
@@ -1681,7 +1836,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <Camera size={16} className="text-[#FF5A1F]" />
                   <div>
                     <div className="font-semibold text-foreground">Screenshot Capture</div>
-                    <div className="text-[10px] text-muted-foreground">Native Win32 BitBlt, 8 MB limit</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Native Win32 BitBlt, 8 MB limit
+                    </div>
                   </div>
                 </div>
                 <button
@@ -1704,7 +1861,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <Lightning size={16} className="text-[#FF5A1F]" />
                   <div>
                     <div className="font-semibold text-foreground">Quick Actions</div>
-                    <div className="text-[10px] text-muted-foreground">Lock, sleep, volume, safe inputs</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Lock, sleep, volume, safe inputs
+                    </div>
                   </div>
                 </div>
                 <button
@@ -1727,7 +1886,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <RocketLaunch size={16} className="text-[#FF5A1F]" />
                   <div>
                     <div className="font-semibold text-foreground">App Launcher</div>
-                    <div className="text-[10px] text-muted-foreground">launcher.json allow-list only</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      launcher.json allow-list only
+                    </div>
                   </div>
                 </div>
                 <button
@@ -1746,7 +1907,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
               {/* Clipboard Shared Counter Notice (Part 4) */}
               <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-                <span>Clipboard shared: <strong className="text-foreground">{clipboardSharedCount} items</strong></span>
+                <span>
+                  Clipboard shared:{' '}
+                  <strong className="text-foreground">{clipboardSharedCount} items</strong>
+                </span>
                 <span className="text-[10px] text-emerald-400">Zero log leakage</span>
               </div>
             </div>
@@ -1766,7 +1930,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 className="px-3 py-1 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
               >
                 <X size={14} />
-                <span>Cancel {countdownState.action?.replace('_', ' ')} ({countdownState.secondsRemaining}s)</span>
+                <span>
+                  Cancel {countdownState.action?.replace('_', ' ')} (
+                  {countdownState.secondsRemaining}s)
+                </span>
               </button>
             )}
           </div>
@@ -1825,19 +1992,21 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
               <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                 {/* Category Filter Chips */}
                 <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
-                  {['all', 'pairing', 'desktop', 'media', 'input', 'security', 'system'].map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setLogFilterCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg border transition-colors ${
-                        logFilterCategory === cat
-                          ? 'bg-[#FF5A1F] border-[#FF5A1F] text-black font-semibold'
-                          : 'bg-raised border-border text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {cat.toUpperCase()}
-                    </button>
-                  ))}
+                  {['all', 'pairing', 'desktop', 'media', 'input', 'security', 'system'].map(
+                    (cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setLogFilterCategory(cat)}
+                        className={`px-2.5 py-1 rounded-lg border transition-colors ${
+                          logFilterCategory === cat
+                            ? 'bg-[#FF5A1F] border-[#FF5A1F] text-black font-semibold'
+                            : 'bg-raised border-border text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {cat.toUpperCase()}
+                      </button>
+                    )
+                  )}
                 </div>
 
                 {/* Level Filter & Actions */}
@@ -1874,14 +2043,21 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <button
                     onClick={() => {
                       const text = filteredLogs
-                        .map((l) => `[${new Date(l.timestamp).toLocaleTimeString()}] [${l.level.toUpperCase()}] [${l.category.toUpperCase()}] ${l.message}`)
+                        .map(
+                          (l) =>
+                            `[${new Date(l.timestamp).toLocaleTimeString()}] [${l.level.toUpperCase()}] [${l.category.toUpperCase()}] ${l.message}`
+                        )
                         .join('\n');
                       handleCopy(text, 'all_logs');
                     }}
                     className="p-1.5 rounded-lg border border-border bg-raised hover:bg-white/[0.08] text-foreground transition-colors"
                     title="Copy displayed logs"
                   >
-                    {copiedKey === 'all_logs' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    {copiedKey === 'all_logs' ? (
+                      <Check size={14} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
                   </button>
 
                   <a

@@ -65,7 +65,17 @@ export interface ServerConfig {
 export interface ActivityEvent {
   id: string;
   time: number;
-  type: 'move' | 'click' | 'button' | 'scroll' | 'media' | 'ping' | 'connect' | 'disconnect' | 'security' | 'system';
+  type:
+    | 'move'
+    | 'click'
+    | 'button'
+    | 'scroll'
+    | 'media'
+    | 'ping'
+    | 'connect'
+    | 'disconnect'
+    | 'security'
+    | 'system';
   summary: string;
 }
 
@@ -116,7 +126,10 @@ export function startServer(config: ServerConfig): {
   const socketsByDeviceId = new Map<string, Set<WebSocket>>();
   const unauthConnectionsByIp = new Map<string, number>();
   const latencyHistoryByDevice = new Map<string, number[]>();
-  const phoneBatteryByDevice = new Map<string, { percent: number | null; charging: boolean | null }>();
+  const phoneBatteryByDevice = new Map<
+    string,
+    { percent: number | null; charging: boolean | null }
+  >();
   const sseClients = new Set<express.Response>();
 
   let lastLatency: number | null = null;
@@ -219,7 +232,9 @@ export function startServer(config: ServerConfig): {
   function getFullDashboardStatus() {
     const activeCode = pairingManager.getActiveCode();
     const currentCode = activeCode ? activeCode.code : '';
-    const pairUrl = currentCode ? `https://${config.lanIp}:${config.port}/#code=${currentCode}` : '';
+    const pairUrl = currentCode
+      ? `https://${config.lanIp}:${config.port}/#code=${currentCode}`
+      : '';
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
@@ -505,8 +520,10 @@ export function startServer(config: ServerConfig): {
       return;
     }
 
-    const deviceName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : 'Mobile Device';
-    const devicePlatform = typeof platform === 'string' && platform.trim() ? platform.trim().slice(0, 32) : 'Browser';
+    const deviceName =
+      typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : 'Mobile Device';
+    const devicePlatform =
+      typeof platform === 'string' && platform.trim() ? platform.trim().slice(0, 32) : 'Browser';
 
     const result = await pairingManager.submitPairing(code, deviceName, devicePlatform, clientIp);
     if (!result.ok) {
@@ -548,12 +565,15 @@ export function startServer(config: ServerConfig): {
 
     const activeCode = pairingManager.getActiveCode();
     const currentCode = activeCode ? activeCode.code : '';
-    const pairUrl = currentCode ? `https://${config.lanIp}:${config.port}/#code=${currentCode}` : '';
+    const pairUrl = currentCode
+      ? `https://${config.lanIp}:${config.port}/#code=${currentCode}`
+      : '';
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
 
-    const hostedPairUrl = (rawHosted && currentCode)
-      ? `${rawHosted}/#host=${config.lanIp}:${config.port}&code=${currentCode}`
-      : undefined;
+    const hostedPairUrl =
+      rawHosted && currentCode
+        ? `${rawHosted}/#host=${config.lanIp}:${config.port}&code=${currentCode}`
+        : undefined;
 
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
@@ -790,7 +810,9 @@ export function startServer(config: ServerConfig): {
 
       // 1.5 Enforce file upload feature flag (disabled by default in server settings)
       if (!featureManager.isEnabled('fileUpload')) {
-        res.status(403).json({ error: 'File transfer upload is disabled in server settings by PC operator.' });
+        res
+          .status(403)
+          .json({ error: 'File transfer upload is disabled in server settings by PC operator.' });
         return;
       }
 
@@ -837,8 +859,13 @@ export function startServer(config: ServerConfig): {
 
       try {
         fs.writeFileSync(finalPath, fileBuffer);
-        const senderName = deviceId ? deviceStore.getDevice(deviceId)?.name || deviceId : 'Local Operator';
-        recordEvent('system', `File received from ${senderName}: ${path.basename(finalPath)} (${fileBuffer.length} bytes)`);
+        const senderName = deviceId
+          ? deviceStore.getDevice(deviceId)?.name || deviceId
+          : 'Local Operator';
+        recordEvent(
+          'system',
+          `File received from ${senderName}: ${path.basename(finalPath)} (${fileBuffer.length} bytes)`
+        );
         res.json({
           ok: true,
           filename: path.basename(finalPath),
@@ -939,10 +966,7 @@ export function startServer(config: ServerConfig): {
     const text = lines.join('\r\n');
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="aerokin-logs-${Date.now()}.txt"`
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="aerokin-logs-${Date.now()}.txt"`);
     res.send(text);
   });
 
@@ -1134,16 +1158,15 @@ export function startServer(config: ServerConfig): {
 
     // Optional legacy query-token check if enabled
     try {
-      const parsedUrl = new URL(
-        req.url || '',
-        `https://${req.headers.host || config.lanIp}`
-      );
+      const parsedUrl = new URL(req.url || '', `https://${req.headers.host || config.lanIp}`);
       const queryToken = parsedUrl.searchParams.get('token');
       const legacySecret = config.legacyToken || config.token;
 
       if (process.env.AEROKIN_LEGACY_TOKEN === '1' && queryToken && legacySecret) {
         if (queryToken === legacySecret) {
-          console.warn('[SECURITY WARNING] Insecure query-token connection accepted (AEROKIN_LEGACY_TOKEN=1).');
+          console.warn(
+            '[SECURITY WARNING] Insecure query-token connection accepted (AEROKIN_LEGACY_TOKEN=1).'
+          );
           completeAuthentication('legacy_query_device', 'Legacy Device');
         }
       }
@@ -1208,7 +1231,9 @@ export function startServer(config: ServerConfig): {
       ws.send(JSON.stringify({ type: 'features_status', flags: featureManager.getFlags() }));
 
       // Send initial desktop status and monitors
-      ws.send(JSON.stringify({ type: 'desktop_monitors', monitors: MonitorService.listMonitors() }));
+      ws.send(
+        JSON.stringify({ type: 'desktop_monitors', monitors: MonitorService.listMonitors() })
+      );
       ws.send(
         JSON.stringify({
           type: 'desktop_status',
@@ -1405,13 +1430,21 @@ export function startServer(config: ServerConfig): {
 
           case 'media':
             // Universal Media Action (scoped to session if provided)
-            const mediaRes = await mediaManager.handleMediaCommand(msg.action, undefined, (msg as any).sessionId);
+            const mediaRes = await mediaManager.handleMediaCommand(
+              msg.action,
+              undefined,
+              (msg as any).sessionId
+            );
             recordEvent('media', `${msg.action} (Tier ${mediaRes.tier}, ${mediaRes.latencyMs}ms)`);
             break;
 
           case 'seekby':
             // Seek relative seconds (positive or negative)
-            const seekByRes = await mediaManager.handleMediaCommand('seekby', msg.seconds, (msg as any).sessionId);
+            const seekByRes = await mediaManager.handleMediaCommand(
+              'seekby',
+              msg.seconds,
+              (msg as any).sessionId
+            );
             recordEvent(
               'media',
               `seekby ${msg.seconds}s (Tier ${seekByRes.tier}, ${seekByRes.latencyMs}ms)`
@@ -1420,7 +1453,11 @@ export function startServer(config: ServerConfig): {
 
           case 'seekto':
             // Seek absolute position
-            const seekToRes = await mediaManager.handleMediaCommand('seekto', msg.position, (msg as any).sessionId);
+            const seekToRes = await mediaManager.handleMediaCommand(
+              'seekto',
+              msg.position,
+              (msg as any).sessionId
+            );
             recordEvent(
               'media',
               `seekto ${msg.position}s (Tier ${seekToRes.tier}, ${seekToRes.latencyMs}ms)`
@@ -1743,12 +1780,16 @@ export function startServer(config: ServerConfig): {
         agentSecret: deviceStore.getAgentSecret(),
         clientTokenHashes: deviceStore.getSignalingTokenHashes(),
         onRegistered: (iceServers) => {
-          console.log(`[Remote] Registered with signaling server at ${signalingUrl}. ${iceServers.length} ICE servers.`);
+          console.log(
+            `[Remote] Registered with signaling server at ${signalingUrl}. ${iceServers.length} ICE servers.`
+          );
           broadcastDashboardEvent('webrtc_status', {
             pcId: deviceStore.getPcId(),
             signalingUrl,
             signalingConnected: true,
-            turnConfigured: !!(process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL),
+            turnConfigured: !!(
+              process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL
+            ),
           });
         },
         onStatusChange: (connected) => {
@@ -1756,12 +1797,17 @@ export function startServer(config: ServerConfig): {
             pcId: deviceStore.getPcId(),
             signalingUrl,
             signalingConnected: connected,
-            turnConfigured: !!(process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL),
+            turnConfigured: !!(
+              process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL
+            ),
           });
         },
       });
     } catch (e: any) {
-      console.warn(`[Remote] Could not connect to signaling server at ${signalingUrl}:`, e?.message);
+      console.warn(
+        `[Remote] Could not connect to signaling server at ${signalingUrl}:`,
+        e?.message
+      );
     }
   }
 

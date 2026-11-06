@@ -262,13 +262,7 @@ export function findFfmpegPath(): string | null {
   // 2. WinGet user links directory
   const localAppData = process.env.LOCALAPPDATA;
   if (localAppData) {
-    const wingetLink = path.join(
-      localAppData,
-      'Microsoft',
-      'WinGet',
-      'Links',
-      'ffmpeg.exe'
-    );
+    const wingetLink = path.join(localAppData, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe');
     if (fs.existsSync(wingetLink)) return wingetLink;
 
     // Check WinGet Packages directory
@@ -560,7 +554,12 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
       }
 
       // On first ffmpeg stderr error on ddagrab before receiving any frame, automatically retry with gdigrab
-      if (!isFallbackGdi && !this.hasReceivedFrame && this.isRunning && this.activeBackend === 'ddagrab') {
+      if (
+        !isFallbackGdi &&
+        !this.hasReceivedFrame &&
+        this.isRunning &&
+        this.activeBackend === 'ddagrab'
+      ) {
         console.warn(
           `[DesktopStream] ddagrab stderr error detected: ${msg.trim()}. Automatically retrying with gdigrab...`
         );
@@ -659,7 +658,15 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
             header.writeUInt16LE(0, 18);
 
             const fullPacket = Buffer.concat([header, accessUnit]);
-            this.frameCallback(fullPacket, targetWidth, targetHeight, seq, nowMs, isKeyframe, 'h264');
+            this.frameCallback(
+              fullPacket,
+              targetWidth,
+              targetHeight,
+              seq,
+              nowMs,
+              isKeyframe,
+              'h264'
+            );
           }
         }
       } else {

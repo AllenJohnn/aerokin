@@ -6,7 +6,8 @@ export * from './server.js';
 
 const PORT = parseInt(process.env.PORT || '8088', 10);
 const HOST = process.env.HOST || '0.0.0.0';
-const COTURN_SECRET = process.env.COTURN_SECRET || 'aerokin-default-coturn-shared-secret-change-in-prod';
+const COTURN_SECRET =
+  process.env.COTURN_SECRET || 'aerokin-default-coturn-shared-secret-change-in-prod';
 const COTURN_HOST = process.env.COTURN_HOST || 'turn.aerokin.local';
 const COTURN_UDP_PORT = parseInt(process.env.COTURN_UDP_PORT || '3478', 10);
 const COTURN_TCP_PORT = parseInt(process.env.COTURN_TCP_PORT || '3478', 10);

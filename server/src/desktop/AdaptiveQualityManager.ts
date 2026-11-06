@@ -91,8 +91,7 @@ export class AdaptiveQualityManager {
     droppedFramesInWindow: number
   ): { activeTier: QualityPresetName; changed: boolean } {
     const now = this.getNow();
-    const isCongested =
-      bufferedAmount > this.bufferThresholdBytes || droppedFramesInWindow > 0;
+    const isCongested = bufferedAmount > this.bufferThresholdBytes || droppedFramesInWindow > 0;
 
     const currentIdx = this.getTierIndex(this.currentTier);
     const capIdx = this.getTierIndex(this.userCapPreset);

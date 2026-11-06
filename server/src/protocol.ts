@@ -33,7 +33,7 @@ export const ALLOWED_QUICK_ACTIONS = [
   'launch_app',
 ] as const;
 
-export type AllowedQuickAction = typeof ALLOWED_QUICK_ACTIONS[number];
+export type AllowedQuickAction = (typeof ALLOWED_QUICK_ACTIONS)[number];
 
 export const ALLOWED_MEDIA_ACTIONS = [
   'playpause',
@@ -48,10 +48,10 @@ export const ALLOWED_MEDIA_ACTIONS = [
   'seekback',
 ] as const;
 
-export type AllowedMediaAction = typeof ALLOWED_MEDIA_ACTIONS[number];
+export type AllowedMediaAction = (typeof ALLOWED_MEDIA_ACTIONS)[number];
 
 export const ALLOWED_KEY_MODIFIERS = ['ctrl', 'alt', 'shift', 'win'] as const;
-export type AllowedKeyModifier = typeof ALLOWED_KEY_MODIFIERS[number];
+export type AllowedKeyModifier = (typeof ALLOWED_KEY_MODIFIERS)[number];
 
 export const ALLOWED_SPECIAL_KEYS = [
   'left',
@@ -346,8 +346,8 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
           typeof msg.sessionId === 'string'
             ? msg.sessionId.trim().slice(0, 128)
             : typeof msg.targetSessionId === 'string'
-            ? msg.targetSessionId.trim().slice(0, 128)
-            : undefined,
+              ? msg.targetSessionId.trim().slice(0, 128)
+              : undefined,
       };
     }
 
@@ -362,8 +362,8 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
           typeof msg.sessionId === 'string'
             ? msg.sessionId.trim().slice(0, 128)
             : typeof msg.targetSessionId === 'string'
-            ? msg.targetSessionId.trim().slice(0, 128)
-            : undefined,
+              ? msg.targetSessionId.trim().slice(0, 128)
+              : undefined,
       };
     }
 
@@ -378,8 +378,8 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
           typeof msg.sessionId === 'string'
             ? msg.sessionId.trim().slice(0, 128)
             : typeof msg.targetSessionId === 'string'
-            ? msg.targetSessionId.trim().slice(0, 128)
-            : undefined,
+              ? msg.targetSessionId.trim().slice(0, 128)
+              : undefined,
       };
     }
 
@@ -417,7 +417,11 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
         }
       }
       let monitorId: string | undefined = undefined;
-      if (typeof msg.monitorId === 'string' && msg.monitorId.length > 0 && msg.monitorId.length <= 64) {
+      if (
+        typeof msg.monitorId === 'string' &&
+        msg.monitorId.length > 0 &&
+        msg.monitorId.length <= 64
+      ) {
         monitorId = msg.monitorId;
       }
       let customScale: number | undefined = undefined;
@@ -634,7 +638,11 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       let payload: string | undefined = undefined;
 
       if (action === 'send_link') {
-        if (typeof msg.payload !== 'string' || msg.payload.length === 0 || msg.payload.length > MAX_URL_LENGTH) {
+        if (
+          typeof msg.payload !== 'string' ||
+          msg.payload.length === 0 ||
+          msg.payload.length > MAX_URL_LENGTH
+        ) {
           return null;
         }
         try {
@@ -647,7 +655,11 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
           return null;
         }
       } else if (action === 'type_text') {
-        if (typeof msg.payload !== 'string' || msg.payload.length === 0 || msg.payload.length > MAX_TYPE_TEXT_CHARS) {
+        if (
+          typeof msg.payload !== 'string' ||
+          msg.payload.length === 0 ||
+          msg.payload.length > MAX_TYPE_TEXT_CHARS
+        ) {
           return null;
         }
         payload = msg.payload;
@@ -815,7 +827,10 @@ export class ConnectionRateLimiter {
    *   { ok: false, closeConnection: false } if dropped due to rate limit.
    *   { ok: false, closeConnection: true, reason: string } if sustained flood requires socket closure.
    */
-  public check(type: ValidClientMessage['type'], now = Date.now()): {
+  public check(
+    type: ValidClientMessage['type'],
+    now = Date.now()
+  ): {
     ok: boolean;
     closeConnection?: boolean;
     reason?: string;

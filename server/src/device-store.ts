@@ -133,12 +133,14 @@ export class DeviceStore {
               name: String(item.name || 'Unnamed Device').slice(0, 64),
               platform: String(item.platform || 'Unknown').slice(0, 32),
               credentialHash: String(item.credentialHash || ''),
-              signalingTokenHash: item.signalingTokenHash ? String(item.signalingTokenHash) : undefined,
+              signalingTokenHash: item.signalingTokenHash
+                ? String(item.signalingTokenHash)
+                : undefined,
               createdAt: Number(item.createdAt) || Date.now(),
               lastSeen: Number(item.lastSeen) || Date.now(),
               revoked: Boolean(item.revoked),
               pairedVia: item.pairedVia === 'remote' ? 'remote' : 'lan',
-              remote: Boolean(item.remote ?? (item.pairedVia === 'remote')),
+              remote: Boolean(item.remote ?? item.pairedVia === 'remote'),
             });
           }
         }
@@ -157,7 +159,9 @@ export class DeviceStore {
       fs.renameSync(tempPath, this.filePath);
     } catch (err) {
       if (fs.existsSync(tempPath)) {
-        try { fs.unlinkSync(tempPath); } catch {}
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {}
       }
       throw err;
     }
@@ -179,7 +183,7 @@ export class DeviceStore {
     const signalingTokenHash = hashSignalingToken(signalingToken);
 
     const pairedVia = options?.pairedVia === 'remote' ? 'remote' : 'lan';
-    const remote = Boolean(options?.remote ?? (pairedVia === 'remote'));
+    const remote = Boolean(options?.remote ?? pairedVia === 'remote');
 
     const record: DeviceRecord = {
       deviceId,
@@ -299,7 +303,9 @@ export class DeviceStore {
       if (!this.lastSeenSaveTimer) {
         this.lastSeenSaveTimer = setTimeout(() => {
           this.lastSeenSaveTimer = null;
-          try { this.save(); } catch {}
+          try {
+            this.save();
+          } catch {}
         }, 30000);
       }
     }

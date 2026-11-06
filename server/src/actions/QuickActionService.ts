@@ -182,9 +182,7 @@ export class QuickActionService {
   /**
    * Starts a 10-second cancelable countdown for dangerous PC operations.
    */
-  public startDangerousActionCountdown(
-    action: 'shutdown' | 'restart' | 'sign_out'
-  ): ActionResult {
+  public startDangerousActionCountdown(action: 'shutdown' | 'restart' | 'sign_out'): ActionResult {
     if (this.countdownState.active) {
       return {
         success: false,
@@ -207,12 +205,17 @@ export class QuickActionService {
 
     // Initial system command with 10s delay via PowerActionExecutor
     if (action === 'shutdown' || action === 'restart') {
-      this.powerExecutor.execute(action, {
-        delaySeconds: 10,
-        comment: `AEROKIN Remote ${action === 'shutdown' ? 'Shutdown' : 'Restart'} initiated from mobile client`,
-      }).catch((err) => {
-        serverLogger.warn('actions', `PowerActionExecutor scheduled countdown execution failed: ${err}`);
-      });
+      this.powerExecutor
+        .execute(action, {
+          delaySeconds: 10,
+          comment: `AEROKIN Remote ${action === 'shutdown' ? 'Shutdown' : 'Restart'} initiated from mobile client`,
+        })
+        .catch((err) => {
+          serverLogger.warn(
+            'actions',
+            `PowerActionExecutor scheduled countdown execution failed: ${err}`
+          );
+        });
     }
 
     this.countdownTimer = setInterval(() => {
@@ -294,10 +297,7 @@ export class QuickActionService {
   /**
    * Executes a safe whitelisted action.
    */
-  public async executeAction(
-    action: AllowedQuickAction,
-    payload?: string
-  ): Promise<ActionResult> {
+  public async executeAction(action: AllowedQuickAction, payload?: string): Promise<ActionResult> {
     // 1. Dangerous action countdowns
     if (action === 'shutdown' || action === 'restart' || action === 'sign_out') {
       return this.startDangerousActionCountdown(action);
@@ -393,7 +393,11 @@ export class QuickActionService {
         try {
           const parsed = new URL(trimmed);
           if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return { success: false, action, error: 'Only http:// and https:// URLs are permitted' };
+            return {
+              success: false,
+              action,
+              error: 'Only http:// and https:// URLs are permitted',
+            };
           }
 
           // Launch in default browser safely
@@ -405,7 +409,11 @@ export class QuickActionService {
           }
 
           this.recordAction('send_link', true);
-          return { success: true, action, message: `Opened ${parsed.hostname} in default PC browser` };
+          return {
+            success: true,
+            action,
+            message: `Opened ${parsed.hostname} in default PC browser`,
+          };
         } catch {
           return { success: false, action, error: 'Invalid URL format' };
         }
@@ -416,7 +424,11 @@ export class QuickActionService {
           return { success: false, action, error: 'No text provided to type' };
         }
         if (payload.length > MAX_TYPE_TEXT_CHARS) {
-          return { success: false, action, error: `Text exceeds ${MAX_TYPE_TEXT_CHARS} character limit` };
+          return {
+            success: false,
+            action,
+            error: `Text exceeds ${MAX_TYPE_TEXT_CHARS} character limit`,
+          };
         }
 
         await this.inputBackend.typeText(payload);
@@ -431,7 +443,9 @@ export class QuickActionService {
         }
 
         const entries = this.getLauncherEntries();
-        const targetEntry = entries.find((e) => e.id.toLowerCase() === payload.trim().toLowerCase());
+        const targetEntry = entries.find(
+          (e) => e.id.toLowerCase() === payload.trim().toLowerCase()
+        );
 
         if (!targetEntry) {
           serverLogger.warn('actions', `Rejected unknown application ID: ${payload}`);

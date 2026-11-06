@@ -34,12 +34,7 @@ export interface DesktopStats {
 }
 
 export type DesktopStreamState =
-  | 'connecting'
-  | 'live'
-  | 'secure_screen'
-  | 'error'
-  | 'reconnecting'
-  | 'stopped';
+  'connecting' | 'live' | 'secure_screen' | 'error' | 'reconnecting' | 'stopped';
 
 export type DesktopInputMode = 'direct' | 'trackpad';
 
@@ -70,14 +65,19 @@ export function loadDesktopSettings(): DesktopSettings {
     if (!raw) return DEFAULT_DESKTOP_SETTINGS;
     const parsed = JSON.parse(raw);
     return {
-      defaultPreset: ['ultra', 'high', 'balanced', 'fast', 'tiny', 'low'].includes(parsed.defaultPreset)
-        ? parsed.defaultPreset === 'low' ? 'tiny' : parsed.defaultPreset
+      defaultPreset: ['ultra', 'high', 'balanced', 'fast', 'tiny', 'low'].includes(
+        parsed.defaultPreset
+      )
+        ? parsed.defaultPreset === 'low'
+          ? 'tiny'
+          : parsed.defaultPreset
         : 'fast',
       fpsCap: typeof parsed.fpsCap === 'number' ? Math.max(15, Math.min(60, parsed.fpsCap)) : 30,
       preferredCodec: parsed.preferredCodec === 'mjpeg' ? 'mjpeg' : 'h264',
       inputMode: parsed.inputMode === 'trackpad' ? 'trackpad' : 'direct',
       showStats: Boolean(parsed.showStats),
-      autoHideToolbar: parsed.autoHideToolbar !== undefined ? Boolean(parsed.autoHideToolbar) : true,
+      autoHideToolbar:
+        parsed.autoHideToolbar !== undefined ? Boolean(parsed.autoHideToolbar) : true,
     };
   } catch {
     return DEFAULT_DESKTOP_SETTINGS;

@@ -6,19 +6,14 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: PART B2 COMPLETED (Playwright Multi-Viewport UI Audit & Layout Verification).
-  - **B2 Completed**:
-    - Ran comprehensive automated layout verifier (`pwa/scripts/audit-viewports.mjs`, `pnpm --filter aerokin-pwa run test:audit`) across 7 viewports:
-      1. `375x667` (iPhone SE compact)
-      2. `390x844` (iPhone 12/13/14 baseline @3x DPR)
-      3. `430x932` (iPhone 14/15/16 Pro Max large display)
-      4. `360x740` (Android baseline)
-      5. `768x1024` (iPad vertical)
-      6. `844x390` (iPhone landscape)
-      7. `1440x900` & `1024x768` (Desktop Management Dashboard)
-    - Tested in both dark (OLED `#000000`) and light modes.
-    - Verified zero horizontal overflow (`scrollWidth <= innerWidth`), 16px iOS zoom-safe font sizes, 18.16:1 contrast ratio, safe-area navigation clearance, and generated `docs/UI-AUDIT.md`.
-- **Exact Next Step**: Part B3 - Tooling, ESLint flat config + Prettier across packages, vitest v8 coverage thresholds, and GitHub Actions CI workflow check (`.github/workflows/ci.yml`).
+- **Current Milestone**: PART B3 COMPLETED (Tooling, ESLint Flat Config, Prettier, Coverage Thresholds & GitHub Actions CI).
+  - **B3 Completed**:
+    - Configured ESLint flat config (`eslint.config.js`) with TypeScript support across all workspace packages (`server`, `pwa`, `signaling`, `design-system`).
+    - Configured Prettier (`.prettierrc`, `.prettierignore`) and formatted 92 source files to standard single quotes, trailing commas, and 2-space indentation.
+    - Added workspace scripts: `pnpm run lint`, `pnpm run format:check`, `pnpm run format`, and `pnpm run test`.
+    - Integrated Vitest v8 coverage provider (`@vitest/coverage-v8`) with enforced coverage thresholds in `server/vitest.config.ts` and `signaling/vitest.config.ts`.
+    - Updated `.github/workflows/ci.yml` matrix with formatting check, ESLint, TypeScript compilation, signaling build, and coverage steps.
+- **Exact Next Step**: Part B4 & B5 - Real desktop benchmarks on host (NVENC vs MJPEG), soak test under Rule S8, video codec 3s probe fallback, cursor overlay, keyframe rate limit, and view-only enforcement.
 - **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 

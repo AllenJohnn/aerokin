@@ -76,30 +76,54 @@ export const DEFAULT_PROFILES_CONFIG: ProfilesConfig = {
       name: 'MPC-HC',
       seekForward: { key: 'Right', verified: false, note: 'MPC-HC jump forward (Right arrow)' },
       seekBackward: { key: 'Left', verified: false, note: 'MPC-HC jump backward (Left arrow)' },
-      fullscreen: { key: 'Alt+Enter', verified: false, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
+      fullscreen: {
+        key: 'Alt+Enter',
+        verified: false,
+        note: 'MPC-HC fullscreen toggle (Alt+Enter)',
+      },
     },
     'mpc-hc.exe': {
       name: 'MPC-HC',
       seekForward: { key: 'Right', verified: false, note: 'MPC-HC jump forward (Right arrow)' },
       seekBackward: { key: 'Left', verified: false, note: 'MPC-HC jump backward (Left arrow)' },
-      fullscreen: { key: 'Alt+Enter', verified: false, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
+      fullscreen: {
+        key: 'Alt+Enter',
+        verified: false,
+        note: 'MPC-HC fullscreen toggle (Alt+Enter)',
+      },
     },
     'potplayermini64.exe': {
       name: 'PotPlayer',
       seekForward: { key: 'Right', verified: false, note: 'PotPlayer 5s jump (UNVERIFIED)' },
       seekBackward: { key: 'Left', verified: false, note: 'PotPlayer 5s jump (UNVERIFIED)' },
-      fullscreen: { key: 'Enter', verified: false, note: 'PotPlayer fullscreen toggle (UNVERIFIED)' },
+      fullscreen: {
+        key: 'Enter',
+        verified: false,
+        note: 'PotPlayer fullscreen toggle (UNVERIFIED)',
+      },
     },
     'potplayer.exe': {
       name: 'PotPlayer',
       seekForward: { key: 'Right', verified: false, note: 'PotPlayer 5s jump (UNVERIFIED)' },
       seekBackward: { key: 'Left', verified: false, note: 'PotPlayer 5s jump (UNVERIFIED)' },
-      fullscreen: { key: 'Enter', verified: false, note: 'PotPlayer fullscreen toggle (UNVERIFIED)' },
+      fullscreen: {
+        key: 'Enter',
+        verified: false,
+        note: 'PotPlayer fullscreen toggle (UNVERIFIED)',
+      },
     },
     'spotify.exe': {
       name: 'Spotify Desktop',
-      seekForward: { key: 'Shift+Right', verified: false, note: 'Spotify forward seek (UNVERIFIED: requires window focus)' },
-      seekBackward: { key: 'Shift+Left', verified: false, note: 'Spotify backward seek (UNVERIFIED: requires window focus)' },
+      seekForward: {
+        key: 'Shift+Right',
+        verified: false,
+        note: 'Spotify forward seek (UNVERIFIED: requires window focus)',
+      },
+      seekBackward: {
+        key: 'Shift+Left',
+        verified: false,
+        note: 'Spotify backward seek (UNVERIFIED: requires window focus)',
+      },
       fullscreen: { key: 'f', verified: false, note: 'Spotify fullscreen view (UNVERIFIED)' },
     },
   },
@@ -133,7 +157,10 @@ export class AppProfiles {
     return this.config.defaults;
   }
 
-  public getProfile(procName?: string | null, title?: string | null): {
+  public getProfile(
+    procName?: string | null,
+    title?: string | null
+  ): {
     name: string;
     seekForward: ProfileEntry;
     seekBackward: ProfileEntry;
@@ -163,8 +190,10 @@ export class AppProfiles {
         if (cleanTitle.includes(pattern.toLowerCase())) {
           return {
             name: `${appCfg.name} - ${pattern}`,
-            seekForward: titleCfg.seekForward || appCfg.seekForward || this.config.defaults.seekForward,
-            seekBackward: titleCfg.seekBackward || appCfg.seekBackward || this.config.defaults.seekBackward,
+            seekForward:
+              titleCfg.seekForward || appCfg.seekForward || this.config.defaults.seekForward,
+            seekBackward:
+              titleCfg.seekBackward || appCfg.seekBackward || this.config.defaults.seekBackward,
             fullscreen: titleCfg.fullscreen || appCfg.fullscreen || this.config.defaults.fullscreen,
           };
         }

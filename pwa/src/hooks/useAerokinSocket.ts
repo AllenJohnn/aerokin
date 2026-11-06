@@ -17,12 +17,7 @@ import {
   setActivePcId,
   SavedPc,
 } from '../utils/hosting';
-import {
-  MonitorInfo,
-  DesktopStats,
-  DesktopStreamState,
-  QualityPresetName,
-} from '../types/desktop';
+import { MonitorInfo, DesktopStats, DesktopStreamState, QualityPresetName } from '../types/desktop';
 import { diagnosticsLogger } from '../utils/diagnosticsLogger';
 
 export type MediaAction =
@@ -430,9 +425,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
         targetHost ||
         host ||
         (typeof window !== 'undefined'
-          ? (window.location.port === '5173' || window.location.port === '5174'
-              ? `${window.location.hostname}:8443`
-              : window.location.host)
+          ? window.location.port === '5173' || window.location.port === '5174'
+            ? `${window.location.hostname}:8443`
+            : window.location.host
           : '');
 
       if (!activeHost) {
@@ -467,8 +462,8 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
             (res.status === 429
               ? 'Too many failed attempts. Locked out for 60 seconds.'
               : res.status === 403
-              ? 'Pairing denied by PC operator or invalid code.'
-              : 'Pairing failed.');
+                ? 'Pairing denied by PC operator or invalid code.'
+                : 'Pairing failed.');
           setConnectionError(errorMsg);
           return { ok: false, error: errorMsg };
         }
@@ -655,7 +650,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       customFps?: number;
       codec?: 'h264' | 'mjpeg';
     }) => {
-      diagnosticsLogger.log('info', 'stream', `Desktop stream start requested (preset: ${options?.preset || 'balanced'}, codec: ${options?.codec || 'h264'})`);
+      diagnosticsLogger.log(
+        'info',
+        'stream',
+        `Desktop stream start requested (preset: ${options?.preset || 'balanced'}, codec: ${options?.codec || 'h264'})`
+      );
       sendRaw({ type: 'desktop_start', ...options });
     },
     [sendRaw]
@@ -865,7 +864,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               setConnectionError(null);
               backoffDelayRef.current = 1000;
               requestWakeLock();
-              diagnosticsLogger.log('info', 'socket', `Authenticated successfully as device ${deviceId}`);
+              diagnosticsLogger.log(
+                'info',
+                'socket',
+                `Authenticated successfully as device ${deviceId}`
+              );
 
               if (data.pcId && deviceId && credential) {
                 savePc({
@@ -1058,7 +1061,12 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     };
   }, [credential, deviceId, host, isHosted, connectTrigger]);
 
-  const runLatencyTest = useCallback(async (): Promise<{ min: number; avg: number; max: number; p95: number }> => {
+  const runLatencyTest = useCallback(async (): Promise<{
+    min: number;
+    avg: number;
+    max: number;
+    p95: number;
+  }> => {
     const ws = socketRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       throw new Error('Socket not connected');

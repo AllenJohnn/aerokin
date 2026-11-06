@@ -15,11 +15,7 @@ import {
   DEFAULT_TRACKPAD_CONFIG,
   validateAndMigrateTrackpadConfig,
 } from './engine/trackpadGestures';
-import {
-  DesktopSettings,
-  loadDesktopSettings,
-  saveDesktopSettings,
-} from './types/desktop';
+import { DesktopSettings, loadDesktopSettings, saveDesktopSettings } from './types/desktop';
 import {
   NavConfig,
   NavSectionId,
@@ -46,9 +42,7 @@ import {
 const DesktopViewer = lazy(() =>
   import('./components/DesktopViewer').then((m) => ({ default: m.DesktopViewer }))
 );
-const MediaTab = lazy(() =>
-  import('./components/MediaTab').then((m) => ({ default: m.MediaTab }))
-);
+const MediaTab = lazy(() => import('./components/MediaTab').then((m) => ({ default: m.MediaTab })));
 const SettingsDrawer = lazy(() =>
   import('./components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer }))
 );
@@ -130,7 +124,9 @@ export const App: React.FC = () => {
   };
 
   // 3. Desktop Remote Settings
-  const [desktopSettings, setDesktopSettings] = useState<DesktopSettings>(() => loadDesktopSettings());
+  const [desktopSettings, setDesktopSettings] = useState<DesktopSettings>(() =>
+    loadDesktopSettings()
+  );
 
   const handleDesktopSettingsChange = (partial: Partial<DesktopSettings>) => {
     setDesktopSettings((prev) => {
@@ -141,7 +137,8 @@ export const App: React.FC = () => {
   };
 
   // 4. Desktop Mode Detection (disabled in hosted mode to never call /api/pair)
-  const isDashboardRoute = typeof window !== 'undefined' && window.location.pathname === '/dashboard';
+  const isDashboardRoute =
+    typeof window !== 'undefined' && window.location.pathname === '/dashboard';
   const [isDesktopMode, setIsDesktopMode] = useState(() => {
     if (typeof window === 'undefined') return false;
     if (isHostedMode()) return false;
@@ -357,7 +354,10 @@ export const App: React.FC = () => {
                 <p>• Phone & PC are on the same local Wi-Fi.</p>
                 <p>• CA Certificate is trusted on this device.</p>
                 <p>• iOS Local Network permission is allowed.</p>
-                <p>• PC has this URL in <code className="bg-raised px-1 py-0.5 rounded">AEROKIN_ALLOWED_ORIGINS</code>.</p>
+                <p>
+                  • PC has this URL in{' '}
+                  <code className="bg-raised px-1 py-0.5 rounded">AEROKIN_ALLOWED_ORIGINS</code>.
+                </p>
               </div>
 
               {host && (
@@ -459,7 +459,13 @@ export const App: React.FC = () => {
   // Full-viewport focused Desktop Remote viewer
   if (activeTab === 'desktop') {
     return (
-      <Suspense fallback={<div className="h-full w-full bg-black flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Desktop Remote...</div>}>
+      <Suspense
+        fallback={
+          <div className="h-full w-full bg-black flex items-center justify-center text-xs font-mono text-muted-foreground">
+            Loading Desktop Remote...
+          </div>
+        }
+      >
         <DesktopViewer
           host={host}
           deviceId={deviceId}
@@ -610,7 +616,13 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Media Controls...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading Media Controls...
+                  </div>
+                }
+              >
                 <MediaTab
                   nowPlaying={nowPlaying}
                   sessions={sessions}
@@ -637,10 +649,20 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading More Tools...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading More Tools...
+                  </div>
+                }
+              >
                 <MoreLauncher
                   onSelectSection={handleSelectMoreSection}
-                  systemSummary={systemStats ? `${systemStats.cpu.totalPercent.toFixed(0)}% CPU • ${(systemStats.ram.usedBytes / 1e9).toFixed(1)} GB RAM` : undefined}
+                  systemSummary={
+                    systemStats
+                      ? `${systemStats.cpu.totalPercent.toFixed(0)}% CPU • ${(systemStats.ram.usedBytes / 1e9).toFixed(1)} GB RAM`
+                      : undefined
+                  }
                   clipboardCount={lastClipboardLength ?? undefined}
                   activeWindow={nowPlaying?.app}
                 />
@@ -657,7 +679,13 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Screenshot Tool...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading Screenshot Tool...
+                  </div>
+                }
+              >
                 <ScreenshotTab
                   onRequestScreenshot={requestScreenshot}
                   lastScreenshot={lastScreenshot}
@@ -678,7 +706,13 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading System Stats...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading System Stats...
+                  </div>
+                }
+              >
                 <SystemTab
                   stats={systemStats}
                   onSubscribe={subscribeStats}
@@ -697,7 +731,13 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Clipboard Sync...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading Clipboard Sync...
+                  </div>
+                }
+              >
                 <ClipboardTab
                   onGetPcClipboard={getClipboard}
                   onSetPcClipboard={setClipboard}
@@ -721,7 +761,13 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Quick Actions...</div>}>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading Quick Actions...
+                  </div>
+                }
+              >
                 <QuickActionsTab
                   onExecuteAction={executeQuickAction}
                   onRequestLauncherList={requestLauncherList}
@@ -744,11 +790,14 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               className="h-full w-full flex flex-col overflow-hidden"
             >
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">Loading Presentation Remote...</div>}>
-                <PresentTab
-                  onSendKey={sendKey}
-                  onSendMove={sendMove}
-                />
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-xs font-mono text-muted-foreground">
+                    Loading Presentation Remote...
+                  </div>
+                }
+              >
+                <PresentTab onSendKey={sendKey} onSendMove={sendMove} />
               </Suspense>
             </motion.div>
           )}

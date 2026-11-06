@@ -21,7 +21,8 @@ export function getLocalIPv4(): string {
   }
 
   // 2. Fallback to physical Ethernet / LAN adapters, filtering out virtual & VPN adapters
-  const virtualFilter = /virtual|vethernet|wsl|docker|tailscale|zerotier|vmware|vbox|hyper-v|loopback/i;
+  const virtualFilter =
+    /virtual|vethernet|wsl|docker|tailscale|zerotier|vmware|vbox|hyper-v|loopback/i;
   for (const [name, addrs] of Object.entries(interfaces)) {
     if (!addrs || virtualFilter.test(name)) continue;
     for (const addr of addrs) {

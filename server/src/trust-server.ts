@@ -248,7 +248,9 @@ export function startTrustServer(config: TrustServerConfig): http.Server {
   });
 
   server.listen(config.port, '0.0.0.0', () => {
-    console.log(`[Trust Server] HTTP listening on port ${config.port} (Serving one-time CA trust profile)`);
+    console.log(
+      `[Trust Server] HTTP listening on port ${config.port} (Serving one-time CA trust profile)`
+    );
   });
 
   return server;

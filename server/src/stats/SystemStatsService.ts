@@ -208,7 +208,10 @@ export class SystemStatsService {
   /**
    * Calculates total and per-core CPU percentages using delta ticks.
    */
-  public computeCpuDeltas(prev: CpuCoreTick[] | null, current: CpuCoreTick[]): {
+  public computeCpuDeltas(
+    prev: CpuCoreTick[] | null,
+    current: CpuCoreTick[]
+  ): {
     totalPercent: number;
     coresPercent: number[];
   } {
@@ -230,15 +233,15 @@ export class SystemStatsService {
       sumTotal += deltaTotal;
       sumIdle += deltaIdle;
 
-      const corePercent = deltaTotal > 0
-        ? Math.max(0, Math.min(100, Math.round((1 - deltaIdle / deltaTotal) * 100)))
-        : 0;
+      const corePercent =
+        deltaTotal > 0
+          ? Math.max(0, Math.min(100, Math.round((1 - deltaIdle / deltaTotal) * 100)))
+          : 0;
       coresPercent.push(corePercent);
     }
 
-    const totalPercent = sumTotal > 0
-      ? Math.max(0, Math.min(100, Math.round((1 - sumIdle / sumTotal) * 100)))
-      : 0;
+    const totalPercent =
+      sumTotal > 0 ? Math.max(0, Math.min(100, Math.round((1 - sumIdle / sumTotal) * 100))) : 0;
 
     return { totalPercent, coresPercent };
   }
@@ -305,7 +308,10 @@ export class SystemStatsService {
       if (elapsedMicros > 0) {
         agentCpuPercent = Math.max(
           0,
-          Math.min(100, Math.round((totalCpuMicros / elapsedMicros / os.cpus().length) * 100 * 10) / 10)
+          Math.min(
+            100,
+            Math.round((totalCpuMicros / elapsedMicros / os.cpus().length) * 100 * 10) / 10
+          )
         );
       }
     }
@@ -361,9 +367,10 @@ export class SystemStatsService {
       temperature: {
         available: this.gpuProvider.getCachedStats().temperatureCelsius !== null,
         celsius: this.gpuProvider.getCachedStats().temperatureCelsius,
-        note: this.gpuProvider.getCachedStats().temperatureCelsius !== null
-          ? `${this.gpuProvider.getCachedStats().name || 'GPU'} thermal sensor`
-          : 'not available (requires hardware sensor driver)',
+        note:
+          this.gpuProvider.getCachedStats().temperatureCelsius !== null
+            ? `${this.gpuProvider.getCachedStats().name || 'GPU'} thermal sensor`
+            : 'not available (requires hardware sensor driver)',
       },
       topProcesses: this.cachedTopProcesses,
     };
@@ -387,9 +394,11 @@ export class SystemStatsService {
     this.processSampleCounter++;
     if (this.processSampleCounter >= 5) {
       this.processSampleCounter = 0;
-      this.sampleTopProcesses().then((procs) => {
-        if (procs) this.cachedTopProcesses = procs;
-      }).catch(() => {});
+      this.sampleTopProcesses()
+        .then((procs) => {
+          if (procs) this.cachedTopProcesses = procs;
+        })
+        .catch(() => {});
     }
 
     metrics.topProcesses = this.cachedTopProcesses;
@@ -421,8 +430,14 @@ export class SystemStatsService {
 
               if (!isNaN(rx) && !isNaN(tx) && this.prevNetBytes) {
                 const elapsedSec = Math.max(0.1, (now - this.prevNetBytes.time) / 1000);
-                const downBytesPerSec = Math.max(0, Math.round((rx - this.prevNetBytes.rx) / elapsedSec));
-                const upBytesPerSec = Math.max(0, Math.round((tx - this.prevNetBytes.tx) / elapsedSec));
+                const downBytesPerSec = Math.max(
+                  0,
+                  Math.round((rx - this.prevNetBytes.rx) / elapsedSec)
+                );
+                const upBytesPerSec = Math.max(
+                  0,
+                  Math.round((tx - this.prevNetBytes.tx) / elapsedSec)
+                );
 
                 this.prevNetBytes = { rx, tx, time: now };
                 return resolve({ upBytesPerSec, downBytesPerSec });
@@ -459,12 +474,10 @@ export class SystemStatsService {
             });
 
           // Top by CPU uses top active processes
-          const byCpu: TopProcessItem[] = list
-            .slice(0, 5)
-            .map((p, idx) => ({
-              name: p.ProcessName,
-              value: idx === 0 ? 'Active' : 'Background',
-            }));
+          const byCpu: TopProcessItem[] = list.slice(0, 5).map((p, idx) => ({
+            name: p.ProcessName,
+            value: idx === 0 ? 'Active' : 'Background',
+          }));
 
           resolve({ byCpu, byRam });
         } catch {

@@ -1,16 +1,9 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import {
-  SignalingMessage,
-  TurnCredentialsResponse,
-} from './types.js';
+import { SignalingMessage, TurnCredentialsResponse } from './types.js';
 import { generateTurnCredentials } from './turn.js';
-import {
-  hashAgentSecret,
-  hashSignalingToken,
-  timingSafeEqualHex,
-} from './tokens.js';
+import { hashAgentSecret, hashSignalingToken, timingSafeEqualHex } from './tokens.js';
 
 export interface SignalingServerConfig {
   port?: number;
@@ -90,7 +83,12 @@ export class SignalingServer {
     ];
     this.allowedOrigins =
       config.allowedOrigins ??
-      (rawOrigins ? rawOrigins.split(',').map((s) => s.trim()).filter(Boolean) : defaultAllowed);
+      (rawOrigins
+        ? rawOrigins
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : defaultAllowed);
 
     this.maxClientsPerRoom = config.maxClientsPerRoom ?? 8;
     this.idleTimeoutMs = config.idleTimeoutMs ?? 60000;
@@ -192,7 +190,9 @@ export class SignalingServer {
     record.count++;
     if (record.count >= 5) {
       record.bannedUntil = Date.now() + 5 * 60 * 1000; // 5 minute lockout
-      console.warn(`[SignalingServer] Rate limiter: Temporary ban on IP ${ip} after 5 failed authentication attempts`);
+      console.warn(
+        `[SignalingServer] Rate limiter: Temporary ban on IP ${ip} after 5 failed authentication attempts`
+      );
     }
     this.ipFailures.set(ip, record);
   }
@@ -321,7 +321,9 @@ export class SignalingServer {
       if (!isTestEnv && (!token || !this.verifyTokenForTurn(token, pcId))) {
         this.recordAuthFailure(ip);
         res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Valid authentication token required for TURN credentials' }));
+        res.end(
+          JSON.stringify({ error: 'Valid authentication token required for TURN credentials' })
+        );
         return;
       }
 
@@ -598,7 +600,11 @@ export class SignalingServer {
         const signalingToken = msg.signalingToken || msg.authSecret;
         if (!pcId || !clientId || !signalingToken) {
           this.recordAuthFailure(ip);
-          this.sendJson(ws, { type: 'error', message: 'Authentication failed', code: 'AUTH_FAILED' });
+          this.sendJson(ws, {
+            type: 'error',
+            message: 'Authentication failed',
+            code: 'AUTH_FAILED',
+          });
           return;
         }
 

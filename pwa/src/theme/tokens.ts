@@ -1,6 +1,6 @@
 /**
  * Aerokin Design Tokens - Minimal True Black (OLED)
- * 
+ *
  * Strict Dieter Rams / Swiss minimalism.
  * Pure Black #000000, 1px borders, Signal Orange #FF5A1F accent (<5% screen area).
  */
@@ -55,10 +55,10 @@ export const TYPOGRAPHY = {
   },
   // 5 size steps
   sizes: {
-    caption: '12px',  // text-xs
-    body: '14px',     // text-sm
-    subhead: '16px',  // text-base
-    title: '20px',    // text-xl
-    display: '28px',  // text-2xl
+    caption: '12px', // text-xs
+    body: '14px', // text-sm
+    subhead: '16px', // text-base
+    title: '20px', // text-xl
+    display: '28px', // text-2xl
   },
 } as const;

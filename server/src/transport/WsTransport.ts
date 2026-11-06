@@ -1,10 +1,5 @@
 import { WebSocket } from 'ws';
-import {
-  Connection,
-  ChannelName,
-  ConnectionState,
-  ConnectionMode,
-} from './Connection.js';
+import { Connection, ChannelName, ConnectionState, ConnectionMode } from './Connection.js';
 
 export class WsTransport implements Connection {
   public state: ConnectionState = 'connected';
@@ -12,7 +7,10 @@ export class WsTransport implements Connection {
   public readonly mode: ConnectionMode = 'lan_direct';
 
   private ws: WebSocket;
-  private messageHandlers = new Map<ChannelName, Set<(data: ArrayBuffer | string | Uint8Array) => void>>();
+  private messageHandlers = new Map<
+    ChannelName,
+    Set<(data: ArrayBuffer | string | Uint8Array) => void>
+  >();
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>();
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPingTime = 0;
@@ -130,7 +128,10 @@ export class WsTransport implements Connection {
       const parsed = JSON.parse(text);
       let channel: ChannelName = 'control';
 
-      if (parsed.channel && ['input', 'stats', 'media', 'clipboard', 'control'].includes(parsed.channel)) {
+      if (
+        parsed.channel &&
+        ['input', 'stats', 'media', 'clipboard', 'control'].includes(parsed.channel)
+      ) {
         channel = parsed.channel;
         const payload = typeof parsed.data === 'string' ? parsed.data : JSON.stringify(parsed.data);
         const handlers = this.messageHandlers.get(channel);

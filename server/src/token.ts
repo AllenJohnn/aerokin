@@ -9,8 +9,7 @@ import crypto from 'node:crypto';
  */
 export function getOrCreateToken(certsDir: string): string {
   const tokenPath = path.join(certsDir, 'token.txt');
-  const forceNew =
-    process.env.AEROKIN_NEW_TOKEN === '1' || process.argv.includes('--new-token');
+  const forceNew = process.env.AEROKIN_NEW_TOKEN === '1' || process.argv.includes('--new-token');
 
   if (!forceNew && fs.existsSync(tokenPath)) {
     try {

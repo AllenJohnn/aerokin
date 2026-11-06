@@ -16,14 +16,7 @@ import { EventEmitter } from 'node:events';
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 export type LogCategory =
-  | 'pairing'
-  | 'desktop'
-  | 'media'
-  | 'input'
-  | 'security'
-  | 'system'
-  | 'actions'
-  | 'clipboard';
+  'pairing' | 'desktop' | 'media' | 'input' | 'security' | 'system' | 'actions' | 'clipboard';
 
 export interface LogEntry {
   id: string;
@@ -74,11 +67,7 @@ export class ServerLogger extends EventEmitter {
   /**
    * Adds an entry to the ring buffer after secret redaction.
    */
-  public addEntry(
-    level: LogLevel,
-    category: LogCategory,
-    rawMessage: string
-  ): LogEntry {
+  public addEntry(level: LogLevel, category: LogCategory, rawMessage: string): LogEntry {
     const cleanMessage = redactSecrets(rawMessage);
     const entry: LogEntry = {
       id: `log_${Date.now()}_${++this.entryCounter}`,
@@ -137,7 +126,12 @@ export class ServerLogger extends EventEmitter {
     const parseCategory = (msg: string): LogCategory => {
       const lower = msg.toLowerCase();
       if (lower.includes('[pairing]') || lower.includes('pair')) return 'pairing';
-      if (lower.includes('[desktopstream]') || lower.includes('[desktop]') || lower.includes('ffmpeg')) return 'desktop';
+      if (
+        lower.includes('[desktopstream]') ||
+        lower.includes('[desktop]') ||
+        lower.includes('ffmpeg')
+      )
+        return 'desktop';
       if (lower.includes('[media]') || lower.includes('smtc')) return 'media';
       if (lower.includes('[win32]') || lower.includes('[input]')) return 'input';
       if (lower.includes('[security]')) return 'security';
@@ -145,9 +139,7 @@ export class ServerLogger extends EventEmitter {
     };
 
     const formatArgs = (args: any[]): string => {
-      return args
-        .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
-        .join(' ');
+      return args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
     };
 
     console.log = (...args: any[]) => {

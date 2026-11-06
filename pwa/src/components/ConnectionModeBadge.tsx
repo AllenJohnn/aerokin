@@ -91,7 +91,9 @@ export const ConnectionModeBadge: React.FC<ConnectionModeBadgeProps> = ({
         title={`${info.title} - Tap for network diagnostics`}
         aria-label="Connection diagnostics"
       >
-        <span className={`w-1.5 h-1.5 rounded-full ${info.dotColor} ${isConnected ? '' : 'animate-pulse'}`} />
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${info.dotColor} ${isConnected ? '' : 'animate-pulse'}`}
+        />
         {info.icon}
         <span>{info.label}</span>
         {isConnected && latency !== null && (
@@ -138,10 +140,10 @@ export const ConnectionModeBadge: React.FC<ConnectionModeBadgeProps> = ({
                     latency === null
                       ? 'text-muted-foreground'
                       : latency < 20
-                      ? 'text-emerald-400'
-                      : latency < 60
-                      ? 'text-amber-400'
-                      : 'text-red-400'
+                        ? 'text-emerald-400'
+                        : latency < 60
+                          ? 'text-amber-400'
+                          : 'text-red-400'
                   }`}
                 >
                   {latency !== null ? `${latency} ms` : 'N/A'}
@@ -150,7 +152,9 @@ export const ConnectionModeBadge: React.FC<ConnectionModeBadgeProps> = ({
 
               <div className="flex items-center justify-between py-1 border-b border-[#1F1F1F]/60">
                 <span className="text-muted-foreground">Packet Loss:</span>
-                <span className="text-emerald-400 font-semibold">{packetLossPercent.toFixed(1)}%</span>
+                <span className="text-emerald-400 font-semibold">
+                  {packetLossPercent.toFixed(1)}%
+                </span>
               </div>
 
               <div className="flex items-center justify-between py-1 border-b border-[#1F1F1F]/60">

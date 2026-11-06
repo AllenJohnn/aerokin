@@ -207,7 +207,9 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
       }
     } catch {
       // Common iOS Safari prompt denial or restriction
-      setIosNotice('iOS clipboard prompt declined or restricted. You can paste directly into the box below.');
+      setIosNotice(
+        'iOS clipboard prompt declined or restricted. You can paste directly into the box below.'
+      );
     }
 
     setTimeout(() => setIosNotice(null), 4000);
@@ -266,7 +268,8 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
         <ShieldCheck size={16} className="text-[#FF5A1F] shrink-0 mt-0.5" />
         <div>
           <strong className="text-foreground">Privacy Guaranteed:</strong> Clipboard contents are
-          strictly in-memory and NEVER logged anywhere on the server or client (only character lengths are recorded).
+          strictly in-memory and NEVER logged anywhere on the server or client (only character
+          lengths are recorded).
         </div>
       </div>
 
@@ -480,7 +483,9 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
           >
             <UploadSimple size={22} className="text-[#FF5A1F]" />
             <span className="font-medium text-xs">Choose File or Photo to Send to PC</span>
-            <span className="text-[10px] text-muted-foreground/60">Saves directly to your PC Downloads folder</span>
+            <span className="text-[10px] text-muted-foreground/60">
+              Saves directly to your PC Downloads folder
+            </span>
           </button>
         )}
 

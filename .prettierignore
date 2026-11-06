@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.certs/
+server/public/
+server/scripts/
+docs/screenshots/
+*.log
+pnpm-lock.yaml

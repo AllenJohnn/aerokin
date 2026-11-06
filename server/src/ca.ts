@@ -169,11 +169,7 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     lastIp = fs.readFileSync(paths.ipTxt, 'utf8').trim();
   }
 
-  if (
-    fs.existsSync(paths.serverCertPem) &&
-    fs.existsSync(paths.serverKeyPem) &&
-    lastIp === lanIp
-  ) {
+  if (fs.existsSync(paths.serverCertPem) && fs.existsSync(paths.serverKeyPem) && lastIp === lanIp) {
     try {
       const existingCertPem = fs.readFileSync(paths.serverCertPem, 'utf8');
       const existingCert = pki.certificateFromPem(existingCertPem);
@@ -183,7 +179,9 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
       if (remainingDays > 30) {
         needNewLeaf = false;
       } else {
-        console.log(`[Security] Leaf certificate expiring in ${Math.round(remainingDays)} days. Regenerating...`);
+        console.log(
+          `[Security] Leaf certificate expiring in ${Math.round(remainingDays)} days. Regenerating...`
+        );
       }
     } catch {
       needNewLeaf = true;
@@ -197,7 +195,9 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     serverCertPem = fs.readFileSync(paths.serverCertPem, 'utf8');
     serverKeyPem = fs.readFileSync(paths.serverKeyPem, 'utf8');
   } else {
-    console.log(`[Security] Generating new leaf certificate signed by AEROKIN Local CA for IP: ${lanIp}...`);
+    console.log(
+      `[Security] Generating new leaf certificate signed by AEROKIN Local CA for IP: ${lanIp}...`
+    );
 
     const leafKeys = pki.rsa.generateKeyPair({ bits: 2048 });
     serverKeyPem = pki.privateKeyToPem(leafKeys.privateKey);

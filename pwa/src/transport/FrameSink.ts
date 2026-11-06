@@ -51,7 +51,10 @@ export class CanvasFrameSink implements FrameSink {
           }
 
           if (this.canvas) {
-            if (this.canvas.width !== frame.displayWidth || this.canvas.height !== frame.displayHeight) {
+            if (
+              this.canvas.width !== frame.displayWidth ||
+              this.canvas.height !== frame.displayHeight
+            ) {
               this.canvas.width = frame.displayWidth;
               this.canvas.height = frame.displayHeight;
             }

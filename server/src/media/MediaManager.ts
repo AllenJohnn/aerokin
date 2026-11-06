@@ -2,11 +2,7 @@ import { SmtcAdapter } from './SmtcAdapter.js';
 import { AppProfiles } from './AppProfiles.js';
 import { MediaCommandRouter } from './MediaCommandRouter.js';
 import { synthesizeProcessSessions } from './ProcessMediaDetector.js';
-import {
-  NowPlayingData,
-  MediaSessionItem,
-  MediaCommandResult,
-} from './types.js';
+import { NowPlayingData, MediaSessionItem, MediaCommandResult } from './types.js';
 
 export interface MediaManagerOptions {
   profilesPath?: string;
@@ -143,7 +139,19 @@ export class MediaManager {
     const res = await this.router.route(action, param, targetSessionId);
 
     // If session or volume state might have changed, trigger a refresh
-    if (['playpause', 'play', 'pause', 'next', 'prev', 'stop', 'session', 'setvolume', 'mute'].includes(action)) {
+    if (
+      [
+        'playpause',
+        'play',
+        'pause',
+        'next',
+        'prev',
+        'stop',
+        'session',
+        'setvolume',
+        'mute',
+      ].includes(action)
+    ) {
       this.refreshStatus().catch(() => {});
     }
 

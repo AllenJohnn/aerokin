@@ -1,9 +1,4 @@
-import {
-  Connection,
-  ConnectionState,
-  ConnectionMode,
-  ChannelName,
-} from './Connection.js';
+import { Connection, ConnectionState, ConnectionMode, ChannelName } from './Connection.js';
 
 export interface RtcChunkHeader {
   messageId: number;

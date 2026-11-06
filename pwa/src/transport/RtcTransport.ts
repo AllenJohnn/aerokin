@@ -1,9 +1,4 @@
-import {
-  Connection,
-  ConnectionState,
-  ConnectionMode,
-  ChannelName,
-} from './Connection';
+import { Connection, ConnectionState, ConnectionMode, ChannelName } from './Connection';
 import { deriveSignalingToken } from './tokens';
 
 export interface RtcChunkHeader {
@@ -145,14 +140,22 @@ export interface RtcTransportOptions {
   authSecret?: string; // legacy alias
   onModeChange?: (mode: ConnectionMode) => void;
   onLatencyUpdate?: (latencyMs: number) => void;
-  onDetailedStats?: (stats: { rttMs: number; jitterMs: number; bitrateKbps: number; candidateType: string }) => void;
+  onDetailedStats?: (stats: {
+    rttMs: number;
+    jitterMs: number;
+    bitrateKbps: number;
+    candidateType: string;
+  }) => void;
   iceServers?: RTCIceServer[];
 }
 
 export class RtcTransport implements Connection {
   private options: RtcTransportOptions;
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>();
-  private messageHandlers = new Map<ChannelName, Set<(data: ArrayBuffer | string | Uint8Array) => void>>();
+  private messageHandlers = new Map<
+    ChannelName,
+    Set<(data: ArrayBuffer | string | Uint8Array) => void>
+  >();
   private currentState: ConnectionState = 'connecting';
   private currentMode: ConnectionMode = 'webrtc_direct';
   private currentLatency = 0;
@@ -221,14 +224,17 @@ export class RtcTransport implements Connection {
 
       this.ws.onmessage = async (event) => {
         try {
-          const raw = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
+          const raw =
+            typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
           const msg = JSON.parse(raw);
 
           if (msg.type === 'joined') {
             await this.setupPeerConnection(msg.iceServers || this.options.iceServers || []);
           } else if (msg.type === 'answer') {
             if (this.pc && msg.sdp) {
-              await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+              await this.pc.setRemoteDescription(
+                new RTCSessionDescription({ type: 'answer', sdp: msg.sdp })
+              );
             }
           } else if (msg.type === 'candidate') {
             if (this.pc && msg.candidate) {
@@ -323,7 +329,10 @@ export class RtcTransport implements Connection {
   private setupDataChannel(name: ChannelName, dc: RTCDataChannel): void {
     dc.onopen = () => {
       // Once primary control and input channels open, connection is established
-      if (this.channels.get('control')?.readyState === 'open' && this.channels.get('input')?.readyState === 'open') {
+      if (
+        this.channels.get('control')?.readyState === 'open' &&
+        this.channels.get('input')?.readyState === 'open'
+      ) {
         if (this.currentState !== 'connected') {
           this.currentState = 'connected';
           this.notifyState('connected');
@@ -385,7 +394,8 @@ export class RtcTransport implements Connection {
         const remoteCand = stats.get(selectedPair.remoteCandidateId);
         const localCand = stats.get(selectedPair.localCandidateId);
 
-        const isRelay = remoteCand?.candidateType === 'relay' || localCand?.candidateType === 'relay';
+        const isRelay =
+          remoteCand?.candidateType === 'relay' || localCand?.candidateType === 'relay';
         const newMode: ConnectionMode = isRelay ? 'webrtc_turn' : 'webrtc_direct';
         if (this.currentMode !== newMode) {
           this.currentMode = newMode;
@@ -411,7 +421,7 @@ export class RtcTransport implements Connection {
             rttMs: this.currentLatency,
             jitterMs,
             bitrateKbps,
-            candidateType: isRelay ? 'relay' : (remoteCand?.candidateType || 'host'),
+            candidateType: isRelay ? 'relay' : remoteCand?.candidateType || 'host',
           });
         }
         this.lastBytesReceived = bytesNow;

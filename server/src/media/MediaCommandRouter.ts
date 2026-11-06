@@ -3,11 +3,7 @@ import { InputBackend, createInputBackend } from '../input/InputBackend.js';
 import { SmtcAdapter } from './SmtcAdapter.js';
 import { AppProfiles } from './AppProfiles.js';
 import { mapSeekSecondsToVlcHotkey } from './ProcessMediaDetector.js';
-import {
-  MediaCommandResult,
-  NowPlayingData,
-  MediaSessionItem,
-} from './types.js';
+import { MediaCommandResult, NowPlayingData, MediaSessionItem } from './types.js';
 
 export interface CommandRouterContext {
   smtcAdapter: SmtcAdapter;
@@ -56,7 +52,8 @@ export class MediaCommandRouter {
     // Determine target session (explicit parameter, or matching current active session)
     const targetSession = targetSessionId
       ? current.sessions.find((s) => s.id === targetSessionId)
-      : current.sessions.find((s) => s.current) || (current.nowPlaying.id ? current.nowPlaying : undefined);
+      : current.sessions.find((s) => s.current) ||
+        (current.nowPlaying.id ? current.nowPlaying : undefined);
 
     const caps = targetSession?.capabilities;
 
@@ -110,7 +107,12 @@ export class MediaCommandRouter {
     }
 
     // 2. SEEKING (seekby, seekto, seekfwd, seekback)
-    if (action === 'seekby' || action === 'seekfwd' || action === 'seekback' || action === 'seekto') {
+    if (
+      action === 'seekby' ||
+      action === 'seekfwd' ||
+      action === 'seekback' ||
+      action === 'seekto'
+    ) {
       const seconds = action === 'seekto' ? 0 : (param ?? (action === 'seekfwd' ? 10 : -10));
 
       // Tier 2: Try SMTC seek if session supports it

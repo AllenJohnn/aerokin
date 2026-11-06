@@ -40,8 +40,7 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
 }) => {
   const [codeVal, setCodeVal] = useState(initialCode || initialToken || '');
   const [hostVal, setHostVal] = useState(initialHost || '');
-  const isApple =
-    typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isApple = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [deviceName, setDeviceName] = useState(
     initialDeviceName || (isApple ? "Allen's iPhone" : 'Mobile Device')
   );
@@ -189,9 +188,7 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-[#8A8A8A]">
-                    8-Digit Pairing Code
-                  </label>
+                  <label className="text-xs font-medium text-[#8A8A8A]">8-Digit Pairing Code</label>
                   <span className="text-[10px] text-muted-foreground font-mono">valid 2m</span>
                 </div>
                 <TextField

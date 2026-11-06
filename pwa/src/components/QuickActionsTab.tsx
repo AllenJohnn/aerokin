@@ -46,7 +46,9 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
   launcherEnabled = true,
 }) => {
   // Modal / Confirm state for dangerous actions
-  const [confirmAction, setConfirmAction] = useState<'shutdown' | 'restart' | 'sign_out' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'shutdown' | 'restart' | 'sign_out' | null>(
+    null
+  );
   const [activeCountdown, setActiveCountdown] = useState<{
     active: boolean;
     action: string | null;
@@ -206,7 +208,8 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
             <span className="text-xs text-destructive-foreground font-mono">Visible on PC</span>
           </div>
           <p className="text-xs text-destructive-foreground">
-            A remote power event was scheduled. You can cancel it immediately below or on the PC dashboard.
+            A remote power event was scheduled. You can cancel it immediately below or on the PC
+            dashboard.
           </p>
           <button
             onClick={handleCancelCountdown}
@@ -404,7 +407,9 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
                 <div className="truncate">
                   <div className="text-xs font-medium text-foreground truncate">{app.name}</div>
                   {app.description && (
-                    <div className="text-[10px] text-muted-foreground truncate">{app.description}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {app.description}
+                    </div>
                   )}
                 </div>
               </button>
@@ -478,8 +483,8 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
               </div>
 
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Are you sure you want to {confirmAction.replace('_', ' ')} your PC? This will start a
-                10-second cancelable countdown visible on the PC screen and dashboard.
+                Are you sure you want to {confirmAction.replace('_', ' ')} your PC? This will start
+                a 10-second cancelable countdown visible on the PC screen and dashboard.
               </p>
 
               <div className="grid grid-cols-2 gap-2 pt-1">
