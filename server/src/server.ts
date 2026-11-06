@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import https from 'node:https';
@@ -58,6 +59,7 @@ export interface ServerConfig {
   quickActionService?: QuickActionService;
   powerExecutor?: PowerActionExecutor;
   inputBackend?: InputBackend;
+  downloadsDir?: string;
 }
 
 export interface ActivityEvent {
@@ -739,6 +741,80 @@ export function startServer(config: ServerConfig): {
     setInputPaused(Boolean(paused));
     res.json({ ok: true, paused: isInputPaused });
   });
+
+  // REST API: Secure File Transfer / Drop to PC (Downloads/AeroKin/)
+  app.post(
+    '/api/transfer/upload',
+    express.raw({ type: '*/*', limit: '50mb' }),
+    async (req, res) => {
+      // 1. Authenticate: Loopback OR verified device credentials
+      const deviceId = (req.headers['x-aerokin-device-id'] as string) || '';
+      const credential = (req.headers['x-aerokin-credential'] as string) || '';
+      const isAuthed =
+        isLoopback(req) ||
+        (deviceId && credential && deviceStore.verifyCredential(deviceId, credential));
+
+      if (!isAuthed) {
+        res.status(401).json({ error: 'Unauthorized: Valid device credentials required' });
+        return;
+      }
+
+      // 2. Extract & sanitize filename
+      const rawHeaderName = (req.headers['x-aerokin-filename'] as string) || '';
+      let filename = 'file_' + Date.now();
+      if (rawHeaderName) {
+        try {
+          filename = decodeURIComponent(rawHeaderName);
+        } catch {
+          filename = rawHeaderName;
+        }
+      }
+
+      const safeFilename = path.basename(filename).replace(/[/\\?%*:|"<>]/g, '_');
+      if (!safeFilename || safeFilename === '.' || safeFilename === '..') {
+        res.status(400).json({ error: 'Invalid filename' });
+        return;
+      }
+
+      // 3. Ensure target directory exists: config.downloadsDir or ~/Downloads/AeroKin/
+      const targetDir = config.downloadsDir || path.join(os.homedir(), 'Downloads', 'AeroKin');
+      try {
+        fs.mkdirSync(targetDir, { recursive: true });
+      } catch (err: any) {
+        res.status(500).json({ error: 'Failed to create destination folder: ' + err?.message });
+        return;
+      }
+
+      // 4. Unique filename if collision
+      let finalPath = path.join(targetDir, safeFilename);
+      if (fs.existsSync(finalPath)) {
+        const ext = path.extname(safeFilename);
+        const base = path.basename(safeFilename, ext);
+        finalPath = path.join(targetDir, `${base}_${Date.now()}${ext}`);
+      }
+
+      // 5. Write file
+      const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+      if (fileBuffer.length === 0) {
+        res.status(400).json({ error: 'Empty file payload' });
+        return;
+      }
+
+      try {
+        fs.writeFileSync(finalPath, fileBuffer);
+        const senderName = deviceId ? deviceStore.getDevice(deviceId)?.name || deviceId : 'Local Operator';
+        recordEvent('system', `File received from ${senderName}: ${path.basename(finalPath)} (${fileBuffer.length} bytes)`);
+        res.json({
+          ok: true,
+          filename: path.basename(finalPath),
+          path: finalPath,
+          bytes: fileBuffer.length,
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: 'Failed to write file: ' + err?.message });
+      }
+    }
+  );
 
   // REST API: Stop Desktop Remote Stream - LOOPBACK ONLY (403 for LAN)
   app.post('/api/desktop/stop', async (req, res) => {

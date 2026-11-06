@@ -6,10 +6,29 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 12 (Feature Additions - Virtual Modifiers, Keyboard Gestures, Tools, File Transfer).
-- **Exact Next Step**: Polish full physical keyboard event mapping, two-finger gesture shortcuts, and drag-and-drop / file drop bridge, commit and tag `stable-p12`.
+- **Current Milestone**: Part 13 (Engineering Quality & Performance - Memory Leak Audits, Ping Cadence, Buffer GC).
+- **Exact Next Step**: Conduct memory leak audit, ping interval optimizations, buffer garbage collection, commit and tag `stable-p13`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 12: Feature Additions - Keyboard, Gestures & File Transfer (Completed)
+- **12.1 Secure File Transfer & Drop Subsystem (`/api/transfer/upload`)**:
+  - Implemented authenticated REST endpoint `POST /api/transfer/upload` handling files up to 50MB.
+  - Automatic directory creation and routing to safe host directory `~/Downloads/AeroKin/` (`config.downloadsDir`).
+  - Path traversal hardening: sanitizes incoming filename headers using `path.basename()` and regex replacement to prevent directory climbing attacks.
+  - Automatic file collision prevention with timestamp suffixes.
+  - Unit test suite in `server/test/file-transfer.test.ts` (4 tests passing) validating authentication, safe writes, and path traversal rejection.
+- **12.2 Physical Keyboard & Modifier Chord Forwarding (`DesktopViewer.tsx`)**:
+  - Added physical keyboard listener handling navigation keys (`Home`, `End`, `PageUp`, `PageDown`, `Insert`, `Delete`, `Escape`, `Tab`, `Enter`, arrows), functional keys (`F1`-`F12`), and modifier chords (`Ctrl`, `Alt`, `Shift`, `Win`).
+  - Extended shortcut chips with high-frequency actions (`Win+E`, `Win+R`, `F5`, `F11`, `Alt+F4` with safety confirmation modal).
+- **12.3 AeroKin Drop Card in Mobile Client (`ClipboardTab.tsx`)**:
+  - Added "Send File to PC (AeroKin Drop)" card in Clipboard tab.
+  - Allows mobile operators to select files/photos, preview name and size, and upload directly to their Windows PC with live progress, haptic feedback, and success notifications.
+- **12.4 Verification**:
+  - All 84 PWA unit tests and 4 server file transfer tests passing.
+  - Production PWA bundle rebuilt and verified.
 
 ---
 
@@ -305,8 +324,8 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 9** | Windows CI, Installer, FFmpeg Provisioning | COMPLETED | Tagged `stable-p9`. Multi-OS CI, static safety gate, Gyan FFmpeg provisioning script, launcher. |
 | **Part 10** | Tray Icon + Pause Switch | COMPLETED | Tagged `stable-p10`. Server pause filter, Windows Tray sidecar, dashboard toggle. |
 | **Part 11** | Saved PCs (Multi-PC Support) | COMPLETED | Tagged `stable-p11`. Multi-PC switcher, persistent PC identities, header indicator, unit tests. |
-| **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | IN PROGRESS | |
-| **Part 13** | Engineering Quality + Performance | PENDING | |
+| **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | COMPLETED | Tagged `stable-p12`. Authenticated file drop to PC, physical keyboard chords, extended shortcut chips. |
+| **Part 13** | Engineering Quality + Performance | IN PROGRESS | |
 | **Part 14** | Dashboard Polish & Remote Cards | PENDING | |
 | **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | PENDING | |
 | **Part 16** | Documentation & Root README Rewrite | PENDING | |

@@ -649,10 +649,62 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
           }
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Backspace') {
-            sendKey('backspace', 'tap');
-          } else if (e.key === 'Enter') {
-            sendKey('enter', 'tap');
+          const key = e.key;
+          const lowerKey = key.toLowerCase();
+
+          const keyMap: Record<string, string> = {
+            Backspace: 'backspace',
+            Enter: 'enter',
+            Tab: 'tab',
+            Escape: 'escape',
+            Esc: 'escape',
+            ArrowUp: 'arrowup',
+            ArrowDown: 'arrowdown',
+            ArrowLeft: 'arrowleft',
+            ArrowRight: 'arrowright',
+            Delete: 'delete',
+            Home: 'home',
+            End: 'end',
+            PageUp: 'pageup',
+            PageDown: 'pagedown',
+            Insert: 'insert',
+            F1: 'f1',
+            F2: 'f2',
+            F3: 'f3',
+            F4: 'f4',
+            F5: 'f5',
+            F6: 'f6',
+            F7: 'f7',
+            F8: 'f8',
+            F9: 'f9',
+            F10: 'f10',
+            F11: 'f11',
+            F12: 'f12',
+          };
+
+          const hasPhysicalMod = e.ctrlKey || e.altKey || e.metaKey;
+          const mods: string[] = [];
+          if (e.ctrlKey) mods.push('ctrl');
+          if (e.altKey) mods.push('alt');
+          if (e.shiftKey) mods.push('shift');
+          if (e.metaKey) mods.push('win');
+
+          for (const m of getActiveModifiers()) {
+            if (!mods.includes(m)) mods.push(m);
+          }
+
+          if (keyMap[key]) {
+            e.preventDefault();
+            sendKey(keyMap[key], 'tap', mods);
+            clearLatchedModifiers();
+            return;
+          }
+
+          if (hasPhysicalMod && key.length === 1) {
+            e.preventDefault();
+            sendKey(lowerKey, 'tap', mods);
+            clearLatchedModifiers();
+            return;
           }
         }}
       />
@@ -1017,7 +1069,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
             {/* Third row: Shortcut Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-              {['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+A', 'Ctrl+S', 'Alt+Tab', 'Win+D', 'Win+Tab', 'Alt+F4'].map((chip) => (
+              {['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+A', 'Ctrl+S', 'Alt+Tab', 'Win+D', 'Win+Tab', 'Win+E', 'Win+R', 'F5', 'F11', 'Alt+F4'].map((chip) => (
                 <button
                   key={chip}
                   onClick={() => handleShortcutChip(chip)}

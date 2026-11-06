@@ -12,8 +12,12 @@ import {
   Clock,
   ShieldCheck,
   PaperPlaneTilt,
+  UploadSimple,
+  FileArrowUp,
+  CheckCircle,
 } from '@phosphor-icons/react';
 import { triggerHaptic } from '../utils/haptics';
+import { getStoredDeviceCredentials } from '../utils/hosting';
 
 export interface ClipboardItem {
   id: string;
@@ -63,6 +67,60 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
   const [copiedToPhone, setCopiedToPhone] = useState<boolean>(false);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [iosNotice, setIosNotice] = useState<string | null>(null);
+
+  // File Transfer State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadStatus, setUploadStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setUploadStatus(null);
+      triggerHaptic('light');
+    }
+  };
+
+  const handleSendFile = async () => {
+    if (!selectedFile) return;
+    setIsUploading(true);
+    setUploadStatus(null);
+    try {
+      const creds = getStoredDeviceCredentials();
+      const res = await fetch('/api/transfer/upload', {
+        method: 'POST',
+        headers: {
+          'x-aerokin-filename': encodeURIComponent(selectedFile.name),
+          'x-aerokin-device-id': creds.deviceId || '',
+          'x-aerokin-credential': creds.credential || '',
+          'content-type': selectedFile.type || 'application/octet-stream',
+        },
+        body: selectedFile,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        triggerHaptic('success');
+        setUploadStatus({ ok: true, message: `Sent ${data.filename} to Downloads/AeroKin on PC!` });
+        setSelectedFile(null);
+      } else {
+        triggerHaptic('alert');
+        setUploadStatus({ ok: false, message: data.error || 'Failed to upload file.' });
+      }
+    } catch (err: any) {
+      triggerHaptic('alert');
+      setUploadStatus({ ok: false, message: err?.message || 'Network error during upload.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   const prevPcTextRef = useRef<string | null>(null);
 
@@ -353,6 +411,93 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
         ) : (
           <div className="p-4 rounded-xl bg-background/50 border border-border/20 text-center text-xs text-muted-foreground">
             Tap &quot;Fetch PC Text&quot; to inspect current PC clipboard text.
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 2.5: AeroKin File Drop & Transfer */}
+      <div className="bg-card border border-border/40 rounded-2xl p-4 space-y-3 text-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileArrowUp size={16} className="text-[#FF5A1F]" />
+            <span className="font-semibold uppercase tracking-wider text-muted-foreground text-[11px]">
+              Send File to PC (AeroKin Drop)
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">Downloads/AeroKin</span>
+        </div>
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          aria-label="Select file to send"
+        />
+
+        {selectedFile ? (
+          <div className="p-3 rounded-xl border border-border/60 bg-surface space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-foreground truncate max-w-[200px]">
+                {selectedFile.name}
+              </span>
+              <span className="font-mono text-muted-foreground text-[11px]">
+                {formatFileSize(selectedFile.size)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => setSelectedFile(null)}
+                className="px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs"
+                disabled={isUploading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendFile}
+                disabled={isUploading}
+                className="flex-1 py-1.5 px-3 rounded-lg bg-[#FF5A1F] text-white font-medium hover:brightness-110 active:scale-[0.98] transition-transform text-xs flex items-center justify-center gap-1.5"
+              >
+                {isUploading ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Sending to PC...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadSimple size={14} weight="bold" />
+                    <span>Send to PC</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full p-4 rounded-xl border border-dashed border-border/60 hover:border-[#FF5A1F]/50 hover:bg-[#FF5A1F]/5 flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+          >
+            <UploadSimple size={22} className="text-[#FF5A1F]" />
+            <span className="font-medium text-xs">Choose File or Photo to Send to PC</span>
+            <span className="text-[10px] text-muted-foreground/60">Saves directly to your PC Downloads folder</span>
+          </button>
+        )}
+
+        {uploadStatus && (
+          <div
+            className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+              uploadStatus.ok
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
+            }`}
+          >
+            {uploadStatus.ok ? (
+              <CheckCircle size={15} weight="fill" className="flex-shrink-0" />
+            ) : (
+              <Warning size={15} weight="fill" className="flex-shrink-0" />
+            )}
+            <span>{uploadStatus.message}</span>
           </div>
         )}
       </div>
