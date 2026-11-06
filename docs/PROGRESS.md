@@ -6,8 +6,8 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 9 Complete (Windows CI Matrix, Safety Gates, FFmpeg Provisioning, Quick Launcher); proceeding to commit Part 9 and tag `stable-p9`.
-- **Exact Next Step**: Commit `ci(windows): configure multi-os CI matrix, safety gate, ffmpeg provisioning script, and Windows launcher`, push, tag `stable-p9`, then proceed to Part 10 (Tray Icon & Pause Switch).
+- **Current Milestone**: Part 10 (Tray Icon & Pause Switch - Windows System Tray Indicator, Pause Input Toggle, and Dashboard Loopback Controls).
+- **Exact Next Step**: Implement Tray / Pause Switch service and loopback dashboard controls, commit and tag `stable-p10`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
