@@ -452,7 +452,7 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
       {/* Confirmation Dialog / Sheet */}
       <AnimatePresence>
         {confirmAction && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 pb-24 sm:pb-4">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
