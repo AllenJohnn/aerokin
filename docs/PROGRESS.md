@@ -6,10 +6,24 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 16 (Documentation & Root README Rewrite).
-- **Exact Next Step**: Completely rewrite root `README.md` with zero 3rd-party tool requirements, self-hosted architecture diagram, iPhone Chrome-Remote-Desktop workflow, quickstart guides, and security invariants. Commit and tag `stable-p16`.
+- **Current Milestone**: Part 17 (Final UI Sweep & Goal Verification).
+- **Exact Next Step**: Run end-to-end type checks, full unit tests across all packages, verify true-black OLED visual tokens, run final safety checks, push final commit and tag `stable-p17`, and declare goal completion.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 16: Documentation & Root README Rewrite (Completed)
+- **16.1 Comprehensive Root README Rewrite (`README.md`)**:
+  - Replaced the template Vite README with a complete, production-grade project documentation.
+  - Articulated the sovereign product goal: Allen controls his Windows PC from his iPhone from anywhere with Chrome-Remote-Desktop quality and zero third-party remote tools (no Tailscale/AnyDesk/TeamViewer).
+  - Authored complete architecture diagram visualizing the multi-path transport (LAN Direct WebSocket 1-3ms, P2P WebRTC DataChannel via STUN hole punching, Coturn TURN relay fallback) and Windows host subsystems.
+  - Documented setup guides for Windows host (PowerShell FFmpeg provisioner, 1-click batch launcher), iOS Safari PWA (Root CA installation, Home Screen app), and VPS remote infrastructure (Docker + Coturn + Caddy TLS).
+  - Documented Hard Safety Rules S1-S9 and security invariants.
+  - Included Desktop 2.0 streaming benchmarks and directory structure.
+- **16.2 Verification**:
+  - Validated markdown formatting and Mermaid diagram syntax.
+  - Pre-commit safety check `pnpm run safety:check` passing with 0 violations.
 
 ---
 
@@ -397,8 +411,8 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 13** | Engineering Quality + Performance | COMPLETED | Tagged `stable-p13`. Reconnect jitter, device map cleanup on revocation, backpressure drop verified. |
 | **Part 14** | Dashboard Polish & Remote Cards | COMPLETED | Tagged `stable-p14`. Remote WebRTC Status Card, LAN/Remote QR toggle, 1-click copy. |
 | **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | COMPLETED | Tagged `stable-p15`. 10 DataChannel fuzz/chaos tests, bounded synthetic benchmark. |
-| **Part 16** | Documentation & Root README Rewrite | IN PROGRESS | |
-| **Part 17** | Final UI Sweep & Verification | PENDING | |
+| **Part 16** | Documentation & Root README Rewrite | COMPLETED | Tagged `stable-p16`. Comprehensive root README with architecture diagram & guides. |
+| **Part 17** | Final UI Sweep & Verification | IN PROGRESS | |
 
 ---
 
