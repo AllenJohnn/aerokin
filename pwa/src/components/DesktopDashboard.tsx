@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   WifiHigh,
   Broadcast,
+  Globe,
   Stop,
   PencilSimple,
   Trash,
@@ -99,6 +100,14 @@ export interface LogEntry {
   message: string;
 }
 
+export interface WebRtcStatus {
+  pcId: string;
+  signalingUrl: string | null;
+  signalingConnected: boolean;
+  turnConfigured: boolean;
+  remotePairPayload: string | null;
+}
+
 export interface DesktopDashboardProps {
   onSwitchToPhoneView: () => void;
 }
@@ -134,6 +143,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
   // QR Code data URLs
   const [pairQrUrl, setPairQrUrl] = useState<string | null>(null);
+  const [remoteQrUrl, setRemoteQrUrl] = useState<string | null>(null);
+  const [pairMode, setPairMode] = useState<'lan' | 'remote'>('lan');
+  const [webrtcStatus, setWebrtcStatus] = useState<WebRtcStatus | null>(null);
   const [trustQrUrl, setTrustQrUrl] = useState<string | null>(null);
   const [showTrustDetails, setShowTrustDetails] = useState<boolean>(false);
 
@@ -197,7 +209,33 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
           if (typeof data.isPaused === 'boolean') {
             setIsInputPaused(data.isPaused);
           }
+          if (data.webrtc) {
+            setWebrtcStatus(data.webrtc);
+          } else if (data.pairing?.pcId) {
+            setWebrtcStatus({
+              pcId: data.pairing.pcId,
+              signalingUrl: data.pairing.signalingUrl || null,
+              signalingConnected: false,
+              turnConfigured: !!data.pairing.signalingUrl,
+              remotePairPayload: data.pairing.remotePairPayload || null,
+            });
+          }
           if (data.systemStats) setSystemTelemetry(data.systemStats);
+        } catch {}
+      });
+
+      sse.addEventListener('webrtc_status', (e) => {
+        try {
+          const w = JSON.parse(e.data);
+          if (w) {
+            setWebrtcStatus((prev) => ({
+              pcId: w.pcId || prev?.pcId || '',
+              signalingUrl: w.signalingUrl || prev?.signalingUrl || null,
+              signalingConnected: !!w.signalingConnected,
+              turnConfigured: !!w.turnConfigured,
+              remotePairPayload: w.remotePairPayload || prev?.remotePairPayload || null,
+            }));
+          }
         } catch {}
       });
 
@@ -425,7 +463,21 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     })
       .then(setTrustQrUrl)
       .catch(() => {});
-  }, [activeCode, pcStats]);
+
+    const pcId = webrtcStatus?.pcId || 'pc_host';
+    const signaling = webrtcStatus?.signalingUrl;
+    const remotePayload = activeCode
+      ? `aerokin://pair?pcId=${pcId}&code=${activeCode}${signaling ? `&signaling=${encodeURIComponent(signaling)}` : ''}`
+      : `aerokin://pair?pcId=${pcId}`;
+
+    QRCode.toDataURL(remotePayload, {
+      margin: 1,
+      scale: 6,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    })
+      .then(setRemoteQrUrl)
+      .catch(() => {});
+  }, [activeCode, pcStats, webrtcStatus]);
 
   // 4. Auto-scroll logs
   useEffect(() => {
@@ -846,13 +898,39 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 </button>
               </div>
 
+              {/* Pairing Transport Toggle */}
+              <div className="flex items-center gap-2 p-1 bg-raised rounded-xl border border-border w-fit text-xs font-medium">
+                <button
+                  onClick={() => setPairMode('lan')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                    pairMode === 'lan'
+                      ? 'bg-[#FF5A1F] text-black font-semibold shadow'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <WifiHigh size={14} />
+                  <span>Local Wi-Fi (LAN)</span>
+                </button>
+                <button
+                  onClick={() => setPairMode('remote')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                    pairMode === 'remote'
+                      ? 'bg-[#FF5A1F] text-black font-semibold shadow'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Globe size={14} />
+                  <span>Remote WebRTC (Anywhere)</span>
+                </button>
+              </div>
+
               <div className="flex flex-col sm:flex-row items-center gap-8 py-2">
                 {/* Big QR Code */}
-                <div className="p-3 bg-white rounded-2xl border border-border shadow-md flex-shrink-0">
-                  {pairQrUrl ? (
+                <div className="p-3 bg-white rounded-2xl border border-border shadow-md flex-shrink-0 flex flex-col items-center">
+                  {(pairMode === 'lan' ? pairQrUrl : remoteQrUrl) ? (
                     <img
-                      src={pairQrUrl}
-                      alt="Pairing QR Code"
+                      src={pairMode === 'lan' ? pairQrUrl! : remoteQrUrl!}
+                      alt={pairMode === 'lan' ? 'LAN Pairing QR Code' : 'Remote WebRTC Pairing QR Code'}
                       className="w-44 h-44 object-contain"
                     />
                   ) : (
@@ -860,6 +938,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                       Generating QR...
                     </div>
                   )}
+                  <span className="text-[10px] font-mono text-neutral-800 font-semibold mt-1">
+                    {pairMode === 'lan' ? 'Direct Wi-Fi / LAN' : 'WebRTC P2P / Remote'}
+                  </span>
                 </div>
 
                 {/* 8-Digit Code Display with Animated Ring */}
@@ -903,8 +984,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     </div>
                   </div>
 
-                  {/* LAN and mDNS Copy Rows */}
-                  {pcStats && (
+                  {/* LAN and Remote Copy Rows */}
+                  {pairMode === 'lan' && pcStats && (
                     <div className="flex flex-col gap-2 pt-2 border-t border-border">
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <span className="font-mono text-muted-foreground truncate max-w-[260px]">
@@ -939,6 +1020,45 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                           title="Copy mDNS URL"
                         >
                           {copiedKey === 'mdns_url' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pairMode === 'remote' && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                      {/* Remote Payload URI */}
+                      <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
+                        <span className="font-mono text-muted-foreground truncate max-w-[260px]">
+                          {`aerokin://pair?pcId=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}`}
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleCopy(
+                              webrtcStatus?.remotePairPayload ||
+                                `aerokin://pair?pcId=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}${webrtcStatus?.signalingUrl ? `&signaling=${encodeURIComponent(webrtcStatus.signalingUrl)}` : ''}`,
+                              'remote_uri'
+                            )
+                          }
+                          className="p-1 hover:text-[#FF5A1F] transition-colors"
+                          title="Copy Remote Pairing URI"
+                        >
+                          {copiedKey === 'remote_uri' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+
+                      {/* Host PC ID */}
+                      <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-[10px] text-muted-foreground uppercase">PC ID:</span>
+                          <span className="text-foreground font-semibold">{webrtcStatus?.pcId || 'pc_host'}</span>
+                        </div>
+                        <button
+                          onClick={() => handleCopy(webrtcStatus?.pcId || 'pc_host', 'pc_id_copy')}
+                          className="p-1 hover:text-[#FF5A1F] transition-colors"
+                          title="Copy Host PC ID"
+                        >
+                          {copiedKey === 'pc_id_copy' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                         </button>
                       </div>
                     </div>
@@ -1261,6 +1381,137 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
             )}
           </div>
         )}
+
+        {/* Remote WebRTC Status & Internet Access Card */}
+        <div className="rounded-2xl bg-surface border border-border p-6 flex flex-col gap-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-raised border border-border flex items-center justify-center text-[#FF5A1F]">
+                <Globe size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Remote WebRTC & Internet Access
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Direct peer-to-peer control from your iPhone anywhere over the internet (No Tailscale / AnyDesk)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono border ${
+                  webrtcStatus?.signalingConnected
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : webrtcStatus?.signalingUrl
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    : 'bg-white/5 border-white/10 text-muted-foreground'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    webrtcStatus?.signalingConnected
+                      ? 'bg-emerald-400 animate-pulse'
+                      : webrtcStatus?.signalingUrl
+                      ? 'bg-amber-400 animate-pulse'
+                      : 'bg-neutral-500'
+                  }`}
+                />
+                <span>
+                  {webrtcStatus?.signalingConnected
+                    ? 'Signaling Online'
+                    : webrtcStatus?.signalingUrl
+                    ? 'Connecting...'
+                    : 'LAN-Only (Signaling Unset)'}
+                </span>
+              </span>
+
+              {webrtcStatus?.remotePairPayload && (
+                <button
+                  onClick={() =>
+                    handleCopy(webrtcStatus.remotePairPayload!, 'remote_payload_btn')
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-raised hover:bg-white/[0.08] text-xs text-foreground font-medium transition-colors"
+                  title="Copy Remote Pairing Link"
+                >
+                  {copiedKey === 'remote_payload_btn' ? (
+                    <Check size={14} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                  <span>Copy Remote Link</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            {/* Host PC ID */}
+            <div className="p-3.5 rounded-xl bg-raised border border-border/60 flex flex-col justify-between gap-2">
+              <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                Host PC ID
+              </div>
+              <div className="flex items-center justify-between gap-2 font-mono text-sm text-foreground font-bold">
+                <span className="text-[#FF5A1F]">{webrtcStatus?.pcId || 'pc_host'}</span>
+                <button
+                  onClick={() => handleCopy(webrtcStatus?.pcId || 'pc_host', 'pc_id_tile')}
+                  className="p-1 hover:text-[#FF5A1F] text-muted-foreground transition-colors"
+                  title="Copy PC ID"
+                >
+                  {copiedKey === 'pc_id_tile' ? (
+                    <Check size={13} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={13} />
+                  )}
+                </button>
+              </div>
+              <div className="text-[10px] text-muted-foreground">Persistent hardware identifier</div>
+            </div>
+
+            {/* Signaling Server */}
+            <div className="p-3.5 rounded-xl bg-raised border border-border/60 flex flex-col justify-between gap-2">
+              <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                Signaling Service
+              </div>
+              <div className="font-mono text-xs text-foreground truncate" title={webrtcStatus?.signalingUrl || 'Self-hosted local'}>
+                {webrtcStatus?.signalingUrl || 'Not configured'}
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {webrtcStatus?.signalingConnected
+                  ? 'WebSocket room ready'
+                  : webrtcStatus?.signalingUrl
+                  ? 'Reconnecting...'
+                  : 'Set AEROKIN_SIGNALING_URL'}
+              </div>
+            </div>
+
+            {/* STUN / TURN Relay */}
+            <div className="p-3.5 rounded-xl bg-raised border border-border/60 flex flex-col justify-between gap-2">
+              <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                NAT Traversal (STUN/TURN)
+              </div>
+              <div className="font-mono text-xs text-foreground font-semibold flex items-center gap-1.5">
+                <ShieldCheck size={14} className={webrtcStatus?.turnConfigured ? 'text-emerald-400' : 'text-neutral-400'} />
+                <span>{webrtcStatus?.turnConfigured ? 'Coturn HMAC-SHA1' : 'Standard STUN'}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {webrtcStatus?.turnConfigured ? 'Direct P2P + Relay fallback' : 'P2P direct hole punching'}
+              </div>
+            </div>
+
+            {/* Transport Hierarchy */}
+            <div className="p-3.5 rounded-xl bg-raised border border-border/60 flex flex-col justify-between gap-2">
+              <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                Multi-Path Priority
+              </div>
+              <div className="font-mono text-[11px] text-foreground font-medium">
+                LAN &rarr; P2P &rarr; TURN
+              </div>
+              <div className="text-[10px] text-emerald-400">Zero 3rd-party SaaS relays</div>
+            </div>
+          </div>
+        </div>
 
         {/* System Telemetry & Features Grid */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">

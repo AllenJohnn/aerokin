@@ -6,6 +6,7 @@ export interface SignalingClientOptions {
   pcId: string;
   authSecret?: string;
   onRegistered?: (iceServers: any[]) => void;
+  onStatusChange?: (connected: boolean) => void;
   onOffer?: (sourcePeerId: string, sdp: string) => void;
   onCandidate?: (sourcePeerId: string, candidate: any) => void;
   onPeerLeft?: (peerId: string) => void;
@@ -58,6 +59,7 @@ export class SignalingClient {
           if (msg.type === 'registered') {
             this.registered = true;
             this.options.onRegistered?.(msg.iceServers || []);
+            this.options.onStatusChange?.(true);
           } else if (msg.type === 'offer') {
             this.options.onOffer?.(msg.sourcePeerId || msg.peerId, msg.sdp);
           } else if (msg.type === 'candidate') {
@@ -70,6 +72,7 @@ export class SignalingClient {
 
       this.ws.on('close', () => {
         this.registered = false;
+        this.options.onStatusChange?.(false);
         this.scheduleReconnect();
       });
 

@@ -6,10 +6,35 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 14 (Dashboard Polish & Remote Cards - WebRTC Status Card, 1-Click Remote Pairing QR & Payload).
-- **Exact Next Step**: In `DesktopDashboard.tsx`, add Remote WebRTC Status Card (Signaling status, PC ID, active TURN credentials, connection mode) and 1-Click Remote Pairing URL/QR display, rebuild PWA and verify.
+- **Current Milestone**: Part 15 (Rigorous Testing - DataChannel Fuzz, Synthetic Network Jitter, Bounded Soak, Chaos Proof).
+- **Exact Next Step**: Add synthetic DataChannel chunking, out-of-order, packet-drop and corruption fuzz test suite in `server/test/transport-rtc.test.ts` or new test file, execute bounded load verification under S8 guidelines, commit and tag `stable-p15`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 14: Dashboard Polish & Remote Cards (Completed)
+- **14.1 Remote WebRTC Status & Internet Access Card (`DesktopDashboard.tsx`)**:
+  - Implemented responsive OLED true-black Remote WebRTC Status Card in PC Dashboard.
+  - Live status pill: dynamically reflects signaling connection status ("Signaling Online" in pulsing emerald, "Connecting..." in pulsing amber, or "LAN-Only Mode" when unconfigured).
+  - Four status metric tiles:
+    1. **Host PC ID**: Persistent `pc_xxxxxx` identifier with 1-click clipboard copy.
+    2. **Signaling Service**: Active signaling endpoint URL and WebSocket room readiness.
+    3. **NAT Traversal**: Coturn HMAC-SHA1 STUN/TURN relay readiness.
+    4. **Multi-Path Priority**: LAN &rarr; P2P WebRTC &rarr; Coturn Relay with zero 3rd-party SaaS guarantee.
+  - 1-click "Copy Remote Link" button in card header.
+- **14.2 Remote WebRTC Pairing Mode Toggle & Dynamic QR Code**:
+  - Added segmented toggle in pairing card to seamlessly switch between **Local Wi-Fi (LAN)** and **Remote WebRTC (Anywhere)**.
+  - Generates dynamic QR code for `aerokin://pair?pcId=...&code=...&signaling=...`.
+  - Added 1-click Copy for Remote Pairing URI and Host PC ID.
+- **14.3 Server Telemetry Integration (`server.ts` & `SignalingClient.ts`)**:
+  - Added `onStatusChange` callback to `SignalingClient` to notify server on connect/disconnect.
+  - Augmented `getFullDashboardStatus()` with `webrtc` status object (`pcId`, `signalingUrl`, `signalingConnected`, `turnConfigured`, `remotePairPayload`).
+  - Broadcasts real-time `webrtc_status` SSE events to all connected PC Dashboard windows.
+- **14.4 Verification**:
+  - All 84 PWA unit tests, 10 signaling tests, and 233 server tests passing.
+  - Production PWA bundle rebuilt and deployed to `server/public`.
+  - Static safety check `pnpm run safety:check` passing with 0 violations.
 
 ---
 
@@ -344,8 +369,8 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 11** | Saved PCs (Multi-PC Support) | COMPLETED | Tagged `stable-p11`. Multi-PC switcher, persistent PC identities, header indicator, unit tests. |
 | **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | COMPLETED | Tagged `stable-p12`. Authenticated file drop to PC, physical keyboard chords, extended shortcut chips. |
 | **Part 13** | Engineering Quality + Performance | COMPLETED | Tagged `stable-p13`. Reconnect jitter, device map cleanup on revocation, backpressure drop verified. |
-| **Part 14** | Dashboard Polish & Remote Cards | IN PROGRESS | |
-| **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | PENDING | |
+| **Part 14** | Dashboard Polish & Remote Cards | COMPLETED | Tagged `stable-p14`. Remote WebRTC Status Card, LAN/Remote QR toggle, 1-click copy. |
+| **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | IN PROGRESS | |
 | **Part 16** | Documentation & Root README Rewrite | PENDING | |
 | **Part 17** | Final UI Sweep & Verification | PENDING | |
 

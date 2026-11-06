@@ -119,6 +119,7 @@ export function startServer(config: ServerConfig): {
   let lastLatency: number | null = null;
   const eventBuffer: ActivityEvent[] = [];
   let isInputPaused = false;
+  let signalingClient: SignalingClient | null = null;
 
   function setInputPaused(paused: boolean) {
     isInputPaused = paused;
@@ -237,6 +238,13 @@ export function startServer(config: ServerConfig): {
       desktop: streamService.getSessionInfo(),
       media: mediaManager.getCurrentStatus(),
       isPaused: isInputPaused,
+      webrtc: {
+        pcId,
+        signalingUrl: signalingUrl || null,
+        signalingConnected: signalingClient ? signalingClient.isConnected() : false,
+        turnConfigured: !!(process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL),
+        remotePairPayload: remotePairPayload || null,
+      },
       pc: {
         hostname: os.hostname(),
         lanIp: config.lanIp,
@@ -1703,7 +1711,6 @@ export function startServer(config: ServerConfig): {
     ws.on('error', cleanup);
   });
 
-  let signalingClient: SignalingClient | null = null;
   const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
   if (signalingUrl) {
     try {
@@ -1712,6 +1719,20 @@ export function startServer(config: ServerConfig): {
         pcId: deviceStore.getPcId(),
         onRegistered: (iceServers) => {
           console.log(`[Remote] Registered with signaling server at ${signalingUrl}. ${iceServers.length} ICE servers.`);
+          broadcastDashboardEvent('webrtc_status', {
+            pcId: deviceStore.getPcId(),
+            signalingUrl,
+            signalingConnected: true,
+            turnConfigured: !!(process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL),
+          });
+        },
+        onStatusChange: (connected) => {
+          broadcastDashboardEvent('webrtc_status', {
+            pcId: deviceStore.getPcId(),
+            signalingUrl,
+            signalingConnected: connected,
+            turnConfigured: !!(process.env.AEROKIN_COTURN_HOST || process.env.AEROKIN_SIGNALING_URL),
+          });
         },
       });
     } catch (e: any) {
