@@ -123,4 +123,35 @@ describe('DeviceStore', () => {
     const corruptStore = new DeviceStore(tempDir);
     expect(corruptStore.listDevices()).toEqual([]);
   });
+
+  it('generates and persists persistent PC identity', () => {
+    const pcId = store.getPcId();
+    expect(pcId).toMatch(/^pc_[a-f0-9]{12}$/);
+
+    const identity = store.getPcIdentity();
+    expect(identity.pcId).toBe(pcId);
+    expect(typeof identity.name).toBe('string');
+    expect(identity.name.length).toBeGreaterThan(0);
+
+    // Verify persisted to disk and reloaded
+    const reloaded = new DeviceStore(tempDir);
+    expect(reloaded.getPcId()).toBe(pcId);
+    expect(reloaded.getPcIdentity().createdAt).toBe(identity.createdAt);
+  });
+
+  it('records pairedVia and remote flags correctly', () => {
+    const lanDev = store.addDevice('LAN Phone', 'iOS', { pairedVia: 'lan' });
+    expect(lanDev.record.pairedVia).toBe('lan');
+    expect(lanDev.record.remote).toBe(false);
+
+    const remoteDev = store.addDevice('Remote Phone', 'iOS', { pairedVia: 'remote' });
+    expect(remoteDev.record.pairedVia).toBe('remote');
+    expect(remoteDev.record.remote).toBe(true);
+
+    const reloaded = new DeviceStore(tempDir);
+    expect(reloaded.getDevice(lanDev.deviceId)?.pairedVia).toBe('lan');
+    expect(reloaded.getDevice(lanDev.deviceId)?.remote).toBe(false);
+    expect(reloaded.getDevice(remoteDev.deviceId)?.pairedVia).toBe('remote');
+    expect(reloaded.getDevice(remoteDev.deviceId)?.remote).toBe(true);
+  });
 });

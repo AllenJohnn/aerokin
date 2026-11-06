@@ -6,10 +6,33 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 4 Complete (WebRTC Transport + DataChannel Message Chunking & Connection Manager Auto-Fallback); proceeding to commit Part 4 and tag `stable-p4`.
-- **Exact Next Step**: Commit `feat(transport): implement RtcTransport with DataChannel chunking and ConnectionManager multi-path fallback`, push, tag `stable-p4`, then proceed to Part 5 (Remote Pairing & Security).
+- **Current Milestone**: Part 5 Complete (Remote Pairing, Persistent PC Identity, Multi-PC SavedPc Storage & Token Revocation); proceeding to commit Part 5 and tag `stable-p5`.
+- **Exact Next Step**: Commit `feat(pairing): implement remote pairing, persistent PC identity, and token revocation`, push, tag `stable-p5`, then proceed to Part 6 (All Existing Features over New Transport).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 5: Remote Pairing & Security (Completed)
+- **5.1 Persistent PC Identity (`DeviceStore`)**:
+  - Implemented persistent cryptographic PC identity stored in `server/.certs/pc-identity.json` (`pcId = "pc_" + hex(6)`, `name = os.hostname()`, `createdAt`).
+  - Added `getPcId()` and `getPcIdentity()` methods to `DeviceStore`.
+  - Added unit test validation for PC identity persistence and reloading.
+- **5.2 Remote Pairing & Security Protocol**:
+  - Standardized remote pairing payload format: `aerokin://pair?pcId=...&code=...&signaling=...`.
+  - Added `remotePairPayload`, `pcId`, and `signalingUrl` to loopback pairing discovery endpoints and dashboard status snapshots.
+  - Added support for `options.pairedVia` ('lan' | 'remote') and `options.remote` flags on newly paired devices.
+  - Protected by existing 30-second timeout PC operator approval gate (default deny) and 5-attempt rate-limiting lockout.
+  - Augmented WebSocket `auth_ok` greeting with `pcId` and `pcName` metadata.
+- **5.3 Saved PCs & Token Revocation (`hosting.ts` & `useAerokinSocket.ts`)**:
+  - Implemented `SavedPc` multi-PC manager in `pwa/src/utils/hosting.ts` (`getSavedPcs`, `savePc`, `removeSavedPc`, `getActivePc`, `setActivePcId`).
+  - Extended `consumeConnectionFragment` to extract and sanitize `pcId` and `signaling` parameters from both hash fragments and URL queries.
+  - Automated `SavedPc` registration upon successful pairing or WebSocket authentication.
+  - Linked "Unpair This Phone" in PWA Settings Drawer to immediate server-side device revocation (`device_revoke`) and local credential cleanup.
+- **5.4 Verification**:
+  - Unit tests in `pwa/test/hosting.test.ts` (20 tests) and `server/test/device-store.test.ts` (9 tests) all passing.
+  - All 225 server vitest tests and 82 PWA vitest tests passing with zero errors.
+  - Rebuilt PWA distribution bundle in `server/public`.
 
 ---
 
@@ -156,7 +179,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | COMPLETED | Tagged `stable-p2`. H.264 NVENC/MF/x264, WebCodecs, AER2 packet format, bench. |
 | **Part 3** | Signaling Service + Infrastructure as Code | COMPLETED | Tagged `stable-p3`. Standalone Node service, Coturn HMAC-SHA1 REST tokens, Docker Compose + Caddy TLS. |
 | **Part 4** | WebRTC Transport + Connection Manager | COMPLETED | Tagged `stable-p4`. RtcTransport, DataChannel chunking, ConnectionManager multi-path. |
-| **Part 5** | Remote Pairing + Security | PENDING | |
+| **Part 5** | Remote Pairing + Security | COMPLETED | Tagged `stable-p5`. Persistent PC identity, remote payload, SavedPc store, revocation. |
 | **Part 6** | All Existing Features over New Transport | PENDING | |
 | **Part 7** | User Experience Refinement | PENDING | |
 | **Part 8** | Design System + "Picture Perfect" UI Pass | PENDING | |

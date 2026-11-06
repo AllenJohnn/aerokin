@@ -199,6 +199,11 @@ export function startServer(config: ServerConfig): {
     const currentCode = activeCode ? activeCode.code : '';
     const pairUrl = currentCode ? `https://${config.lanIp}:${config.port}/#code=${currentCode}` : '';
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
+    const pcId = deviceStore.getPcId();
+    const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
+    const remotePairPayload = currentCode
+      ? `aerokin://pair?pcId=${pcId}&code=${currentCode}${signalingUrl ? `&signaling=${encodeURIComponent(signalingUrl)}` : ''}`
+      : '';
 
     return {
       devices: getEnrichedDeviceList(),
@@ -207,6 +212,9 @@ export function startServer(config: ServerConfig): {
         expiresInSeconds: activeCode ? activeCode.validForSeconds : 0,
         url: pairUrl,
         mdnsUrl,
+        remotePairPayload: remotePairPayload || undefined,
+        pcId,
+        signalingUrl: signalingUrl || undefined,
         pendingApproval: pairingManager.getPendingApproval(),
       },
       desktop: streamService.getSessionInfo(),
@@ -468,13 +476,19 @@ export function startServer(config: ServerConfig): {
     }
 
     // On PC operator approval: issue 32-byte cryptographic credential, store SHA-256 hash on disk
-    const { deviceId, rawCredential } = deviceStore.addDevice(deviceName, devicePlatform);
+    const isRemote = req.body?.remote === true || req.body?.pairedVia === 'remote';
+    const { deviceId, rawCredential } = deviceStore.addDevice(deviceName, devicePlatform, {
+      pairedVia: isRemote ? 'remote' : 'lan',
+      remote: isRemote,
+    });
 
     res.json({
       ok: true,
       deviceId,
       credential: rawCredential,
       name: deviceName,
+      pcId: deviceStore.getPcId(),
+      pcName: deviceStore.getPcIdentity().name,
     });
   });
 
@@ -495,9 +509,18 @@ export function startServer(config: ServerConfig): {
       ? `${rawHosted}/#host=${config.lanIp}:${config.port}&code=${currentCode}`
       : undefined;
 
+    const pcId = deviceStore.getPcId();
+    const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
+    const remotePairPayload = currentCode
+      ? `aerokin://pair?pcId=${pcId}&code=${currentCode}${signalingUrl ? `&signaling=${encodeURIComponent(signalingUrl)}` : ''}`
+      : '';
+
     res.json({
       url: pairUrl,
       mdnsUrl,
+      remotePairPayload: remotePairPayload || undefined,
+      pcId,
+      signalingUrl: signalingUrl || undefined,
       hostedUrl: rawHosted || undefined,
       hostedPairUrl,
       code: currentCode,
@@ -1006,7 +1029,14 @@ export function startServer(config: ServerConfig): {
       scroller = createScroller();
 
       // Handshake greeting
-      ws.send(JSON.stringify({ type: 'auth_ok', deviceId }));
+      ws.send(
+        JSON.stringify({
+          type: 'auth_ok',
+          deviceId,
+          pcId: deviceStore.getPcId(),
+          pcName: deviceStore.getPcIdentity().name,
+        })
+      );
       ws.send(JSON.stringify({ type: 'hello', ok: true }));
 
       // Send initial media status and sessions list

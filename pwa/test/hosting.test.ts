@@ -6,6 +6,12 @@ import {
   buildTrustUrl,
   STORAGE_HOST_KEY,
   STORAGE_TOKEN_KEY,
+  getSavedPcs,
+  savePc,
+  getSavedPc,
+  getActivePc,
+  removeSavedPc,
+  setActivePcId,
 } from '../src/utils/hosting';
 
 // Simple in-memory localStorage mock for node environment
@@ -210,5 +216,65 @@ describe('consumeConnectionFragment', () => {
     const result = consumeConnectionFragment();
     expect(result.host).toBe('10.0.0.2:8443');
     expect(result.code).toBe('ABCDEF');
+  });
+
+  it('parses pcId and signaling from query or hash', () => {
+    (globalThis as any).window.location = {
+      ...mockLocation,
+      hash: '#pcId=pc_1234567890ab&signaling=wss://signaling.example.com&code=12345678',
+      pathname: '/',
+      search: '',
+    };
+
+    const result = consumeConnectionFragment();
+    expect(result.pcId).toBe('pc_1234567890ab');
+    expect(result.signalingUrl).toBe('wss://signaling.example.com');
+    expect(result.code).toBe('12345678');
+  });
+});
+
+describe('SavedPc Store', () => {
+  beforeEach(() => {
+    storage.clear();
+  });
+
+  it('manages saving, retrieving, activating, and removing saved PCs', () => {
+    expect(getSavedPcs()).toEqual([]);
+    expect(getActivePc()).toBeNull();
+
+    savePc({
+      pcId: 'pc_home12345678',
+      name: "Allen's Workstation",
+      deviceId: 'dev_111',
+      credential: 'secret_cred_1',
+      lanHost: '192.168.1.55:8443',
+      signalingUrl: 'wss://signal.aerokin.com',
+      lastSeen: 1000,
+      pairedVia: 'lan',
+    });
+
+    savePc({
+      pcId: 'pc_office876543',
+      name: "Office Studio",
+      deviceId: 'dev_222',
+      credential: 'secret_cred_2',
+      signalingUrl: 'wss://signal.aerokin.com',
+      lastSeen: 2000,
+      pairedVia: 'remote',
+    });
+
+    const list = getSavedPcs();
+    expect(list.length).toBe(2);
+    expect(getActivePc()?.pcId).toBe('pc_office876543');
+
+    // Switch active PC
+    const switched = setActivePcId('pc_home12345678');
+    expect(switched).toBe(true);
+    expect(getActivePc()?.name).toBe("Allen's Workstation");
+
+    // Remove PC
+    removeSavedPc('pc_home12345678');
+    expect(getSavedPcs().length).toBe(1);
+    expect(getActivePc()?.pcId).toBe('pc_office876543');
   });
 });

@@ -31,6 +31,7 @@ describe('AEROKIN Desktop Settings & Key Modifier Latching', () => {
     it('persists and reloads valid desktop settings', () => {
       const custom: DesktopSettings = {
         defaultPreset: 'high',
+        preferredCodec: 'h264',
         fpsCap: 60,
         inputMode: 'trackpad',
         showStats: true,

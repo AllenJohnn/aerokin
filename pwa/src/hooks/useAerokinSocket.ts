@@ -10,6 +10,9 @@ import {
   getStoredDeviceCredentials,
   saveStoredDeviceCredentials,
   clearStoredDeviceCredentials,
+  savePc,
+  removeSavedPc,
+  getActivePcId,
 } from '../utils/hosting';
 import {
   MonitorInfo,
@@ -450,6 +453,17 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
         if (data.ok && data.deviceId && data.credential) {
           saveStoredDeviceCredentials(data.deviceId, data.credential, data.name || devName);
+          if (data.pcId) {
+            savePc({
+              pcId: data.pcId,
+              name: data.pcName || 'AeroKin PC',
+              deviceId: data.deviceId,
+              credential: data.credential,
+              lanHost: activeHost,
+              lastSeen: Date.now(),
+              pairedVia: 'lan',
+            });
+          }
           setDeviceId(data.deviceId);
           setCredential(data.credential);
           setDeviceName(data.name || devName);
@@ -475,6 +489,10 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
   const logout = useCallback(() => {
     sendRaw({ type: 'logout' });
+    const activePcId = getActivePcId();
+    if (activePcId) {
+      removeSavedPc(activePcId);
+    }
     clearStoredDeviceCredentials();
     setDeviceId(null);
     setCredential(null);
@@ -825,6 +843,18 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               backoffDelayRef.current = 1000;
               requestWakeLock();
               diagnosticsLogger.log('info', 'socket', `Authenticated successfully as device ${deviceId}`);
+
+              if (data.pcId && deviceId && credential) {
+                savePc({
+                  pcId: data.pcId,
+                  name: data.pcName || deviceName || 'AeroKin PC',
+                  deviceId,
+                  credential,
+                  lanHost: host || undefined,
+                  lastSeen: Date.now(),
+                  pairedVia: 'lan',
+                });
+              }
 
               if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
               pingIntervalRef.current = setInterval(() => {

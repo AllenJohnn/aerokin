@@ -1,6 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
+
+export interface PcIdentity {
+  pcId: string;
+  name: string;
+  createdAt: number;
+}
 
 export interface DeviceRecord {
   deviceId: string;
@@ -10,20 +17,69 @@ export interface DeviceRecord {
   createdAt: number;
   lastSeen: number;
   revoked: boolean;
+  pairedVia?: 'lan' | 'remote';
+  remote?: boolean;
 }
 
 export type DevicePublicInfo = Omit<DeviceRecord, 'credentialHash'>;
 
 export class DeviceStore {
   private filePath: string;
+  private identityFilePath: string;
   private devices: Map<string, DeviceRecord> = new Map();
+  private pcIdentity: PcIdentity;
 
   constructor(certsDir: string) {
     if (!fs.existsSync(certsDir)) {
       fs.mkdirSync(certsDir, { recursive: true });
     }
     this.filePath = path.join(certsDir, 'devices.json');
+    this.identityFilePath = path.join(certsDir, 'pc-identity.json');
+    this.pcIdentity = this.loadOrCreatePcIdentity();
     this.load();
+  }
+
+  private loadOrCreatePcIdentity(): PcIdentity {
+    if (fs.existsSync(this.identityFilePath)) {
+      try {
+        const raw = fs.readFileSync(this.identityFilePath, 'utf8').trim();
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.pcId === 'string' && parsed.pcId.startsWith('pc_')) {
+            return {
+              pcId: parsed.pcId,
+              name: String(parsed.name || os.hostname()).slice(0, 64),
+              createdAt: Number(parsed.createdAt) || Date.now(),
+            };
+          }
+        }
+      } catch {
+        // fallback to generate new
+      }
+    }
+
+    const newIdentity: PcIdentity = {
+      pcId: `pc_${crypto.randomBytes(6).toString('hex')}`,
+      name: (os.hostname() || 'AeroKin-PC').slice(0, 64),
+      createdAt: Date.now(),
+    };
+
+    try {
+      fs.writeFileSync(this.identityFilePath, JSON.stringify(newIdentity, null, 2), {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+    } catch {}
+
+    return newIdentity;
+  }
+
+  public getPcId(): string {
+    return this.pcIdentity.pcId;
+  }
+
+  public getPcIdentity(): PcIdentity {
+    return { ...this.pcIdentity };
   }
 
   private load(): void {
@@ -50,6 +106,8 @@ export class DeviceStore {
               createdAt: Number(item.createdAt) || Date.now(),
               lastSeen: Number(item.lastSeen) || Date.now(),
               revoked: Boolean(item.revoked),
+              pairedVia: item.pairedVia === 'remote' ? 'remote' : 'lan',
+              remote: Boolean(item.remote ?? (item.pairedVia === 'remote')),
             });
           }
         }
@@ -80,11 +138,15 @@ export class DeviceStore {
    */
   public addDevice(
     name: string,
-    platform: string
+    platform: string,
+    options?: { pairedVia?: 'lan' | 'remote'; remote?: boolean }
   ): { deviceId: string; rawCredential: string; record: DeviceRecord } {
     const deviceId = `dev_${crypto.randomBytes(8).toString('hex')}`;
     const rawCredential = crypto.randomBytes(32).toString('base64url');
     const credentialHash = crypto.createHash('sha256').update(rawCredential).digest('hex');
+
+    const pairedVia = options?.pairedVia === 'remote' ? 'remote' : 'lan';
+    const remote = Boolean(options?.remote ?? (pairedVia === 'remote'));
 
     const record: DeviceRecord = {
       deviceId,
@@ -94,6 +156,8 @@ export class DeviceStore {
       createdAt: Date.now(),
       lastSeen: Date.now(),
       revoked: false,
+      pairedVia,
+      remote,
     };
 
     this.devices.set(deviceId, record);
