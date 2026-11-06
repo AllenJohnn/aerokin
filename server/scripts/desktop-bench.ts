@@ -212,7 +212,3 @@ async function main() {
 main().catch((err) => {
   console.error('Benchmark fatal error:', err);
 });
-
-main().catch((err) => {
-  console.error('Benchmark fatal error:', err);
-});

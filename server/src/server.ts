@@ -1306,7 +1306,8 @@ export function startServer(config: ServerConfig): {
           return;
         }
 
-        if (isInputPaused) {
+        const isViewOnlyActive = Boolean((ws as any).isViewOnly);
+        if (isInputPaused || isViewOnlyActive) {
           const inputTypes = [
             'move',
             'click',
@@ -1324,7 +1325,9 @@ export function startServer(config: ServerConfig): {
               ws.send(
                 JSON.stringify({
                   type: 'error',
-                  error: 'Remote input is paused by PC operator',
+                  error: isViewOnlyActive
+                    ? 'View-only mode is active'
+                    : 'Remote input is paused by PC operator',
                 })
               );
             }
@@ -1492,9 +1495,12 @@ export function startServer(config: ServerConfig): {
           }
 
           case 'desktop_start': {
+            if (msg.viewOnly !== undefined) {
+              (ws as any).isViewOnly = Boolean(msg.viewOnly);
+            }
             recordEvent(
               'connect',
-              `Desktop stream request (preset: ${msg.preset || 'balanced'}, codec: ${msg.codec || 'h264'}, monitor: ${msg.monitorId || 'primary'})`
+              `Desktop stream request (preset: ${msg.preset || 'balanced'}, codec: ${msg.codec || 'h264'}, monitor: ${msg.monitorId || 'primary'}, viewOnly: ${(ws as any).isViewOnly || false})`
             );
             const startRes = await streamService.startSession({
               monitorId: msg.monitorId,
@@ -1529,6 +1535,23 @@ export function startServer(config: ServerConfig): {
                 })
               );
             }
+            break;
+          }
+
+          case 'set_view_only': {
+            (ws as any).isViewOnly = Boolean(msg.viewOnly);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'view_only_status',
+                  viewOnly: (ws as any).isViewOnly,
+                })
+              );
+            }
+            recordEvent(
+              'security',
+              `Client view-only mode ${(ws as any).isViewOnly ? 'ENABLED' : 'DISABLED'}`
+            );
             break;
           }
 

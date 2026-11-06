@@ -168,4 +168,50 @@ describe('AEROKIN StreamService & Adaptive Backpressure', () => {
 
     await service.stopSession();
   });
+
+  it('rate limits keyframe requests to maximum 1 per 2 seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      await service.startSession({ preset: 'balanced', codec: 'h264' });
+
+      // First request succeeds
+      const firstReq = service.requestKeyframe();
+      expect(firstReq).toBe(true);
+
+      // Immediate second request is throttled
+      const secondReq = service.requestKeyframe();
+      expect(secondReq).toBe(false);
+
+      // 500ms later still throttled
+      vi.advanceTimersByTime(500);
+      expect(service.requestKeyframe()).toBe(false);
+
+      // 2100ms later request succeeds
+      vi.advanceTimersByTime(2100);
+      expect(service.requestKeyframe()).toBe(true);
+
+      await service.stopSession();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('auto-falls back to MJPEG if H.264 probe emits 0 frames within 3000ms', async () => {
+    vi.useFakeTimers();
+    try {
+      await service.startSession({ preset: 'fast', codec: 'h264' });
+      expect(service.getActiveCodec()).toBe('h264');
+
+      // Advance time by 3100ms with zero frames emitted
+      await vi.advanceTimersByTimeAsync(3100);
+
+      // Verify that service automatically switched to MJPEG
+      expect(service.getActiveCodec()).toBe('mjpeg');
+      expect(mockAdapter.lastStartedOptions?.codec).toBe('mjpeg');
+
+      await service.stopSession();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

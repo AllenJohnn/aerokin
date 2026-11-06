@@ -45,6 +45,7 @@ export interface DesktopSettings {
   inputMode: DesktopInputMode;
   showStats: boolean;
   autoHideToolbar: boolean;
+  viewOnly: boolean;
 }
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
@@ -54,6 +55,7 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   inputMode: 'direct',
   showStats: false,
   autoHideToolbar: true,
+  viewOnly: false,
 };
 
 export const STORAGE_DESKTOP_SETTINGS_KEY = 'aerokin_desktop_settings';
@@ -78,6 +80,7 @@ export function loadDesktopSettings(): DesktopSettings {
       showStats: Boolean(parsed.showStats),
       autoHideToolbar:
         parsed.autoHideToolbar !== undefined ? Boolean(parsed.autoHideToolbar) : true,
+      viewOnly: Boolean(parsed.viewOnly),
     };
   } catch {
     return DEFAULT_DESKTOP_SETTINGS;

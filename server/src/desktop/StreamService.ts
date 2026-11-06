@@ -42,6 +42,8 @@ export class StreamService {
 
   private originalConsoleTitle = 'AEROKIN SERVER';
   private statsInterval: NodeJS.Timeout | null = null;
+  private probeTimeout: NodeJS.Timeout | null = null;
+  private lastKeyframeRequestMs = 0;
 
   // Stats accumulators
   private frameCount = 0;
@@ -136,6 +138,19 @@ export class StreamService {
       encoder: this.getActiveEncoder() || undefined,
       activeTier: this.adaptiveQuality.getActiveTier(),
     };
+  }
+
+  /**
+   * Requests an immediate keyframe with a rate-limit threshold of 1 per 2 seconds.
+   */
+  public requestKeyframe(): boolean {
+    const now = Date.now();
+    if (now - this.lastKeyframeRequestMs < 2000) {
+      return false; // Throttled: max 1 keyframe per 2 seconds
+    }
+    this.lastKeyframeRequestMs = now;
+    (this.captureAdapter as any).requestKeyframe?.();
+    return true;
   }
 
   public getSessionInfo(): {
@@ -244,6 +259,36 @@ export class StreamService {
       this.startStatsTimer();
       this.setPcIndicator(true);
 
+      // Codec auto-fallback with 3s probe: If H.264 produces 0 frames in 3s, fall back to MJPEG
+      if (this.currentCodec === 'h264') {
+        if (this.probeTimeout) clearTimeout(this.probeTimeout);
+        this.probeTimeout = setTimeout(async () => {
+          if (this.state === 'active' && this.frameCount === 0) {
+            console.warn(
+              '[StreamService] H.264 capture probe timed out after 3000ms with 0 frames. Auto-falling back to MJPEG.'
+            );
+            this.currentCodec = 'mjpeg';
+            try {
+              await this.captureAdapter.stop();
+              const activeTier = this.adaptiveQuality.getActiveTier();
+              const presetConfig = QUALITY_PRESETS[activeTier] || QUALITY_PRESETS.fast;
+              await this.captureAdapter.start({
+                monitor: this.selectedMonitor || MonitorService.getMonitor(),
+                fps: presetConfig.fps,
+                scale: presetConfig.scale,
+                quality: presetConfig.jpegQuality,
+                codec: 'mjpeg',
+                bitrateKbps: presetConfig.bitrateKbps,
+                isTestMode: options.isTestMode,
+              });
+              this.onStatusChange?.(this.state);
+            } catch (e) {
+              console.error('[StreamService] Failed fallback to MJPEG:', e);
+            }
+          }
+        }, 3000);
+      }
+
       return { ok: true, monitor };
     } catch (err: any) {
       const msg = err?.message || 'Failed to start screen capture';
@@ -268,6 +313,11 @@ export class StreamService {
    */
   public async stopSession(reason = 'Session stopped'): Promise<void> {
     if (this.state === 'stopped') return;
+
+    if (this.probeTimeout) {
+      clearTimeout(this.probeTimeout);
+      this.probeTimeout = null;
+    }
 
     this.stopStatsTimer();
     this.setPcIndicator(false);
@@ -304,6 +354,11 @@ export class StreamService {
     isKeyframe = false,
     codec: VideoCodec = 'h264'
   ): void {
+    if (this.probeTimeout) {
+      clearTimeout(this.probeTimeout);
+      this.probeTimeout = null;
+    }
+
     this.lastWidth = width;
     this.lastHeight = height;
     this.currentSequence = seq;

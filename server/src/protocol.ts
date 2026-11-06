@@ -125,7 +125,9 @@ export type ValidClientMessage =
       customScale?: number;
       customFps?: number;
       codec?: 'h264' | 'mjpeg';
+      viewOnly?: boolean;
     }
+  | { type: 'set_view_only'; viewOnly: boolean }
   | { type: 'desktop_stop' }
   | { type: 'desktop_monitors' }
   | { type: 'abs_move'; x: number; y: number; monitorId?: string }
@@ -436,6 +438,10 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       if (msg.codec === 'h264' || msg.codec === 'mjpeg') {
         codec = msg.codec;
       }
+      let viewOnly: boolean | undefined = undefined;
+      if (typeof msg.viewOnly === 'boolean') {
+        viewOnly = msg.viewOnly;
+      }
       return {
         type: 'desktop_start',
         monitorId,
@@ -443,7 +449,15 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
         customScale,
         customFps,
         codec,
+        viewOnly,
       };
+    }
+
+    case 'set_view_only': {
+      if (typeof msg.viewOnly !== 'boolean') {
+        return null;
+      }
+      return { type: 'set_view_only', viewOnly: msg.viewOnly };
     }
 
     case 'desktop_stop': {
@@ -803,6 +817,7 @@ export class ConnectionRateLimiter {
       case 'device_revoke_all':
       case 'logout':
       case 'features_get':
+      case 'set_view_only':
         return 'device';
       case 'screenshot_request':
         return 'screenshot';

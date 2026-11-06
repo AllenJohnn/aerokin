@@ -172,4 +172,56 @@ describe('Remote Input Pause Switch & Safety Controls', () => {
       ws.close();
     }
   });
+
+  it('blocks remote input messages when view-only mode is active and returns error', async () => {
+    const { deviceId, rawCredential } = deviceStore.addDevice("Viewer Phone", 'iOS');
+
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/`, {
+      rejectUnauthorized: false,
+    });
+
+    try {
+      await new Promise((resolve) => ws.on('open', resolve));
+
+      const messages: any[] = [];
+      ws.on('message', (data) => {
+        try {
+          messages.push(JSON.parse(data.toString()));
+        } catch {}
+      });
+
+      ws.send(JSON.stringify({ type: 'auth', deviceId, credential: rawCredential }));
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      // Enable view-only mode
+      ws.send(JSON.stringify({ type: 'set_view_only', viewOnly: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Send inputs
+      ws.send(JSON.stringify({ type: 'move', dx: 10, dy: 10 }));
+      ws.send(JSON.stringify({ type: 'click', button: 'left' }));
+      ws.send(JSON.stringify({ type: 'key', key: 'x' }));
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const viewOnlyErrors = messages.filter(
+        (m) => m.type === 'error' && m.error === 'View-only mode is active'
+      );
+      expect(viewOnlyErrors.length).toBe(3);
+
+      // Disable view-only mode
+      ws.send(JSON.stringify({ type: 'set_view_only', viewOnly: false }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      ws.send(JSON.stringify({ type: 'move', dx: 5, dy: 5 }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const errorsAfter = messages.filter(
+        (m) => m.type === 'error' && m.error === 'View-only mode is active'
+      );
+      expect(errorsAfter.length).toBe(3); // No new error
+    } finally {
+      ws.close();
+    }
+  });
 });

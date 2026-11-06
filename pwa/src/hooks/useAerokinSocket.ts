@@ -220,6 +220,8 @@ export interface UseAerokinSocketReturn {
     preset?: QualityPresetName;
     customScale?: number;
     customFps?: number;
+    codec?: 'h264' | 'mjpeg';
+    viewOnly?: boolean;
   }) => void;
   stopDesktopStream: () => void;
   requestMonitors: () => void;
@@ -649,11 +651,12 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       customScale?: number;
       customFps?: number;
       codec?: 'h264' | 'mjpeg';
+      viewOnly?: boolean;
     }) => {
       diagnosticsLogger.log(
         'info',
         'stream',
-        `Desktop stream start requested (preset: ${options?.preset || 'balanced'}, codec: ${options?.codec || 'h264'})`
+        `Desktop stream start requested (preset: ${options?.preset || 'balanced'}, codec: ${options?.codec || 'h264'}, viewOnly: ${options?.viewOnly || false})`
       );
       sendRaw({ type: 'desktop_start', ...options });
     },

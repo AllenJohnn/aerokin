@@ -73,6 +73,7 @@ export interface DesktopViewerProps {
     customScale?: number;
     customFps?: number;
     codec?: 'h264' | 'mjpeg';
+    viewOnly?: boolean;
   }) => void;
   stopDesktopStream: () => void;
   onRunLatencyTest?: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
@@ -223,9 +224,17 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
         monitorId: selectedMonitorId,
         preset: activePreset,
         codec: desktopSettings.preferredCodec || 'h264',
+        viewOnly: desktopSettings.viewOnly,
       });
     }
-  }, [active, selectedMonitorId, activePreset, desktopSettings.preferredCodec, startDesktopStream]);
+  }, [
+    active,
+    selectedMonitorId,
+    activePreset,
+    desktopSettings.preferredCodec,
+    desktopSettings.viewOnly,
+    startDesktopStream,
+  ]);
 
   // Fullscreen toggle with iOS fallback
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -447,7 +456,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
       // Start long-press timer (500ms for right-click)
       const timer = setTimeout(() => {
-        if (!touchStartRef.current.hasMoved) {
+        if (!touchStartRef.current.hasMoved && !desktopSettings.viewOnly) {
           triggerHaptic('heavy');
           const coords = toNormalizedMonitorCoords(startX, startY);
           if (coords) {
@@ -572,6 +581,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
     // If movement was negligible, arbitrate single vs double tap
     if (!touchStartRef.current.hasMoved && !touchStartRef.current.isPinching) {
+      if (desktopSettings.viewOnly) return;
       const t = e.changedTouches[0];
       if (!t) return;
 
@@ -653,6 +663,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
         autoCorrect="off"
         spellCheck="false"
         onChange={(e) => {
+          if (desktopSettings.viewOnly) return;
           const val = e.target.value;
           if (val) {
             sendText(val);
@@ -660,6 +671,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
           }
         }}
         onKeyDown={(e) => {
+          if (desktopSettings.viewOnly) return;
           const key = e.key;
           const lowerKey = key.toLowerCase();
 
@@ -1033,6 +1045,23 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
               aria-label="Toggle stats overlay"
             >
               <ChartLine size={18} />
+            </button>
+
+            {/* View-Only Toggle */}
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                onUpdateDesktopSettings({ viewOnly: !desktopSettings.viewOnly });
+              }}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                desktopSettings.viewOnly
+                  ? 'text-amber-400 bg-amber-500/10 border border-amber-500/30'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title={desktopSettings.viewOnly ? 'View-Only Mode (Active)' : 'Interactive Mode'}
+              aria-label="Toggle view-only mode"
+            >
+              {desktopSettings.viewOnly ? <EyeSlash size={18} /> : <Eye size={18} />}
             </button>
 
             {/* Fullscreen Toggle */}

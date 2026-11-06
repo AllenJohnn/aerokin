@@ -98,9 +98,10 @@ Used exclusively to negotiate WebRTC sessions between host and phone.
 `lock_pc`, `sleep`, `monitor_off`, `show_desktop`, `task_view`, `task_manager`, `volume_mute`, `brightness_up`, `brightness_down`, `send_link`, `type_text`, `shutdown`, `restart`, `sign_out`, `cancel_shutdown`, `launch_app`
 
 ### H. Desktop Streaming & Screenshots
-- `desktop_start`: `{ type: "desktop_start", monitorId?: string, preset?: "low" | "balanced" | "high" | "ultra", customScale?: number, customFps?: number, codec?: "h264" | "mjpeg" }`
+- `desktop_start`: `{ type: "desktop_start", monitorId?: string, preset?: "low" | "balanced" | "high" | "ultra", customScale?: number, customFps?: number, codec?: "h264" | "mjpeg", viewOnly?: boolean }`
 - `desktop_stop`: `{ type: "desktop_stop" }`
 - `desktop_monitors`: `{ type: "desktop_monitors" }`
+- `set_view_only`: `{ type: "set_view_only", viewOnly: boolean }`
 - `screenshot_request`: `{ type: "screenshot_request", target?: "all" | "active_window" | "monitor", monitorId?: string, includeCursor?: boolean }`
 
 ### I. Clipboard & System Stats
