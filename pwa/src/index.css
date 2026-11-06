@@ -11,6 +11,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     --bg: #000000;
     --surface: #0A0A0A;
     --raised: #121212;
@@ -21,6 +22,67 @@
     --accent-pressed: #E64A12;
     --success: #3DDC84;
     --error: #FF453A;
+  }
+
+  /* Global iOS WebKit dark form baseline */
+  input,
+  textarea,
+  select,
+  [contenteditable] {
+    color-scheme: dark;
+    background-color: var(--surface);
+    color: var(--text);
+    -webkit-text-fill-color: var(--text);
+    caret-color: #FF5A1F;
+    border-color: var(--border);
+    opacity: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    font-size: 16px; /* Prevents iOS auto-zoom while ensuring contrast */
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+    -webkit-text-fill-color: var(--muted);
+    opacity: 1;
+  }
+
+  input::selection,
+  textarea::selection {
+    background-color: rgba(255, 90, 31, 0.35);
+    color: #FFFFFF;
+    -webkit-text-fill-color: #FFFFFF;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--text) !important;
+    -webkit-box-shadow: 0 0 0px 1000px var(--surface) inset !important;
+    box-shadow: 0 0 0px 1000px var(--surface) inset !important;
+    caret-color: #FF5A1F !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  input:disabled,
+  textarea:disabled,
+  select:disabled {
+    opacity: 0.5;
+    -webkit-text-fill-color: var(--muted);
+    cursor: not-allowed;
   }
 
   html,

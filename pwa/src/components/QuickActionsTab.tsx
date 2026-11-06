@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { TextField } from '@ui';
 import {
   Lightning,
   Lock,
@@ -330,18 +331,20 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
           <Link size={14} className="text-[#FF5A1F]" />
           <span>Send Link to PC Browser</span>
         </div>
-        <form onSubmit={handleSendLink} className="flex gap-2">
-          <input
-            type="url"
-            value={linkInput}
-            onChange={(e) => setLinkInput(e.target.value)}
-            placeholder="https://example.com"
-            className="flex-1 bg-background border border-border/40 rounded-xl px-3 py-2 text-xs text-foreground font-mono focus:outline-none focus:border-[#FF5A1F]"
-          />
+        <form onSubmit={handleSendLink} className="flex gap-2 items-center">
+          <div className="flex-1">
+            <TextField
+              type="url"
+              value={linkInput}
+              onChange={(e) => setLinkInput(e.target.value)}
+              placeholder="https://example.com"
+              className="font-mono text-xs py-2"
+            />
+          </div>
           <button
             type="submit"
             disabled={!linkInput || !featureEnabled}
-            className="py-2 px-3.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium transition-colors disabled:opacity-40"
+            className="h-11 px-3.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium transition-colors disabled:opacity-40 shrink-0"
           >
             Open
           </button>
@@ -355,19 +358,21 @@ export const QuickActionsTab: React.FC<QuickActionsTabProps> = ({
           <Keyboard size={14} className="text-[#FF5A1F]" />
           <span>Type Text on PC</span>
         </div>
-        <form onSubmit={handleTypeText} className="flex gap-2">
-          <input
-            type="text"
-            value={textInput}
-            maxLength={1000}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Type text to send as keystrokes..."
-            className="flex-1 bg-background border border-border/40 rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-[#FF5A1F]"
-          />
+        <form onSubmit={handleTypeText} className="flex gap-2 items-center">
+          <div className="flex-1">
+            <TextField
+              type="text"
+              value={textInput}
+              maxLength={1000}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Type text to send as keystrokes..."
+              className="text-xs py-2"
+            />
+          </div>
           <button
             type="submit"
             disabled={!textInput || !featureEnabled}
-            className="py-2 px-3.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium transition-colors disabled:opacity-40"
+            className="h-11 px-3.5 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium transition-colors disabled:opacity-40 shrink-0"
           >
             Type
           </button>

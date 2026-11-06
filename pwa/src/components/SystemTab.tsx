@@ -314,16 +314,16 @@ export const SystemTab: React.FC<SystemTabProps> = ({
           <span className="text-muted-foreground">GPU Utilization:</span>
           <span className="font-mono text-muted-foreground/80">
             {gpu.available && gpu.utilizationPercent !== null
-              ? `${gpu.utilizationPercent}%`
-              : 'not available'}
+              ? `${gpu.utilizationPercent}%${(gpu as any).name ? ` (${(gpu as any).name})` : ''}`
+              : (gpu.note || 'not available')}
           </span>
         </div>
         <div className="flex items-center justify-between border-t border-border/20 pt-1.5">
           <span className="text-muted-foreground">Hardware Temperature:</span>
           <span className="font-mono text-muted-foreground/80">
             {temperature.available && temperature.celsius !== null
-              ? `${temperature.celsius}°C`
-              : 'not available (requires OEM driver)'}
+              ? `${temperature.celsius}°C${temperature.note ? ` (${temperature.note})` : ''}`
+              : (temperature.note || 'not available')}
           </span>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { TextArea } from '@ui';
 import {
   ClipboardText,
   ArrowRight,
@@ -226,13 +227,13 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
           </button>
         </div>
 
-        <textarea
+        <TextArea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="Paste or type text to send to your PC clipboard..."
           rows={3}
           maxLength={MAX_CLIPBOARD_BYTES}
-          className="w-full bg-background border border-border/40 rounded-xl p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F] resize-none font-mono"
+          className="font-mono text-xs"
         />
 
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -320,11 +321,11 @@ export const ClipboardTab: React.FC<ClipboardTabProps> = ({
         {pcClipboardText !== null ? (
           <div className="space-y-2">
             <div className="relative">
-              <textarea
+              <TextArea
                 readOnly
                 value={pcClipboardText}
                 rows={3}
-                className="w-full bg-background border border-border/40 rounded-xl p-2.5 text-xs text-foreground font-mono resize-none focus:outline-none"
+                className="font-mono text-xs cursor-default"
               />
             </div>
             <div className="flex items-center justify-between text-xs pt-1">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TextField } from '@ui';
 import { triggerHaptic } from '../utils/haptics';
 import { validateHost } from '../utils/hosting';
 
@@ -161,52 +162,39 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               {isHosted && (
-                <div className="flex flex-col gap-1 text-left">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                    PC Host Address
-                  </label>
-                  <input
-                    type="text"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck="false"
-                    value={hostVal}
-                    onChange={(e) => {
-                      setHostVal(e.target.value);
-                      if (hostError) setHostError(null);
-                    }}
-                    placeholder="e.g. 192.168.1.50:8443 or aerokin.local"
-                    className="w-full h-11 px-3 rounded-xl bg-raised border border-border font-mono text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
-                  />
-                  {hostError && (
-                    <p className="text-[11px] text-optic-red mt-0.5">{hostError}</p>
-                  )}
-                </div>
+                <TextField
+                  label="PC Host Address"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  value={hostVal}
+                  onChange={(e) => {
+                    setHostVal(e.target.value);
+                    if (hostError) setHostError(null);
+                  }}
+                  placeholder="e.g. 192.168.1.50:8443 or aerokin.local"
+                  error={hostError || undefined}
+                  className="font-mono text-sm"
+                />
               )}
 
-              <div className="flex flex-col gap-1 text-left">
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                  Device Name
-                </label>
-                <input
-                  type="text"
-                  maxLength={32}
-                  value={deviceName}
-                  onChange={(e) => setDeviceName(e.target.value)}
-                  placeholder="e.g. Allen's iPhone"
-                  className="w-full h-11 px-3 rounded-xl bg-raised border border-border text-sm text-foreground focus:outline-none focus:border-accent transition-colors"
-                />
-              </div>
+              <TextField
+                label="Device Name"
+                maxLength={32}
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                placeholder="e.g. Allen's iPhone"
+                className="text-sm"
+              />
 
-              <div className="flex flex-col gap-1 text-left">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-[#8A8A8A]">
                     8-Digit Pairing Code
                   </label>
                   <span className="text-[10px] text-muted-foreground font-mono">valid 2m</span>
                 </div>
-                <input
-                  type="text"
+                <TextField
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={8}
@@ -217,11 +205,9 @@ export const ManualTokenModal: React.FC<ManualTokenModalProps> = ({
                     if (codeError) setCodeError(null);
                   }}
                   placeholder="e.g. 84920153"
-                  className="w-full h-12 rounded-xl bg-raised border border-border text-center font-mono text-xl tracking-[0.25em] text-foreground focus:outline-none focus:border-accent transition-colors"
+                  error={codeError || undefined}
+                  className="text-center font-mono text-xl tracking-[0.25em]"
                 />
-                {codeError && (
-                  <p className="text-[11px] text-optic-red text-center mt-0.5">{codeError}</p>
-                )}
               </div>
 
               <button

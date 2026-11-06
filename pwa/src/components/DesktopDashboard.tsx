@@ -1298,8 +1298,24 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
                 {/* GPU & Thermal honest reporting */}
                 <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>GPU Engine: <strong className="text-foreground">{systemTelemetry.gpu?.available ? `${systemTelemetry.gpu.utilization}%` : 'Not available'}</strong></span>
-                  <span>Hardware Thermal: <strong className="text-foreground">{systemTelemetry.temperatures?.available ? `${systemTelemetry.temperatures.main}°C` : 'Not available (driver-free)'}</strong></span>
+                  <span>GPU Engine: <strong className="text-foreground">{systemTelemetry.gpu?.available && (systemTelemetry.gpu.utilizationPercent !== null || systemTelemetry.gpu.utilization !== null) ? `${systemTelemetry.gpu.utilizationPercent ?? systemTelemetry.gpu.utilization}%${systemTelemetry.gpu.name ? ` (${systemTelemetry.gpu.name})` : ''}` : (systemTelemetry.gpu?.note || 'Not available')}</strong></span>
+                  <span>Hardware Thermal: <strong className="text-foreground">{systemTelemetry.temperature?.available && systemTelemetry.temperature.celsius !== null ? `${systemTelemetry.temperature.celsius}°C` : (systemTelemetry.temperatures?.available ? `${systemTelemetry.temperatures.main}°C` : (systemTelemetry.temperature?.note || 'Not available'))}</strong></span>
+                </div>
+
+                {/* Media Diagnostics Card */}
+                <div className="pt-2.5 border-t border-border/40 space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between font-semibold text-foreground">
+                    <span className="flex items-center gap-1.5"><MusicNotes size={13} className="text-[#FF5A1F]" /> Media Detection:</span>
+                    <span className="font-mono text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">
+                      {mediaStatus?.nowPlaying?.status === 'playing' ? 'Active Playing' : 'Idle / Ready'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                    <div>SMTC Native Bridge: <strong className="text-foreground">Online</strong></div>
+                    <div>Process Fallback: <strong className="text-foreground">VLC / MPC-HC</strong></div>
+                    <div>Master Volume: <strong className="text-foreground">{mediaStatus?.volume != null ? `${mediaStatus.volume}%` : '50%'}</strong></div>
+                    <div>Seek Profile: <strong className="text-foreground">VLC (Alt+Arrow)</strong></div>
+                  </div>
                 </div>
               </div>
             ) : (

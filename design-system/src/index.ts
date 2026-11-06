@@ -33,3 +33,9 @@ export type { AerokinCursorProps } from './components/AerokinCursor';
 
 export { AerokinLogo } from './components/AerokinLogo';
 export type { AerokinLogoProps } from './components/AerokinLogo';
+
+export { TextField } from './components/TextField';
+export type { TextFieldProps } from './components/TextField';
+
+export { TextArea } from './components/TextArea';
+export type { TextAreaProps } from './components/TextArea';

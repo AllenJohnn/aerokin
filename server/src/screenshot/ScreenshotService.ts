@@ -7,8 +7,9 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import koffi from 'koffi';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,28 +55,8 @@ let GetWindowRectFn: any = null;
 let GetCursorInfoFn: any = null;
 let DrawIconFn: any = null;
 
-let sharpInstance: any = null;
-
-async function getSharp() {
-  if (sharpInstance) return sharpInstance;
-  try {
-    // Attempt local resolution or workspace resolution without static compile-time failure
-    const dynamicImport = new Function('specifier', 'return import(specifier)');
-    const mod = await dynamicImport('sharp');
-    sharpInstance = mod.default || mod;
-    return sharpInstance;
-  } catch {
-    try {
-      const dynamicImport = new Function('specifier', 'return import(specifier)');
-      const pwaSharpPath = path.resolve(__dirname, '../../../pwa/node_modules/sharp/lib/index.js');
-      const mod = await dynamicImport(pathToFileURL(pwaSharpPath).href);
-      sharpInstance = mod.default || mod;
-      return sharpInstance;
-    } catch (err) {
-      console.warn('[Screenshot] Sharp module could not be loaded:', err);
-      return null;
-    }
-  }
+function getSharp() {
+  return sharp;
 }
 
 if (process.platform === 'win32') {

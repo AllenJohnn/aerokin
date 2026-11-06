@@ -6,6 +6,8 @@ settings:
 
 importers:
 
+  .: {}
+
   design-system:
     dependencies:
       '@fontsource/geist-mono':
@@ -157,6 +159,9 @@ importers:
       selfsigned:
         specifier: ^2.4.1
         version: 2.4.1
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
       ws:
         specifier: ^8.18.0
         version: 8.22.1

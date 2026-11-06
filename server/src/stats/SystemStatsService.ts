@@ -16,6 +16,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { exec } from 'node:child_process';
 import { getHostPowerStatus, PowerStatus } from '../power.js';
+import { GpuStatsProvider, GpuStats } from './GpuStatsProvider.js';
 
 export interface CpuStats {
   totalPercent: number;
@@ -62,7 +63,14 @@ export interface SystemStatsData {
   power: PowerStatus;
   gpu: {
     available: boolean;
+    name?: string | null;
     utilizationPercent: number | null;
+    memoryUsedBytes?: number | null;
+    memoryTotalBytes?: number | null;
+    temperatureCelsius?: number | null;
+    powerDrawWatts?: number | null;
+    clockMhz?: number | null;
+    source?: string;
     note: string;
   };
   temperature: {
@@ -101,6 +109,17 @@ export class SystemStatsService {
     byRam: [],
   };
   private processSampleCounter = 0;
+
+  // Real GPU & Hardware Thermal Provider
+  private gpuProvider = new GpuStatsProvider();
+
+  public getGpuProvider(): GpuStatsProvider {
+    return this.gpuProvider;
+  }
+
+  public setGpuProvider(provider: GpuStatsProvider): void {
+    this.gpuProvider = provider;
+  }
 
   /**
    * Subscribes a client to live system stats updates.
@@ -151,6 +170,9 @@ export class SystemStatsService {
     this.prevCpuTicks = this.getCpuTicks();
     this.prevAgentCpuUsage = process.cpuUsage();
     this.prevAgentCpuTime = performance.now();
+
+    // Trigger initial GPU sample asynchronously
+    this.gpuProvider.sample().catch(() => {});
 
     this.timer = setInterval(async () => {
       try {
@@ -325,20 +347,32 @@ export class SystemStatsService {
       },
       power,
       gpu: {
-        available: false,
-        utilizationPercent: null,
-        note: 'not available',
+        available: this.gpuProvider.getCachedStats().available,
+        name: this.gpuProvider.getCachedStats().name,
+        utilizationPercent: this.gpuProvider.getCachedStats().utilizationPercent,
+        memoryUsedBytes: this.gpuProvider.getCachedStats().memoryUsedBytes,
+        memoryTotalBytes: this.gpuProvider.getCachedStats().memoryTotalBytes,
+        temperatureCelsius: this.gpuProvider.getCachedStats().temperatureCelsius,
+        powerDrawWatts: this.gpuProvider.getCachedStats().powerDrawWatts,
+        clockMhz: this.gpuProvider.getCachedStats().clockMhz,
+        source: this.gpuProvider.getCachedStats().source,
+        note: this.gpuProvider.getCachedStats().note,
       },
       temperature: {
-        available: false,
-        celsius: null,
-        note: 'not available (no-driver OEM hardware sensor required)',
+        available: this.gpuProvider.getCachedStats().temperatureCelsius !== null,
+        celsius: this.gpuProvider.getCachedStats().temperatureCelsius,
+        note: this.gpuProvider.getCachedStats().temperatureCelsius !== null
+          ? `${this.gpuProvider.getCachedStats().name || 'GPU'} thermal sensor`
+          : 'not available (requires hardware sensor driver)',
       },
       topProcesses: this.cachedTopProcesses,
     };
   }
 
   private async sampleAndBroadcast(): Promise<void> {
+    // Continuously refresh GPU stats in background
+    this.gpuProvider.sample().catch(() => {});
+
     const metrics = this.collectSynchronousMetrics();
 
     // 7. Network up/down rate via netstat -e

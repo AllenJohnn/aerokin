@@ -6,10 +6,36 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 0.0 Complete; proceeding to commit Part 0.0 and tag `stable-p0-safety`.
-- **Exact Next Step**: Commit `fix(server): block real power actions and input injection outside explicit opt-in`, push, tag `stable-p0-safety`.
+- **Current Milestone**: Part 1 Complete (Input visibility, GPU metrics, VLC media detection & cleanup); proceeding to commit Part 1 and tag `stable-p1`.
+- **Exact Next Step**: Commit `feat(core): fix input visibility, real GPU telemetry, VLC media detection, and docs`, push, tag `stable-p1`, then proceed to Part 2 (Transport Abstraction & Desktop 2.0 Pipeline).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 1: Reported Bugs & Cleanup (Completed)
+- **1A. Input Text Visibility**:
+  - Root Cause: Safari PWA form fields default to transparent/white backgrounds without explicit dark color-scheme, and standard mobile inputs <16px font-size trigger destructive iOS viewport auto-zoom.
+  - Fix: Added `<meta name="color-scheme" content="dark">` to HTML heads, `:root { color-scheme: dark; }` and global `-webkit-text-fill-color: var(--text)` to CSS. Created `<TextField>` and `<TextArea>` components in `@aerokin/design-system` enforcing `#0A0A0A` background, `#F5F5F5` text, `#FF5A1F` caret, and `16px` font-size.
+  - Migrated inputs in `ManualTokenModal.tsx`, `QuickActionsTab.tsx`, `ClipboardTab.tsx`, and `SettingsDrawer.tsx`.
+  - Playwright test (`pwa/scripts/test-input-visibility.mjs`) verified: 18.16:1 contrast ratio (exceeding WCAG 4.5:1 requirement) across Chromium & WebKit in both light and dark modes on iPhone 14 emulation.
+- **1B. GPU Utilization ("OEM driver required" fix)**:
+  - Root Cause: System stats previously hardcoded `available: false` with placeholder `"OEM driver required"`.
+  - Fix: Implemented `GpuStatsProvider` with a real multi-tier source chain:
+    1. `nvidia-smi` query for name, utilization, VRAM, temperature, power draw, and clock.
+    2. DirectX Windows Performance Counters (`\GPU Engine(*)\Utilization Percentage` aggregated by LUID/engine) for non-NVIDIA GPUs or idle states.
+    3. Explicit fallback with granular reason string.
+  - Distinguishes 0% (idle) from `null` (unavailable) in stats and UI.
+  - Tested on host: Successfully captures `NVIDIA GeForce RTX 4060 Laptop GPU` at 9% utilization, 44.9°C thermal diode reading.
+  - Added unit test suite `server/test/gpu-stats.test.ts` (10 tests passing).
+- **1C. VLC Media Detection & Seeking**:
+  - Implemented multi-signal detection: SMTC session bridge, `EnumWindows` top-level window titles for active media players, and Windows CoreAudio active audio session detection.
+  - Verified VLC seek shortcuts use `Alt+Arrow` (10s), `Shift+Arrow` (3s), and `Ctrl+Arrow` (60s).
+  - Added Media Detection Diagnostics cards to Settings Drawer and PC Dashboard.
+- **1D. Cleanup**:
+  - Removed dynamic `new Function()` import hack in `ScreenshotService.ts`; made `sharp` a direct dependency in `server/package.json`.
+  - Removed debug loopback endpoint `/debug/keys`.
+  - Created `docs/QUICKSTART.md` documenting architecture, ports (`8443`, `8080`, `5174`), prerequisites, and setup instructions.
 
 ---
 
@@ -68,9 +94,9 @@ The entire codebase was scanned for power transitions and input injection APIs:
 
 | Part | Title | Status | Notes / Blockers |
 |------|-------|--------|------------------|
-| **Part 0** | Emergency Safety Fix & Main Branch Sync | IN PROGRESS | Part 0.0 completed; ready for commit & tag `stable-p0-safety` |
-| **Part 1** | Reported Bugs First + Cleanup (Inputs, GPU, VLC, Cleanup) | PENDING | To start after Part 0.3 |
-| **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | PENDING | |
+| **Part 0** | Emergency Safety Fix & Main Branch Sync | COMPLETED | Tagged `stable-p0-safety` & `stable-p0`. Guard suite active. |
+| **Part 1** | Reported Bugs First + Cleanup (Inputs, GPU, VLC, Cleanup) | COMPLETED | Tagged `stable-p1`. Inputs, GPU 4060, VLC, Sharp, Quickstart done. |
+| **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | IN PROGRESS | Starting Transport & FrameSink abstraction |
 | **Part 3** | Signaling Service + Infrastructure as Code | PENDING | |
 | **Part 4** | WebRTC Transport + Connection Manager | PENDING | |
 | **Part 5** | Remote Pairing + Security | PENDING | |

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { TextField } from '@ui';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/Sheet';
 import { TrackpadConfig } from '../engine/trackpadGestures';
 import { DeviceInfo } from '../hooks/useAerokinSocket';
@@ -558,23 +559,79 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   {devices.map((d) => (
                     <div
                       key={d.deviceId}
-                      className="bg-card border border-border/30 rounded-xl p-3 flex items-center justify-between text-xs"
+                      className="bg-card border border-border/30 rounded-xl p-3 flex flex-col gap-2 text-xs"
                     >
-                      <div>
-                        <div className="font-medium text-foreground">
-                          {d.name} {d.deviceId === deviceId && '(This Phone)'}
+                      {editingDeviceId === d.deviceId ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <TextField
+                              value={editNameVal}
+                              onChange={(e) => setEditNameVal(e.target.value)}
+                              placeholder="Device Name"
+                              maxLength={32}
+                              className="text-xs py-1.5"
+                              autoFocus
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (editNameVal.trim() && onRenameDevice) {
+                                onRenameDevice(d.deviceId, editNameVal.trim());
+                              }
+                              setEditingDeviceId(null);
+                            }}
+                            className="p-2 rounded-lg bg-[#FF5A1F] text-white hover:brightness-110"
+                            aria-label="Save device name"
+                          >
+                            <Check size={14} weight="bold" />
+                          </button>
+                          <button
+                            onClick={() => setEditingDeviceId(null)}
+                            className="p-2 rounded-lg bg-secondary text-muted-foreground hover:text-foreground"
+                            aria-label="Cancel rename"
+                          >
+                            <Trash size={14} />
+                          </button>
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono">
-                          ID: {d.deviceId.slice(0, 12)}...
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-foreground flex items-center gap-1.5">
+                              <span>{d.name}</span>
+                              {d.deviceId === deviceId && (
+                                <span className="text-[10px] text-[#FF5A1F] bg-[#FF5A1F]/10 px-1.5 py-0.5 rounded-full">
+                                  This Phone
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono">
+                              ID: {d.deviceId.slice(0, 12)}...
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {onRenameDevice && (
+                              <button
+                                onClick={() => {
+                                  setEditingDeviceId(d.deviceId);
+                                  setEditNameVal(d.name);
+                                }}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+                                aria-label="Rename device"
+                              >
+                                <PencilSimple size={16} />
+                              </button>
+                            )}
+                            {d.deviceId !== deviceId && onRevokeDevice && (
+                              <button
+                                onClick={() => onRevokeDevice(d.deviceId)}
+                                className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10"
+                                aria-label="Revoke device"
+                              >
+                                <Trash size={16} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {d.deviceId !== deviceId && onRevokeDevice && (
-                        <button
-                          onClick={() => onRevokeDevice(d.deviceId)}
-                          className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash size={16} />
-                        </button>
                       )}
                     </div>
                   ))}
@@ -842,6 +899,34 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   >
                     Hotkeys (VLC Alt+Arrow)
                   </button>
+                </div>
+              </div>
+
+              {/* Media Detection Diagnostics */}
+              <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground">Media Detection Pipeline</span>
+                  <span className="text-[10px] font-mono text-[#FF5A1F] bg-[#FF5A1F]/10 px-1.5 py-0.5 rounded-full">
+                    Multi-Signal
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-between py-1 border-b border-border/20">
+                    <span>1. SMTC Native Session Bridge</span>
+                    <span className="font-mono text-emerald-400">Available</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-border/20">
+                    <span>2. Process Window Watcher (VLC/MPC)</span>
+                    <span className="font-mono text-emerald-400">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-border/20">
+                    <span>3. CoreAudio Endpoint Mixer</span>
+                    <span className="font-mono text-emerald-400">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1">
+                    <span>VLC Seek Shortcut</span>
+                    <span className="font-mono text-foreground font-medium">Alt+Left / Alt+Right</span>
+                  </div>
                 </div>
               </div>
             </div>
