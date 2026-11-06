@@ -384,6 +384,8 @@ export function startServer(config: ServerConfig): {
   function revokeDevice(deviceId: string) {
     deviceStore.revokeDevice(deviceId);
     closeDeviceSockets(deviceId);
+    latencyHistoryByDevice.delete(deviceId);
+    phoneBatteryByDevice.delete(deviceId);
     broadcastDevices();
   }
 
@@ -391,6 +393,8 @@ export function startServer(config: ServerConfig): {
     const revoked = deviceStore.revokeAllDevices(exceptDeviceId);
     for (const id of revoked) {
       closeDeviceSockets(id);
+      latencyHistoryByDevice.delete(id);
+      phoneBatteryByDevice.delete(id);
     }
     broadcastDevices();
   }

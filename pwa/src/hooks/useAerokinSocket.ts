@@ -1022,10 +1022,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
           const delay = backoffDelayRef.current;
           backoffDelayRef.current = Math.min(delay * 1.5, 8000);
+          const jitter = Math.floor(Math.random() * 500);
 
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isMounted) connect();
-          }, delay);
+          }, delay + jitter);
         };
 
         ws.onerror = () => {

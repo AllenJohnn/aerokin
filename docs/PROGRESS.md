@@ -6,10 +6,28 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 13 (Engineering Quality & Performance - Memory Leak Audits, Ping Cadence, Buffer GC).
-- **Exact Next Step**: Conduct memory leak audit, ping interval optimizations, buffer garbage collection, commit and tag `stable-p13`.
+- **Current Milestone**: Part 14 (Dashboard Polish & Remote Cards - WebRTC Status Card, 1-Click Remote Pairing QR & Payload).
+- **Exact Next Step**: In `DesktopDashboard.tsx`, add Remote WebRTC Status Card (Signaling status, PC ID, active TURN credentials, connection mode) and 1-Click Remote Pairing URL/QR display, rebuild PWA and verify.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 13: Engineering Quality & Performance (Completed)
+- **13.1 Memory Leak Audits & Lifecycle Cleanup (`server.ts`)**:
+  - Added explicit device cleanup for `latencyHistoryByDevice` and `phoneBatteryByDevice` upon device revocation (`revokeDevice` and `revokeAll`), preventing unbounded Map growth.
+  - Verified `eventBuffer` circular ring buffer capped at 50 events.
+  - Verified `sseClients` clean removal and keepalive timer disposal on connection close.
+  - Verified `serverPingInterval` disposal on server shutdown.
+- **13.2 Connection Reconnection Jitter (`useAerokinSocket.ts`)**:
+  - Added randomized backoff jitter (`delay + Math.floor(Math.random() * 500)`) on client reconnection attempts to prevent synchronized reconnection stampedes across mobile clients during network drops.
+- **13.3 Desktop Stream Backpressure & Buffer GC (`StreamService.ts` & `useDesktopStream.ts`)**:
+  - Verified adaptive backpressure frame dropping: `StreamService.ts` drops captured frames immediately when `ws.bufferedAmount` exceeds 256KB (`MAX_BUFFERED_BYTES`), preventing memory bloat on slow mobile links.
+  - Verified deterministic closing of WebCodecs `VideoFrame` instances via `prev.close()` upon frame replacement and explicit `.close()` on stream termination and component unmount.
+- **13.4 Verification**:
+  - All 84 PWA unit tests, 10 signaling tests, and 233 server tests passing with zero errors.
+  - Workspace design system, signaling, and PWA production bundles rebuilt cleanly.
+  - Safety check `pnpm run safety:check` passed with 0 violations.
 
 ---
 
@@ -325,8 +343,8 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 10** | Tray Icon + Pause Switch | COMPLETED | Tagged `stable-p10`. Server pause filter, Windows Tray sidecar, dashboard toggle. |
 | **Part 11** | Saved PCs (Multi-PC Support) | COMPLETED | Tagged `stable-p11`. Multi-PC switcher, persistent PC identities, header indicator, unit tests. |
 | **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | COMPLETED | Tagged `stable-p12`. Authenticated file drop to PC, physical keyboard chords, extended shortcut chips. |
-| **Part 13** | Engineering Quality + Performance | IN PROGRESS | |
-| **Part 14** | Dashboard Polish & Remote Cards | PENDING | |
+| **Part 13** | Engineering Quality + Performance | COMPLETED | Tagged `stable-p13`. Reconnect jitter, device map cleanup on revocation, backpressure drop verified. |
+| **Part 14** | Dashboard Polish & Remote Cards | IN PROGRESS | |
 | **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | PENDING | |
 | **Part 16** | Documentation & Root README Rewrite | PENDING | |
 | **Part 17** | Final UI Sweep & Verification | PENDING | |
