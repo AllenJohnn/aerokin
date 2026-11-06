@@ -18,6 +18,7 @@ import {
   handleAbsButton,
   handleKey,
   handleText,
+  setInputBackend,
 } from './input.js';
 import {
   validateClientMessage,
@@ -35,6 +36,8 @@ import { SystemStatsService } from './stats/SystemStatsService.js';
 import { ClipboardService } from './clipboard/ClipboardService.js';
 import { ScreenshotService } from './screenshot/ScreenshotService.js';
 import { QuickActionService } from './actions/QuickActionService.js';
+import { PowerActionExecutor } from './actions/PowerActionExecutor.js';
+import { InputBackend } from './input/InputBackend.js';
 
 export interface ServerConfig {
   port: number;
@@ -52,6 +55,8 @@ export interface ServerConfig {
   clipboardService?: ClipboardService;
   screenshotService?: ScreenshotService;
   quickActionService?: QuickActionService;
+  powerExecutor?: PowerActionExecutor;
+  inputBackend?: InputBackend;
 }
 
 export interface ActivityEvent {
@@ -93,7 +98,12 @@ export function startServer(config: ServerConfig): {
   const statsService = config.statsService || new SystemStatsService();
   const clipboardService = config.clipboardService || new ClipboardService();
   const screenshotService = config.screenshotService || new ScreenshotService();
-  const quickActionService = config.quickActionService || new QuickActionService();
+  if (config.inputBackend) {
+    setInputBackend(config.inputBackend);
+  }
+  const quickActionService =
+    config.quickActionService ||
+    new QuickActionService(undefined, config.powerExecutor, config.inputBackend);
 
   // In-memory state for desktop localhost dashboard
   const activeSockets = new Set<WebSocket>();

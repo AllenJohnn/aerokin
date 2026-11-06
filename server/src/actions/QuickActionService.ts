@@ -7,6 +7,11 @@
  * Dangerous actions (shutdown, restart, sign_out) are governed by a 10-second
  * cancelable countdown state machine visible both on the mobile client and the PC dashboard.
  *
+ * S1/S2/S3 SAFETY COMPLIANCE:
+ * All power and session operations are strictly routed through PowerActionExecutor.
+ * All input injection operations are strictly routed through InputBackend.
+ * Under test/CI environments or without explicit opt-in, dry-run fakes are used.
+ *
  * App launcher strictly loads an allow-list file (launcher.json) configured by the PC owner.
  */
 
@@ -16,7 +21,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import koffi from 'koffi';
 import { AllowedQuickAction, MAX_TYPE_TEXT_CHARS, MAX_URL_LENGTH } from '../protocol.js';
-import { Win32Input } from '../native/win32.js';
+import {
+  PowerActionExecutor,
+  createPowerActionExecutor,
+  RealPowerActionExecutor,
+  isTestOrCiEnvironment,
+} from './PowerActionExecutor.js';
+import { InputBackend, createInputBackend } from '../input/InputBackend.js';
 import { serverLogger } from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,17 +58,17 @@ export interface ActionResult {
   error?: string;
 }
 
-// Win32 APIs for safe system calls
-let LockWorkStationFn: any = null;
+// Safe monitor display control (display standby / sleep, not system sleep)
 let SendMessageWFn: any = null;
 
 if (process.platform === 'win32') {
   try {
     const user32 = koffi.load('user32.dll');
-    LockWorkStationFn = user32.func('bool __stdcall LockWorkStation()');
-    SendMessageWFn = user32.func('intptr_t __stdcall SendMessageW(intptr_t hWnd, uint32_t Msg, uintptr_t wParam, intptr_t lParam)');
+    SendMessageWFn = user32.func(
+      'intptr_t __stdcall SendMessageW(intptr_t hWnd, uint32_t Msg, uintptr_t wParam, intptr_t lParam)'
+    );
   } catch (err) {
-    console.warn('[QuickActions] Failed to bind user32 APIs:', err);
+    serverLogger.warn('actions', `Failed to bind user32 SendMessageW: ${err}`);
   }
 }
 
@@ -73,8 +84,28 @@ export class QuickActionService {
   private actionHistory: Array<{ action: string; time: number; success: boolean }> = [];
   private customLauncherPath: string | null = null;
 
-  constructor(customLauncherPath?: string) {
+  public readonly powerExecutor: PowerActionExecutor;
+  public readonly inputBackend: InputBackend;
+
+  constructor(
+    customLauncherPath?: string,
+    powerExecutor?: PowerActionExecutor,
+    inputBackend?: InputBackend
+  ) {
     this.customLauncherPath = customLauncherPath || null;
+
+    if (
+      isTestOrCiEnvironment() &&
+      powerExecutor &&
+      powerExecutor instanceof RealPowerActionExecutor
+    ) {
+      throw new Error(
+        'QuickActionService cannot be constructed with RealPowerActionExecutor under test environment.'
+      );
+    }
+
+    this.powerExecutor = powerExecutor || createPowerActionExecutor();
+    this.inputBackend = inputBackend || createInputBackend();
   }
 
   public getCountdownState(): CountdownState {
@@ -174,13 +205,14 @@ export class QuickActionService {
       `Initiated 10-second countdown for dangerous action: ${action}. Cancelable from PC dashboard or mobile app.`
     );
 
-    // Initial system command with delay if on Windows
-    if (process.platform === 'win32') {
-      if (action === 'shutdown') {
-        exec('shutdown.exe /s /t 10 /c "AEROKIN Remote Shutdown initiated from mobile client"');
-      } else if (action === 'restart') {
-        exec('shutdown.exe /r /t 10 /c "AEROKIN Remote Restart initiated from mobile client"');
-      }
+    // Initial system command with 10s delay via PowerActionExecutor
+    if (action === 'shutdown' || action === 'restart') {
+      this.powerExecutor.execute(action, {
+        delaySeconds: 10,
+        comment: `AEROKIN Remote ${action === 'shutdown' ? 'Shutdown' : 'Restart'} initiated from mobile client`,
+      }).catch((err) => {
+        serverLogger.warn('actions', `PowerActionExecutor scheduled countdown execution failed: ${err}`);
+      });
     }
 
     this.countdownTimer = setInterval(() => {
@@ -237,10 +269,10 @@ export class QuickActionService {
     };
     this.notifyCountdownChange();
 
-    // Abort Windows shutdown if initiated
-    if (process.platform === 'win32') {
-      exec('shutdown.exe /a', () => {});
-    }
+    // Abort Windows shutdown if initiated via PowerActionExecutor
+    this.powerExecutor.cancelShutdown().catch((err) => {
+      serverLogger.warn('actions', `PowerActionExecutor cancelShutdown failed: ${err}`);
+    });
 
     serverLogger.info('actions', `Cancelled ${previousAction} countdown.`);
     this.recordAction('cancel_shutdown', true);
@@ -253,15 +285,10 @@ export class QuickActionService {
   }
 
   private executeFinalDangerousAction(action: 'shutdown' | 'restart' | 'sign_out' | null): void {
-    if (process.platform !== 'win32' || !action) return;
-
-    if (action === 'shutdown') {
-      exec('shutdown.exe /s /t 0');
-    } else if (action === 'restart') {
-      exec('shutdown.exe /r /t 0');
-    } else if (action === 'sign_out') {
-      exec('shutdown.exe /l');
-    }
+    if (!action) return;
+    this.powerExecutor.execute(action, { delaySeconds: 0 }).catch((err) => {
+      serverLogger.warn('actions', `PowerActionExecutor final execution failed: ${err}`);
+    });
   }
 
   /**
@@ -285,21 +312,25 @@ export class QuickActionService {
     // 2. Safe PC actions
     switch (action) {
       case 'lock_pc': {
-        if (process.platform === 'win32' && LockWorkStationFn) {
-          const ok = LockWorkStationFn();
-          this.recordAction('lock_pc', ok);
-          return { success: ok, action, message: 'Workstation locked' };
-        }
-        this.recordAction('lock_pc', true);
-        return { success: true, action, message: 'Lock simulated (non-Windows host)' };
+        const res = await this.powerExecutor.execute('lock');
+        this.recordAction('lock_pc', res.success);
+        return {
+          success: res.success,
+          action,
+          message: res.executed ? 'Workstation locked' : 'Lock simulated (dry run / safe mode)',
+          error: res.error,
+        };
       }
 
       case 'sleep': {
-        if (process.platform === 'win32') {
-          exec('rundll32.exe powrprof.dll,SetSuspendState 0,1,0');
-        }
-        this.recordAction('sleep', true);
-        return { success: true, action, message: 'PC entered sleep mode' };
+        const res = await this.powerExecutor.execute('sleep');
+        this.recordAction('sleep', res.success);
+        return {
+          success: res.success,
+          action,
+          message: res.executed ? 'PC entered sleep mode' : 'Sleep simulated (dry run / safe mode)',
+          error: res.error,
+        };
       }
 
       case 'monitor_off': {
@@ -314,13 +345,13 @@ export class QuickActionService {
       }
 
       case 'show_desktop': {
-        await Win32Input.keyCombo('win+d');
+        await this.inputBackend.keyCombo('win+d');
         this.recordAction('show_desktop', true);
         return { success: true, action, message: 'Show desktop toggled' };
       }
 
       case 'task_view': {
-        await Win32Input.keyCombo('win+tab');
+        await this.inputBackend.keyCombo('win+tab');
         this.recordAction('task_view', true);
         return { success: true, action, message: 'Task view opened' };
       }
@@ -334,7 +365,7 @@ export class QuickActionService {
       }
 
       case 'volume_mute': {
-        await Win32Input.key('mute', 'tap');
+        await this.inputBackend.key('mute', 'tap');
         this.recordAction('volume_mute', true);
         return { success: true, action, message: 'Volume mute toggled' };
       }
@@ -388,9 +419,7 @@ export class QuickActionService {
           return { success: false, action, error: `Text exceeds ${MAX_TYPE_TEXT_CHARS} character limit` };
         }
 
-        for (const char of payload) {
-          await Win32Input.sendUnicodeChar(char);
-        }
+        await this.inputBackend.typeText(payload);
 
         this.recordAction('type_text', true);
         return { success: true, action, message: `Typed ${payload.length} characters on PC` };

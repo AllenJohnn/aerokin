@@ -8,7 +8,7 @@ import {
 } from '../src/media/ProcessMediaDetector.js';
 import { MediaCommandRouter } from '../src/media/MediaCommandRouter.js';
 import { AppProfiles } from '../src/media/AppProfiles.js';
-import { Win32Input } from '../src/native/win32.js';
+import { RecordingInputBackend } from '../src/input/InputBackend.js';
 
 describe('Media Fallback Detection & Session Synthesis', () => {
   describe('Window Title Parsing', () => {
@@ -163,7 +163,7 @@ describe('Media Fallback Detection & Session Synthesis', () => {
     });
 
     it('dispatches appropriate VLC keystroke when targeted session is VLC fallback', async () => {
-      const keyComboSpy = vi.spyOn(Win32Input, 'keyCombo').mockResolvedValue(true);
+      const inputBackend = new RecordingInputBackend();
 
       const fakeSmtc = {
         ready: false,
@@ -189,25 +189,24 @@ describe('Media Fallback Detection & Session Synthesis', () => {
           muted: false,
         }),
         getForegroundApp: () => ({ processName: 'explorer.exe', title: 'File Explorer' }),
+        inputBackend,
       });
 
       // Seek forward 10 seconds (Alt+Right)
       const res10 = await router.route('seekby', 10, vlcSession.id);
       expect(res10.handled).toBe(true);
       expect(res10.tier).toBe(3);
-      expect(keyComboSpy).toHaveBeenCalledWith('Alt+Right');
+      expect(inputBackend.events.some((e) => e.type === 'keyCombo' && e.args[0] === 'Alt+Right')).toBe(true);
 
       // Seek backward 3 seconds (Shift+Left)
       const res3 = await router.route('seekby', -3, vlcSession.id);
       expect(res3.handled).toBe(true);
-      expect(keyComboSpy).toHaveBeenCalledWith('Shift+Left');
+      expect(inputBackend.events.some((e) => e.type === 'keyCombo' && e.args[0] === 'Shift+Left')).toBe(true);
 
       // Seek forward 60 seconds (Ctrl+Right)
       const res60 = await router.route('seekby', 60, vlcSession.id);
       expect(res60.handled).toBe(true);
-      expect(keyComboSpy).toHaveBeenCalledWith('Ctrl+Right');
-
-      keyComboSpy.mockRestore();
+      expect(inputBackend.events.some((e) => e.type === 'keyCombo' && e.args[0] === 'Ctrl+Right')).toBe(true);
     });
   });
 });

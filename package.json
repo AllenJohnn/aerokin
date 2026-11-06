@@ -1,0 +1,8 @@
+{
+  "name": "aerokin-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "safety:check": "node scripts/safety-check.mjs"
+  }
+}

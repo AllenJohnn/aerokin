@@ -1,10 +1,24 @@
-import { mouse, keyboard, Button, Key, Point } from '@nut-tree-fork/nut-js';
-import { Win32Input } from './native/win32.js';
+import { mouse, keyboard, Button, Key, Point as NutPoint } from '@nut-tree-fork/nut-js';
 import { MonitorService } from './desktop/MonitorService.js';
+import { InputBackend, createInputBackend } from './input/InputBackend.js';
 
 // Configure nut-js for zero-delay instant response fallback
 mouse.config.autoDelayMs = 0;
 keyboard.config.autoDelayMs = 0;
+
+let activeInputBackend: InputBackend = createInputBackend();
+
+export function getInputBackend(): InputBackend {
+  return activeInputBackend;
+}
+
+export function setInputBackend(backend: InputBackend): void {
+  activeInputBackend = backend;
+}
+
+export function resetDefaultInputBackend(): void {
+  activeInputBackend = createInputBackend();
+}
 
 export interface MoveCoalescer {
   addMove: (dxRaw: unknown, dyRaw: unknown) => void;
@@ -16,7 +30,7 @@ export interface MoveCoalescer {
  * Accumulates dx/dy (supports floats!) and flushes every ~8ms with ONE atomic move.
  * Maintains fractional remainders server-side across ticks so low-speed sub-pixel tracking is preserved.
  * Enforces a +/-200 cap per incoming message before accumulating.
- * Uses native Win32 GetCursorPos + SetCursorPos on Windows, falling back to nut-js.
+ * Uses native Win32 GetCursorPos + SetCursorPos via InputBackend, falling back to nut-js.
  */
 export function createMoveCoalescer(flushIntervalMs = 8): MoveCoalescer {
   let accumulatedDx = 0;
@@ -48,16 +62,16 @@ export function createMoveCoalescer(flushIntervalMs = 8): MoveCoalescer {
 
     isFlushing = true;
     try {
-      // 1. Try native Win32 GetCursorPos + SetCursorPos
+      const backend = getInputBackend();
       let handled = false;
-      if (Win32Input.isSupported()) {
-        handled = Win32Input.moveRelative(intDx, intDy);
+      if (backend.isSupported()) {
+        handled = backend.moveRelative(intDx, intDy);
       }
 
-      // 2. Fallback to nut-js if not Windows or if Win32 returned false
+      // Fallback to nut-js if unsupported or returned false
       if (!handled) {
         const current = await mouse.getPosition();
-        await mouse.setPosition(new Point(current.x + intDx, current.y + intDy));
+        await mouse.setPosition(new NutPoint(current.x + intDx, current.y + intDy));
       }
     } catch {
       // Ignore coordinate clamp errors
@@ -85,14 +99,15 @@ export function createMoveCoalescer(flushIntervalMs = 8): MoveCoalescer {
 }
 
 /**
- * Handles mouse click commands immediately (left or right).
+ * Handles mouse click commands immediately (left, right, or middle).
  */
 export async function handleClick(button: unknown): Promise<void> {
   if (button !== 'left' && button !== 'right' && button !== 'middle') return;
 
   try {
-    if (Win32Input.isSupported()) {
-      const ok = Win32Input.click(button as 'left' | 'right' | 'middle');
+    const backend = getInputBackend();
+    if (backend.isSupported()) {
+      const ok = backend.click(button as 'left' | 'right' | 'middle');
       if (ok) return;
     }
 
@@ -117,8 +132,9 @@ export async function handleButton(button: unknown, state: unknown): Promise<voi
   if (state !== 'down' && state !== 'up') return;
 
   try {
-    if (Win32Input.isSupported()) {
-      const ok = Win32Input.mouseButton(button as 'left' | 'right' | 'middle', state as 'down' | 'up');
+    const backend = getInputBackend();
+    if (backend.isSupported()) {
+      const ok = backend.mouseButton(button as 'left' | 'right' | 'middle', state as 'down' | 'up');
       if (ok) return;
     }
 
@@ -207,8 +223,9 @@ export function createScroller(): Scroller {
       if (intWheelDy === 0 && intWheelDx === 0) return;
 
       try {
-        if (Win32Input.isSupported()) {
-          const ok = Win32Input.scroll(intWheelDy, intWheelDx);
+        const backend = getInputBackend();
+        if (backend.isSupported()) {
+          const ok = backend.scroll(intWheelDy, intWheelDx);
           if (ok) return;
         }
 
@@ -269,8 +286,9 @@ export function handleAbsMove(normX: number, normY: number, monitorId?: string):
   const virtual = MonitorService.getVirtualDesktopBounds();
   const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
 
-  if (Win32Input.isSupported()) {
-    return Win32Input.moveAbsolute(
+  const backend = getInputBackend();
+  if (backend.isSupported()) {
+    return backend.moveAbsolute(
       mapped.virtualNormX,
       mapped.virtualNormY,
       mapped.screenX,
@@ -292,13 +310,14 @@ export async function handleAbsClick(
 ): Promise<boolean> {
   if (button !== 'left' && button !== 'right' && button !== 'middle') return false;
 
+  const backend = getInputBackend();
   if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
     const monitor = MonitorService.getMonitor(monitorId);
     const virtual = MonitorService.getVirtualDesktopBounds();
     const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
 
-    if (Win32Input.isSupported()) {
-      return Win32Input.clickAbsolute(
+    if (backend.isSupported()) {
+      return backend.clickAbsolute(
         button,
         mapped.virtualNormX,
         mapped.virtualNormY,
@@ -309,8 +328,8 @@ export async function handleAbsClick(
     }
   }
 
-  if (Win32Input.isSupported()) {
-    return Win32Input.clickAbsolute(button, undefined, undefined, undefined, undefined, count);
+  if (backend.isSupported()) {
+    return backend.clickAbsolute(button, undefined, undefined, undefined, undefined, count);
   }
 
   // Fallback to handleClick
@@ -333,13 +352,14 @@ export async function handleAbsButton(
   if (button !== 'left' && button !== 'right' && button !== 'middle') return false;
   if (state !== 'down' && state !== 'up') return false;
 
+  const backend = getInputBackend();
   if (normX !== undefined && normY !== undefined && Number.isFinite(normX) && Number.isFinite(normY)) {
     const monitor = MonitorService.getMonitor(monitorId);
     const virtual = MonitorService.getVirtualDesktopBounds();
     const mapped = MonitorService.mapNormalizedToVirtual(normX, normY, monitor, virtual);
 
-    if (Win32Input.isSupported()) {
-      return Win32Input.buttonAbsolute(
+    if (backend.isSupported()) {
+      return backend.buttonAbsolute(
         button,
         state,
         mapped.virtualNormX,
@@ -350,8 +370,8 @@ export async function handleAbsButton(
     }
   }
 
-  if (Win32Input.isSupported()) {
-    return Win32Input.buttonAbsolute(button, state);
+  if (backend.isSupported()) {
+    return backend.buttonAbsolute(button, state);
   }
 
   await handleButton(button, state);
@@ -367,8 +387,9 @@ export async function handleKey(
   modifiers: string[] = []
 ): Promise<boolean> {
   if (!key || typeof key !== 'string') return false;
-  if (Win32Input.isSupported()) {
-    return Win32Input.keyWithModifiers(key, action, modifiers);
+  const backend = getInputBackend();
+  if (backend.isSupported()) {
+    return backend.keyWithModifiers(key, action, modifiers);
   }
   return false;
 }
@@ -378,11 +399,9 @@ export async function handleKey(
  */
 export async function handleText(text: string): Promise<boolean> {
   if (!text || typeof text !== 'string') return false;
-  if (Win32Input.isSupported()) {
-    for (const char of text) {
-      await Win32Input.sendUnicodeChar(char);
-    }
-    return true;
+  const backend = getInputBackend();
+  if (backend.isSupported()) {
+    return backend.typeText(text);
   }
   return false;
 }

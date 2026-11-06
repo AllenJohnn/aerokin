@@ -1,4 +1,5 @@
 import { Win32Input } from '../native/win32.js';
+import { InputBackend, createInputBackend } from '../input/InputBackend.js';
 import { SmtcAdapter } from './SmtcAdapter.js';
 import { AppProfiles } from './AppProfiles.js';
 import { mapSeekSecondsToVlcHotkey } from './ProcessMediaDetector.js';
@@ -18,6 +19,7 @@ export interface CommandRouterContext {
     muted: boolean;
   };
   getForegroundApp?: () => { processName: string; title: string } | null;
+  inputBackend?: InputBackend;
 }
 
 export class MediaCommandRouter {
@@ -30,12 +32,14 @@ export class MediaCommandRouter {
     muted: boolean;
   };
   private getForegroundApp: () => { processName: string; title: string } | null;
+  public readonly inputBackend: InputBackend;
 
   constructor(context: CommandRouterContext) {
     this.smtc = context.smtcAdapter;
     this.profiles = context.appProfiles;
     this.getStatus = context.getCurrentStatus;
     this.getForegroundApp = context.getForegroundApp || (() => Win32Input.getForegroundApp());
+    this.inputBackend = context.inputBackend || createInputBackend();
   }
 
   /**
@@ -138,7 +142,7 @@ export class MediaCommandRouter {
 
       if (isVlc) {
         const vlcSeek = mapSeekSecondsToVlcHotkey(seconds);
-        await Win32Input.keyCombo(vlcSeek.key);
+        await this.inputBackend.keyCombo(vlcSeek.key);
         return {
           tier: 3,
           action,
@@ -154,9 +158,9 @@ export class MediaCommandRouter {
 
       const keyToSend = targetEntry.key;
       if (keyToSend.includes('+')) {
-        await Win32Input.keyCombo(keyToSend);
+        await this.inputBackend.keyCombo(keyToSend);
       } else {
-        await Win32Input.key(keyToSend, 'tap');
+        await this.inputBackend.key(keyToSend, 'tap');
       }
 
       return {
@@ -175,9 +179,9 @@ export class MediaCommandRouter {
       const keyToSend = profile.fullscreen.key;
 
       if (keyToSend.includes('+')) {
-        await Win32Input.keyCombo(keyToSend);
+        await this.inputBackend.keyCombo(keyToSend);
       } else {
-        await Win32Input.key(keyToSend, 'tap');
+        await this.inputBackend.key(keyToSend, 'tap');
       }
 
       return {
@@ -207,7 +211,7 @@ export class MediaCommandRouter {
 
       // Tier 1: Hardware Media Keys fallback
       const keyName = action === 'play' || action === 'pause' ? 'playpause' : action;
-      await Win32Input.key(keyName, 'tap');
+      await this.inputBackend.key(keyName, 'tap');
       return {
         tier: 1,
         action,
@@ -255,7 +259,7 @@ export class MediaCommandRouter {
         }
       }
 
-      await Win32Input.key('mute', 'tap');
+      await this.inputBackend.key('mute', 'tap');
       return {
         tier: 1,
         action,
@@ -266,7 +270,7 @@ export class MediaCommandRouter {
     }
 
     if (action === 'volup' || action === 'voldown') {
-      await Win32Input.key(action, 'tap');
+      await this.inputBackend.key(action, 'tap');
       return {
         tier: 1,
         action,

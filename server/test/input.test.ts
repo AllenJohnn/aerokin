@@ -6,11 +6,13 @@ import {
   handleButton,
   handleScroll,
   resetDefaultScroller,
+  setInputBackend,
+  resetDefaultInputBackend,
   WHEEL_DELTA,
   WHEEL_DELTA_PER_UNIT,
   MAX_SCROLL_DELTA,
 } from '../src/input.js';
-import { Win32Input } from '../src/native/win32.js';
+import { RecordingInputBackend } from '../src/input/InputBackend.js';
 import {
   validateClientMessage,
   TokenBucket,
@@ -24,20 +26,24 @@ import {
 import { mouse } from '@nut-tree-fork/nut-js';
 
 describe('AEROKIN Input & Protocol Validation', () => {
+  let mockBackend: RecordingInputBackend;
+
   beforeEach(() => {
     vi.useFakeTimers();
     resetDefaultScroller();
+    mockBackend = new RecordingInputBackend();
+    setInputBackend(mockBackend);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    resetDefaultInputBackend();
   });
 
   describe('Move Coalescer & Remainder Carry', () => {
     it('accumulates sub-pixel float moves and carries remainder across ticks', () => {
-      const moveRelSpy = vi.spyOn(Win32Input, 'moveRelative').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const moveRelSpy = vi.spyOn(mockBackend, 'moveRelative').mockReturnValue(true);
 
       const coalescer = createMoveCoalescer(8);
 
@@ -74,8 +80,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('handles negative float values and carries negative remainders correctly', () => {
-      const moveRelSpy = vi.spyOn(Win32Input, 'moveRelative').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const moveRelSpy = vi.spyOn(mockBackend, 'moveRelative').mockReturnValue(true);
 
       const coalescer = createMoveCoalescer(8);
 
@@ -94,8 +99,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('enforces +/-200 cap per incoming move message', () => {
-      const moveRelSpy = vi.spyOn(Win32Input, 'moveRelative').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const moveRelSpy = vi.spyOn(mockBackend, 'moveRelative').mockReturnValue(true);
 
       const coalescer = createMoveCoalescer(8);
 
@@ -108,8 +112,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('ignores invalid move inputs (NaN, strings, non-numbers, undefined)', () => {
-      const moveRelSpy = vi.spyOn(Win32Input, 'moveRelative').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const moveRelSpy = vi.spyOn(mockBackend, 'moveRelative').mockReturnValue(true);
 
       const coalescer = createMoveCoalescer(8);
 
@@ -127,8 +130,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
 
   describe('Scroll Handler, Unit Conversion & Isolation', () => {
     it('converts protocol units to Windows wheel units and negates dy (positive dy = scroll down)', async () => {
-      const scrollSpy = vi.spyOn(Win32Input, 'scroll').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const scrollSpy = vi.spyOn(mockBackend, 'scroll').mockReturnValue(true);
 
       const scroller = createScroller();
 
@@ -156,8 +158,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('accumulates sub-notch float scroll deltas and carries remainder across calls', async () => {
-      const scrollSpy = vi.spyOn(Win32Input, 'scroll').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const scrollSpy = vi.spyOn(mockBackend, 'scroll').mockReturnValue(true);
 
       const scroller = createScroller();
 
@@ -184,8 +185,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('clamps incoming scroll deltas to MAX_SCROLL_DELTA', async () => {
-      const scrollSpy = vi.spyOn(Win32Input, 'scroll').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const scrollSpy = vi.spyOn(mockBackend, 'scroll').mockReturnValue(true);
 
       const scroller = createScroller();
 
@@ -197,8 +197,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('isolates scroll remainder between two separate connections', async () => {
-      const scrollSpy = vi.spyOn(Win32Input, 'scroll').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const scrollSpy = vi.spyOn(mockBackend, 'scroll').mockReturnValue(true);
 
       const scrollerA = createScroller();
       const scrollerB = createScroller();
@@ -228,7 +227,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('nut-js fallback follows the exact same sign convention as Win32', async () => {
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(false);
+      mockBackend.supported = false;
       const scrollDownSpy = vi.spyOn(mouse, 'scrollDown').mockResolvedValue(undefined as any);
       const scrollUpSpy = vi.spyOn(mouse, 'scrollUp').mockResolvedValue(undefined as any);
 
@@ -248,8 +247,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('ignores invalid scroll parameters', async () => {
-      const scrollSpy = vi.spyOn(Win32Input, 'scroll').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const scrollSpy = vi.spyOn(mockBackend, 'scroll').mockReturnValue(true);
 
       const scroller = createScroller();
       await scroller.scroll('not-a-number' as any);
@@ -263,9 +261,8 @@ describe('AEROKIN Input & Protocol Validation', () => {
   });
 
   describe('Click and Drag Button Handlers', () => {
-    it('dispatches valid click actions to Win32Input', async () => {
-      const clickSpy = vi.spyOn(Win32Input, 'click').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+    it('dispatches valid click actions to InputBackend', async () => {
+      const clickSpy = vi.spyOn(mockBackend, 'click').mockReturnValue(true);
 
       await handleClick('left');
       expect(clickSpy).toHaveBeenCalledWith('left');
@@ -281,8 +278,7 @@ describe('AEROKIN Input & Protocol Validation', () => {
     });
 
     it('dispatches valid button state transitions (down/up) for dragging', async () => {
-      const buttonSpy = vi.spyOn(Win32Input, 'mouseButton').mockReturnValue(true);
-      vi.spyOn(Win32Input, 'isSupported').mockReturnValue(true);
+      const buttonSpy = vi.spyOn(mockBackend, 'mouseButton').mockReturnValue(true);
 
       await handleButton('left', 'down');
       expect(buttonSpy).toHaveBeenCalledWith('left', 'down');
