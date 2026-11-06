@@ -43,6 +43,8 @@ import {
   formatDiagnosticsReport,
   DiagnosticEvent,
 } from '../utils/diagnosticsLogger';
+import { SavedPcSwitcher } from './SavedPcSwitcher';
+import { SavedPc } from '../utils/hosting';
 
 export type SettingsPageId =
   | 'connections'
@@ -84,6 +86,8 @@ export interface SettingsDrawerProps {
   onLogout?: () => void;
   onUnpairThisDevice?: () => void;
   onOpenAuthModal?: () => void;
+  onSwitchPc?: (pc: SavedPc) => void;
+  onPairNewPc?: () => void;
   status?: string;
   host?: string | null;
   latency?: number | null;
@@ -117,6 +121,8 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onLogout,
   onUnpairThisDevice,
   onOpenAuthModal,
+  onSwitchPc,
+  onPairNewPc,
   status = 'disconnected',
   host = null,
   latency = null,
@@ -533,6 +539,14 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
           {/* PAGE 1: Connections & Devices */}
           {activePage === 'connections' && (
             <div className="space-y-4">
+              {/* Multi-PC Switcher & Saved Computers */}
+              <SavedPcSwitcher
+                onSelectPc={(pc) => {
+                  if (onSwitchPc) onSwitchPc(pc);
+                }}
+                onPairNewPc={onPairNewPc || onOpenAuthModal}
+              />
+
               <div className="bg-card border border-border/40 rounded-2xl p-3.5 space-y-2 text-xs">
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Status:</span>

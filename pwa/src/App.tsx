@@ -39,6 +39,7 @@ import {
   Presentation,
   SquaresFour,
   CaretLeft,
+  Desktop,
 } from '@phosphor-icons/react';
 
 // Code-split heavy views using React.lazy for faster initial mobile bundle
@@ -193,6 +194,8 @@ export const App: React.FC = () => {
     devices,
     pairingCode,
     pairingAwaitingApproval,
+    activePc,
+    switchPc,
     setToken,
     setHost,
     setPairingCode,
@@ -445,6 +448,8 @@ export const App: React.FC = () => {
           onLogout={logout}
           onUnpairThisDevice={unpairThisDevice}
           onOpenAuthModal={() => setShowAuthModal(true)}
+          onSwitchPc={switchPc}
+          onPairNewPc={() => setShowAuthModal(true)}
           onResetAllSettings={handleResetAllSettings}
         />
       </div>
@@ -525,6 +530,22 @@ export const App: React.FC = () => {
             fps={desktopStats?.fps}
             onOpenSettings={() => setShowSettingsDrawer(true)}
           />
+
+          {/* Active PC Switcher Pill */}
+          {activePc?.name && (
+            <button
+              onClick={() => {
+                triggerHaptic('light');
+                setShowSettingsDrawer(true);
+              }}
+              className="hidden min-[480px]:flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/40 bg-card hover:border-border text-[11px] font-mono text-muted-foreground hover:text-foreground transition-all cursor-pointer truncate max-w-[140px]"
+              title={`Active Computer: ${activePc.name}. Tap to switch or manage PCs.`}
+              aria-label="Active computer"
+            >
+              <Desktop size={12} className="text-[#FF5A1F] flex-shrink-0" weight="fill" />
+              <span className="truncate">{activePc.name}</span>
+            </button>
+          )}
         </div>
 
         {/* Right side: Settings icon + optional simulator toggle */}
@@ -800,6 +821,8 @@ export const App: React.FC = () => {
           onLogout={logout}
           onUnpairThisDevice={unpairThisDevice}
           onOpenAuthModal={() => setShowAuthModal(true)}
+          onSwitchPc={switchPc}
+          onPairNewPc={() => setShowAuthModal(true)}
           status={status}
           host={host}
           latency={latency}

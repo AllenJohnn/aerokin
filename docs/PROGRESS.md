@@ -6,10 +6,31 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 11 (Saved PCs & Multi-PC Switcher UI in PWA).
-- **Exact Next Step**: Implement Multi-PC Switcher and Management UI in PWA (Header/Settings Drawer), commit and tag `stable-p11`.
+- **Current Milestone**: Part 12 (Feature Additions - Virtual Modifiers, Keyboard Gestures, Tools, File Transfer).
+- **Exact Next Step**: Polish full physical keyboard event mapping, two-finger gesture shortcuts, and drag-and-drop / file drop bridge, commit and tag `stable-p12`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 11: Saved PCs & Multi-PC Switcher UI (Completed)
+- **11.1 Saved PC Switcher Component (`pwa/src/components/SavedPcSwitcher.tsx`)**:
+  - Implemented responsive OLED true-black Multi-PC Switcher component.
+  - Lists all paired computers from persistent storage with computer name, active status badge, connection method (LAN Wi-Fi address vs WebRTC Remote), and relative last-seen timestamp.
+  - Allows seamless 1-tap switching between multiple computers with haptic feedback.
+  - Added inline confirmation workflow for "Forget Computer" to safely revoke credentials from the client device.
+  - Added "Pair Another PC" button for direct entry into the pairing sheet.
+- **11.2 Socket State Hook Integration (`pwa/src/hooks/useAerokinSocket.ts`)**:
+  - Added `activePc` and `switchPc(pc: SavedPc)` to `useAerokinSocket` hook.
+  - Seamlessly reconfigures device credentials, target host, and signaling endpoints when switching PCs, closing the active socket and connecting to the new target.
+  - Synchronizes active PC state whenever a new pairing completes or an existing device is forgotten.
+- **11.3 UI Integration (`App.tsx` & `SettingsDrawer.tsx`)**:
+  - Added active PC indicator pill to mobile header (`[🖥️ {pc.name} ▾]`) next to connection badge for immediate computer context and 1-tap switcher access.
+  - Embedded `SavedPcSwitcher` directly into the "Connections" tab of the Settings Drawer.
+- **11.4 Unit Test Suite (`pwa/test/multiPcSwitcher.test.ts`)**:
+  - Added automated test suite validating multi-PC lifecycle: pairing multiple PCs, active PC switching, storage synchronization, and deletion fallback.
+  - Passed all 84 unit tests in `aerokin-pwa`.
+  - Production PWA bundle rebuilt and verified.
 
 ---
 
@@ -282,9 +303,9 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 7** | User Experience Refinement | COMPLETED | Tagged `stable-p7`. Trackpad haptics/sensitivities, sticky modifiers, desktop pinch-to-zoom. |
 | **Part 8** | Design System + "Picture Perfect" UI Pass | COMPLETED | Tagged `stable-p8`. True-black OLED tokens, typography hierarchy, anti-generic visual polish. |
 | **Part 9** | Windows CI, Installer, FFmpeg Provisioning | COMPLETED | Tagged `stable-p9`. Multi-OS CI, static safety gate, Gyan FFmpeg provisioning script, launcher. |
-| **Part 10** | Tray Icon + Pause Switch | PENDING | |
-| **Part 11** | Saved PCs (Multi-PC Support) | PENDING | |
-| **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | PENDING | |
+| **Part 10** | Tray Icon + Pause Switch | COMPLETED | Tagged `stable-p10`. Server pause filter, Windows Tray sidecar, dashboard toggle. |
+| **Part 11** | Saved PCs (Multi-PC Support) | COMPLETED | Tagged `stable-p11`. Multi-PC switcher, persistent PC identities, header indicator, unit tests. |
+| **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | IN PROGRESS | |
 | **Part 13** | Engineering Quality + Performance | PENDING | |
 | **Part 14** | Dashboard Polish & Remote Cards | PENDING | |
 | **Part 15** | Rigorous Testing (Fuzz, Soak, E2E, Chaos) | PENDING | |

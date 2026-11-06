@@ -13,6 +13,9 @@ import {
   savePc,
   removeSavedPc,
   getActivePcId,
+  getActivePc,
+  setActivePcId,
+  SavedPc,
 } from '../utils/hosting';
 import {
   MonitorInfo,
@@ -176,6 +179,8 @@ export interface UseAerokinSocketReturn {
   pairingCode: string | null;
   pairingAwaitingApproval: boolean;
   token: string | null; // Backwards compatibility for UI
+  activePc: SavedPc | null;
+  switchPc: (pc: SavedPc) => void;
   setToken: (token: string) => void;
   setHost: (host: string) => void;
   setPairingCode: (code: string) => void;
@@ -302,6 +307,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>(() =>
     storedCreds.credential && storedCreds.deviceId ? 'disconnected' : 'unauthorized'
   );
+  const [activePc, setActivePcState] = useState<SavedPc | null>(() => getActivePc());
   const [latency, setLatency] = useState<number | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [pairingAwaitingApproval, setPairingAwaitingApproval] = useState<boolean>(false);
@@ -311,6 +317,19 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   const [connectTrigger, setConnectTrigger] = useState<number>(() =>
     isHosted ? 0 : storedCreds.credential ? 1 : 0
   );
+
+  const switchPc = useCallback((pc: SavedPc) => {
+    setActivePcId(pc.pcId);
+    setActivePcState(pc);
+    setDeviceId(pc.deviceId);
+    setCredential(pc.credential);
+    setDeviceName(pc.name);
+    if (pc.lanHost) {
+      setHostState(pc.lanHost);
+    }
+    setConnectionError(null);
+    setConnectTrigger((prev) => prev + 1);
+  }, []);
 
   // Live media state from server
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData>({ status: 'none' });
@@ -463,6 +482,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               lastSeen: Date.now(),
               pairedVia: 'lan',
             });
+            setActivePcState(getActivePc());
           }
           setDeviceId(data.deviceId);
           setCredential(data.credential);
@@ -854,6 +874,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
                   lastSeen: Date.now(),
                   pairedVia: 'lan',
                 });
+                setActivePcState(getActivePc());
               }
 
               if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -1105,6 +1126,8 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     pairingCode,
     pairingAwaitingApproval,
     token: pairingCode || credential || null,
+    activePc,
+    switchPc,
     setToken: setPairingCode,
     setHost,
     setPairingCode,
