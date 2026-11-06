@@ -6,10 +6,31 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 6 (All Existing Features over New Transport - Input, Stats, Media, Clipboard, Desktop 2.0).
-- **Exact Next Step**: Verify and implement end-to-end feature parity across ConnectionManager and RtcTransport, commit and tag `stable-p6`.
+- **Current Milestone**: Part 6 Complete (Full Feature Parity over WebRTC Transport & Signaling Bridge); proceeding to commit Part 6 and tag `stable-p6`.
+- **Exact Next Step**: Commit `feat(transport): wire end-to-end WebRTC DataChannel transport and server signaling client`, push, tag `stable-p6`, then proceed to Part 7 (User Experience Refinement).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 6: All Existing Features over New Transport (Completed)
+- **6.1 Browser WebRTC DataChannel Transport (`RtcTransport.ts`)**:
+  - Implemented client-side `RtcTransport` conforming to the unified `Connection` interface.
+  - Automatically negotiates WebRTC peer connections via WebSocket signaling with SDP offer/answer handshakes and trickle ICE candidate forwarding.
+  - Configured 5 distinct DataChannels matching existing capability boundaries: `control` (reliable), `input` (unreliable low-latency), `stats` (reliable), `media` (reliable), and `clipboard` (reliable).
+  - Wired 56KB chunking and `RtcMessageReassembler` to support arbitrarily large frames, clipboard buffers, and status payloads.
+  - Added continuous RTT round-trip latency measurement over the `control` channel and automated candidate pair inspection (`webrtc_direct` vs `webrtc_turn`).
+- **6.2 Multi-Path Connection Manager Integration (`ConnectionManager.ts`)**:
+  - Seamlessly routes all app features (touchpad movements, mouse clicks, scrolls, keyboard typing, media playback, system stats, quick actions, clipboard sync, and desktop streaming) over `ConnectionManager`.
+  - When direct LAN WebSocket fails or phone drops off home Wi-Fi, automatically initiates `RtcTransport` remote fallback using saved PC identity and signaling credentials without session loss.
+- **6.3 Host Server Signaling Bridge (`SignalingClient.ts`)**:
+  - Implemented server-side `SignalingClient` connecting to the self-hosted WebRTC signaling service with timing-safe SHA-256 host authentication.
+  - Handles client connection requests and answers remote offers, keeping the host reachable from any external network.
+  - Added unit test suite `server/test/signaling-client.test.ts` verifying complete signaling registration and offer/answer relay.
+- **6.4 Verification**:
+  - All 318 unit tests passing across workspace (`server`: 226, `pwa`: 82, `signaling`: 10).
+  - PWA production bundle rebuilt and validated.
+  - Pre-commit safety guard `pnpm run safety:check` passing with 0 violations.
 
 ---
 
@@ -180,7 +201,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 3** | Signaling Service + Infrastructure as Code | COMPLETED | Tagged `stable-p3`. Standalone Node service, Coturn HMAC-SHA1 REST tokens, Docker Compose + Caddy TLS. |
 | **Part 4** | WebRTC Transport + Connection Manager | COMPLETED | Tagged `stable-p4`. RtcTransport, DataChannel chunking, ConnectionManager multi-path. |
 | **Part 5** | Remote Pairing + Security | COMPLETED | Tagged `stable-p5`. Persistent PC identity, remote payload, SavedPc store, revocation. |
-| **Part 6** | All Existing Features over New Transport | PENDING | |
+| **Part 6** | All Existing Features over New Transport | COMPLETED | Tagged `stable-p6`. WebRTC DataChannels (input/stats/media/clipboard/control) & SignalingClient. |
 | **Part 7** | User Experience Refinement | PENDING | |
 | **Part 8** | Design System + "Picture Perfect" UI Pass | PENDING | |
 | **Part 9** | Windows CI, Installer, FFmpeg Provisioning | PENDING | |

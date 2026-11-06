@@ -33,6 +33,7 @@ import { PairingManager } from './pairing-manager.js';
 import { StreamService, MonitorService } from './desktop/index.js';
 import { FeatureManager } from './features/FeatureManager.js';
 import { SystemStatsService } from './stats/SystemStatsService.js';
+import { SignalingClient } from './transport/SignalingClient.js';
 import { ClipboardService } from './clipboard/ClipboardService.js';
 import { ScreenshotService } from './screenshot/ScreenshotService.js';
 import { QuickActionService } from './actions/QuickActionService.js';
@@ -1558,8 +1559,25 @@ export function startServer(config: ServerConfig): {
     ws.on('error', cleanup);
   });
 
+  let signalingClient: SignalingClient | null = null;
+  const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
+  if (signalingUrl) {
+    try {
+      signalingClient = new SignalingClient({
+        signalingUrl,
+        pcId: deviceStore.getPcId(),
+        onRegistered: (iceServers) => {
+          console.log(`[Remote] Registered with signaling server at ${signalingUrl}. ${iceServers.length} ICE servers.`);
+        },
+      });
+    } catch (e: any) {
+      console.warn(`[Remote] Could not connect to signaling server at ${signalingUrl}:`, e?.message);
+    }
+  }
+
   httpsServer.on('close', () => {
     clearInterval(serverPingInterval);
+    signalingClient?.close();
   });
 
   httpsServer.listen(config.port, '0.0.0.0');
@@ -1577,6 +1595,7 @@ export function startServer(config: ServerConfig): {
     clipboardService,
     screenshotService,
     quickActionService,
+    signalingClient,
     revokeDevice,
     revokeAll,
     broadcastDevices,
