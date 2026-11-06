@@ -28,7 +28,8 @@ export interface DesktopStats {
   latencyP95?: number;
   decodeMs?: number;
   paintMs?: number;
-  backend?: 'ddagrab' | 'gdigrab';
+  backend?: 'ddagrab' | 'gdigrab' | 'testsrc';
+  codec?: 'h264' | 'mjpeg';
   activeTier?: QualityPresetName;
 }
 
@@ -45,6 +46,7 @@ export type DesktopInputMode = 'direct' | 'trackpad';
 export interface DesktopSettings {
   defaultPreset: QualityPresetName;
   fpsCap: number;
+  preferredCodec: 'h264' | 'mjpeg';
   inputMode: DesktopInputMode;
   showStats: boolean;
   autoHideToolbar: boolean;
@@ -53,6 +55,7 @@ export interface DesktopSettings {
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   defaultPreset: 'fast',
   fpsCap: 30,
+  preferredCodec: 'h264',
   inputMode: 'direct',
   showStats: false,
   autoHideToolbar: true,
@@ -71,6 +74,7 @@ export function loadDesktopSettings(): DesktopSettings {
         ? parsed.defaultPreset === 'low' ? 'tiny' : parsed.defaultPreset
         : 'fast',
       fpsCap: typeof parsed.fpsCap === 'number' ? Math.max(15, Math.min(60, parsed.fpsCap)) : 30,
+      preferredCodec: parsed.preferredCodec === 'mjpeg' ? 'mjpeg' : 'h264',
       inputMode: parsed.inputMode === 'trackpad' ? 'trackpad' : 'direct',
       showStats: Boolean(parsed.showStats),
       autoHideToolbar: parsed.autoHideToolbar !== undefined ? Boolean(parsed.autoHideToolbar) : true,

@@ -256,4 +256,113 @@ describe('FFmpeg Capture Argument Builder & Monitor Mapping', () => {
       expect(WindowsFfmpegCaptureAdapter.getRememberedBackend()).toBe('ddagrab');
     });
   });
+
+  describe('Desktop 2.0 H.264 Encoder & Pipeline Arguments', () => {
+    it('constructs correct h264_nvenc args with ultra-low latency flags and AUD bitstream filter', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 60,
+        scale: 1.0,
+        quality: 2,
+        codec: 'h264',
+        bitrateKbps: 4000,
+      };
+
+      const args = buildFfmpegArgs(options, 'ddagrab', 'h264_nvenc');
+
+      expect(args).toContain('-c:v');
+      expect(args).toContain('h264_nvenc');
+      expect(args).toContain('-tune');
+      expect(args).toContain('ull');
+      expect(args).toContain('-zerolatency');
+      expect(args).toContain('1');
+      expect(args).toContain('-preset');
+      expect(args).toContain('p1');
+      expect(args).toContain('-rc');
+      expect(args).toContain('cbr');
+      expect(args).toContain('-b:v');
+      expect(args).toContain('4000k');
+      expect(args).toContain('-profile:v');
+      expect(args).toContain('baseline');
+      expect(args).toContain('-level');
+      expect(args).toContain('4.1');
+      expect(args).toContain('-bsf:v');
+      expect(args).toContain('h264_metadata=aud=insert');
+      expect(args).toContain('-f');
+      expect(args).toContain('h264');
+      expect(args).toContain('pipe:1');
+    });
+
+    it('constructs correct h264_mf args for MediaFoundation hardware encoder', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 30,
+        scale: 0.75,
+        quality: 5,
+        codec: 'h264',
+        bitrateKbps: 2000,
+      };
+
+      const args = buildFfmpegArgs(options, 'ddagrab', 'h264_mf');
+
+      expect(args).toContain('-c:v');
+      expect(args).toContain('h264_mf');
+      expect(args).toContain('-rate_control');
+      expect(args).toContain('cbr');
+      expect(args).toContain('-b:v');
+      expect(args).toContain('2000k');
+      expect(args).toContain('-profile:v');
+      expect(args).toContain('baseline');
+      expect(args).toContain('-bsf:v');
+      expect(args).toContain('h264_metadata=aud=insert');
+    });
+
+    it('constructs correct libx264 software fallback args', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 30,
+        scale: 0.5,
+        quality: 7,
+        codec: 'h264',
+        bitrateKbps: 1000,
+      };
+
+      const args = buildFfmpegArgs(options, 'gdigrab', 'libx264');
+
+      expect(args).toContain('-c:v');
+      expect(args).toContain('libx264');
+      expect(args).toContain('-preset');
+      expect(args).toContain('ultrafast');
+      expect(args).toContain('-tune');
+      expect(args).toContain('zerolatency');
+      expect(args).toContain('-b:v');
+      expect(args).toContain('1000k');
+      expect(args).toContain('-profile:v');
+      expect(args).toContain('baseline');
+      expect(args).toContain('-level');
+      expect(args).toContain('4.1');
+      expect(args).toContain('-bsf:v');
+      expect(args).toContain('h264_metadata=aud=insert');
+    });
+
+    it('constructs correct testsrc synthetic capture args for headless and benchmark runs', () => {
+      const options: CaptureOptions = {
+        monitor: primaryMonitor,
+        fps: 30,
+        scale: 0.5,
+        quality: 7,
+        codec: 'h264',
+        bitrateKbps: 1000,
+        isTestMode: true,
+      };
+
+      const args = buildFfmpegArgs(options, 'testsrc', 'libx264');
+
+      expect(args).toContain('-re');
+      expect(args).toContain('-f');
+      expect(args).toContain('lavfi');
+      const iIdx = args.indexOf('-i');
+      expect(args[iIdx + 1]).toContain('testsrc=size=960x540:rate=30');
+    });
+  });
 });

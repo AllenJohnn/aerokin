@@ -612,8 +612,9 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
       preset?: QualityPresetName;
       customScale?: number;
       customFps?: number;
+      codec?: 'h264' | 'mjpeg';
     }) => {
-      diagnosticsLogger.log('info', 'stream', `Desktop stream start requested (preset: ${options?.preset || 'balanced'})`);
+      diagnosticsLogger.log('info', 'stream', `Desktop stream start requested (preset: ${options?.preset || 'balanced'}, codec: ${options?.codec || 'h264'})`);
       sendRaw({ type: 'desktop_start', ...options });
     },
     [sendRaw]

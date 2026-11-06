@@ -72,6 +72,7 @@ export interface DesktopViewerProps {
     preset?: QualityPresetName;
     customScale?: number;
     customFps?: number;
+    codec?: 'h264' | 'mjpeg';
   }) => void;
   stopDesktopStream: () => void;
   onRunLatencyTest?: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
@@ -214,9 +215,10 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
       startDesktopStream({
         monitorId: selectedMonitorId,
         preset: activePreset,
+        codec: desktopSettings.preferredCodec || 'h264',
       });
     }
-  }, [active, selectedMonitorId, activePreset, startDesktopStream]);
+  }, [active, selectedMonitorId, activePreset, desktopSettings.preferredCodec, startDesktopStream]);
 
   // Fullscreen toggle with iOS fallback
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -603,6 +605,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
     startDesktopStream({
       monitorId: selectedMonitorId,
       preset,
+      codec: desktopSettings.preferredCodec || 'h264',
     });
   };
 
@@ -613,6 +616,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
     startDesktopStream({
       monitorId: monId,
       preset: activePreset,
+      codec: desktopSettings.preferredCodec || 'h264',
     });
   };
 

@@ -6,10 +6,29 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 1 Complete (Input visibility, GPU metrics, VLC media detection & cleanup); proceeding to commit Part 1 and tag `stable-p1`.
-- **Exact Next Step**: Commit `feat(core): fix input visibility, real GPU telemetry, VLC media detection, and docs`, push, tag `stable-p1`, then proceed to Part 2 (Transport Abstraction & Desktop 2.0 Pipeline).
+- **Current Milestone**: Part 2 Complete (Transport Abstraction, WebCodecs H.264 Desktop 2.0 Pipeline, NVENC Hardware Acceleration, AER2 Packet Format, and Benchmark Suite); proceeding to commit Part 2 and tag `stable-p2`.
+- **Exact Next Step**: Commit `feat(desktop): implement transport abstraction and low-latency H.264 desktop 2.0 pipeline`, push, tag `stable-p2`, then proceed to Part 3 (Signaling Service + Infrastructure as Code for Allen's VPS).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 2: Transport Abstraction & Desktop 2.0 Pipeline (Completed)
+- **2.1 Transport Abstraction**:
+  - Implemented common `Connection` interface (`server/src/transport/Connection.ts` and `pwa/src/transport/Connection.ts`) with `send`, `onMessage`, `onStateChange`, `state`, `latencyMs`, `mode` (`lan_direct` | `webrtc_direct` | `webrtc_turn`), and `close()`.
+  - Implemented `WsTransport` wrapping existing WebSocket with zero regressions.
+  - Added `ConnectionModeBadge` in PWA header displaying LAN (green, "LAN DIRECT"), P2P (blue, "DIRECT P2P"), and RELAY (amber, "TURN RELAY") with live latency and diagnostic popover on tap.
+  - Added `FrameSink` (`CanvasFrameSink` in `pwa/src/transport/FrameSink.ts`) supporting WebCodecs `VideoDecoder` (H.264 `avc1.42001f` baseline) with smooth `createImageBitmap` canvas fallback.
+- **2.2 Desktop 2.0 Pipeline**:
+  - **Capture Chain**: DXGI Desktop Duplication (`ddagrab` via FFmpeg) -> GDI (`gdigrab`) -> synthetic (`testsrc` for headless/benchmarks).
+  - **Encoder Chain**: `h264_nvenc` with ultra-low latency flags (`-tune ull -zerolatency 1 -preset p1 -rc cbr -g 60 -bf 0 -profile:v baseline -level 4.1 -pix_fmt yuv420p`), falling back to `h264_mf`, then `libx264` (`-preset ultrafast -tune zerolatency -pix_fmt yuv420p -profile:v baseline -level 4.1`), then MJPEG fallback.
+  - **Bitstream Slicing & Format**: Used `-bsf:v h264_metadata=aud=insert` to mark frame boundaries with Access Unit Delimiters. Standardized 20-byte `AER2` binary header (`AER2` magic, sequence, timestamp, width, height, codec flag, keyframe flag), maintaining backward compatibility with legacy 16-byte `AERO` MJPEG packets.
+  - **PWA Rendering**: WebCodecs `VideoFrame` drawn directly via `ctx.drawImage` with native hardware acceleration, keeping aspect-ratio letterboxing, zoom, pan, and coordinate tracking completely intact.
+- **2.3 Benchmark Results (`bench:desktop`)**:
+  - **1080p H.264 (`h264_nvenc`)**: 28.7 fps, 3.2 Mbps, p50 31ms, p95 47ms, avg frame 14.3 KB, CPU 3.1%.
+  - **720p H.264 (`h264_nvenc`)**: 29.4 fps, 1.87 Mbps, p50 31ms, p95 46ms, avg frame 8.2 KB, CPU 0.4%.
+  - **720p MJPEG**: 35.6 fps, 13.56 Mbps (7.2x bandwidth of H.264!), avg frame 48.7 KB.
+  - Achieved >85% bandwidth reduction with sub-frame encoding latency on Allen's RTX 4060 GPU.
 
 ---
 
@@ -96,7 +115,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 |------|-------|--------|------------------|
 | **Part 0** | Emergency Safety Fix & Main Branch Sync | COMPLETED | Tagged `stable-p0-safety` & `stable-p0`. Guard suite active. |
 | **Part 1** | Reported Bugs First + Cleanup (Inputs, GPU, VLC, Cleanup) | COMPLETED | Tagged `stable-p1`. Inputs, GPU 4060, VLC, Sharp, Quickstart done. |
-| **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | IN PROGRESS | Starting Transport & FrameSink abstraction |
+| **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | COMPLETED | Tagged `stable-p2`. H.264 NVENC/MF/x264, WebCodecs, AER2 packet format, bench. |
 | **Part 3** | Signaling Service + Infrastructure as Code | PENDING | |
 | **Part 4** | WebRTC Transport + Connection Manager | PENDING | |
 | **Part 5** | Remote Pairing + Security | PENDING | |

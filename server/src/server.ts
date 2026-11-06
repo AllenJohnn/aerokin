@@ -1251,13 +1251,14 @@ export function startServer(config: ServerConfig): {
           case 'desktop_start': {
             recordEvent(
               'connect',
-              `Desktop stream request (preset: ${msg.preset || 'balanced'}, monitor: ${msg.monitorId || 'primary'})`
+              `Desktop stream request (preset: ${msg.preset || 'balanced'}, codec: ${msg.codec || 'h264'}, monitor: ${msg.monitorId || 'primary'})`
             );
             const startRes = await streamService.startSession({
               monitorId: msg.monitorId,
               preset: msg.preset,
               customScale: msg.customScale,
               customFps: msg.customFps,
+              codec: msg.codec,
             });
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(

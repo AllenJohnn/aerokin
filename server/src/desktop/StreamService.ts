@@ -11,6 +11,8 @@ import {
   DesktopStats,
   DesktopSessionState,
   CaptureBackend,
+  VideoCodec,
+  H264Encoder,
 } from './types.js';
 
 export interface StreamServiceConfig {
@@ -34,6 +36,7 @@ export class StreamService {
   private state: DesktopSessionState = 'stopped';
   private selectedMonitor: MonitorInfo | null = null;
   private currentPreset: QualityPresetName = 'fast';
+  private currentCodec: VideoCodec = 'h264';
   private isStarting = false;
   private pendingStartOptions: any = null;
 
@@ -68,8 +71,8 @@ export class StreamService {
     this.onStatsUpdate = config.onStatsUpdate;
     this.onBackendChange = config.onBackendChange;
 
-    this.captureAdapter.onFrame((packet, width, height, seq) => {
-      this.handleCapturedFrame(packet, width, height, seq);
+    this.captureAdapter.onFrame((packet, width, height, seq, nowMs, isKeyframe, codec) => {
+      this.handleCapturedFrame(packet, width, height, seq, nowMs, isKeyframe, codec);
     });
 
     this.captureAdapter.onError((err, isSecureScreen) => {
@@ -94,6 +97,14 @@ export class StreamService {
 
   public getActiveBackend(): CaptureBackend {
     return this.captureAdapter.getActiveBackend?.() || 'ddagrab';
+  }
+
+  public getActiveCodec(): VideoCodec {
+    return this.captureAdapter.getActiveCodec?.() || this.currentCodec;
+  }
+
+  public getActiveEncoder(): H264Encoder | null {
+    return this.captureAdapter.getActiveEncoder?.() || null;
   }
 
   public setOnStatusChange(cb?: (state: DesktopSessionState, error?: string) => void): void {
@@ -121,6 +132,8 @@ export class StreamService {
       width: this.lastWidth,
       height: this.lastHeight,
       backend: this.getActiveBackend(),
+      codec: this.getActiveCodec(),
+      encoder: this.getActiveEncoder() || undefined,
       activeTier: this.adaptiveQuality.getActiveTier(),
     };
   }
@@ -132,6 +145,8 @@ export class StreamService {
     monitor: MonitorInfo | null;
     preset: QualityPresetName;
     backend: CaptureBackend;
+    codec: VideoCodec;
+    encoder: H264Encoder | null;
     stats: DesktopStats;
   } {
     return {
@@ -141,6 +156,8 @@ export class StreamService {
       monitor: this.selectedMonitor,
       preset: this.currentPreset,
       backend: this.getActiveBackend(),
+      codec: this.getActiveCodec(),
+      encoder: this.getActiveEncoder(),
       stats: this.getStats(),
     };
   }
@@ -187,6 +204,9 @@ export class StreamService {
       preset?: QualityPresetName;
       customScale?: number;
       customFps?: number;
+      codec?: VideoCodec;
+      bitrateKbps?: number;
+      isTestMode?: boolean;
     } = {}
   ): Promise<{ ok: boolean; monitor: MonitorInfo; error?: string }> {
     if (this.isStarting) {
@@ -198,6 +218,7 @@ export class StreamService {
     try {
       const presetName = options.preset || 'fast';
       this.currentPreset = presetName;
+      this.currentCodec = options.codec || 'h264';
       this.adaptiveQuality.setUserCap(presetName);
 
       const activeTier = this.adaptiveQuality.getActiveTier();
@@ -209,6 +230,7 @@ export class StreamService {
       const fps = options.customFps || presetConfig.fps;
       const scale = options.customScale || presetConfig.scale;
       const quality = presetConfig.jpegQuality;
+      const bitrateKbps = options.bitrateKbps || presetConfig.bitrateKbps;
 
       this.transitionState('starting');
 
@@ -217,6 +239,9 @@ export class StreamService {
         fps,
         scale,
         quality,
+        codec: this.currentCodec,
+        bitrateKbps,
+        isTestMode: options.isTestMode,
       });
 
       this.transitionState('active');
@@ -274,7 +299,10 @@ export class StreamService {
     packet: Buffer,
     width: number,
     height: number,
-    seq: number
+    seq: number,
+    nowMs: number,
+    isKeyframe = false,
+    codec: VideoCodec = 'h264'
   ): void {
     this.lastWidth = width;
     this.lastHeight = height;
@@ -284,9 +312,9 @@ export class StreamService {
       return;
     }
 
-    // Bandwidth reduction: Deduplicate consecutive identical frames (16-byte metadata + JPEG)
-    if (packet.length > 16) {
-      const jpegBytes = packet.subarray(16);
+    // For MJPEG streams: Deduplicate consecutive identical frames (20-byte AER2 or 16-byte AERO metadata)
+    if (codec === 'mjpeg' && packet.length > 20) {
+      const jpegBytes = packet.subarray(20);
       const decision = this.deduplicator.shouldSend(jpegBytes);
       if (!decision.send) {
         return;

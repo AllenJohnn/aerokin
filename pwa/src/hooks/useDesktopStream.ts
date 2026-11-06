@@ -4,6 +4,7 @@ import {
   DesktopStreamState,
   MonitorInfo,
 } from '../types/desktop';
+import { CanvasFrameSink, DecodedFrame } from '../transport/FrameSink';
 
 export interface UseDesktopStreamOptions {
   host: string | null;
@@ -64,7 +65,8 @@ export function useDesktopStream({
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backoffRef = useRef<number>(1000);
-  const latestBitmapRef = useRef<ImageBitmap | null>(null);
+  const latestFrameRef = useRef<DecodedFrame | null>(null);
+  const frameSinkRef = useRef<CanvasFrameSink | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
   // Frame rate & bitrate calculation accumulators
@@ -91,8 +93,8 @@ export function useDesktopStream({
   // Render loop using requestAnimationFrame
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
-    const bitmap = latestBitmapRef.current;
-    if (!canvas || !bitmap) {
+    const frame = latestFrameRef.current;
+    if (!canvas || !frame) {
       rafIdRef.current = requestAnimationFrame(renderFrame);
       return;
     }
@@ -115,8 +117,8 @@ export function useDesktopStream({
 
     const cw = canvas.width;
     const ch = canvas.height;
-    const bw = bitmap.width;
-    const bh = bitmap.height;
+    const bw = 'displayWidth' in frame ? (frame as VideoFrame).displayWidth : (frame as ImageBitmap).width;
+    const bh = 'displayHeight' in frame ? (frame as VideoFrame).displayHeight : (frame as ImageBitmap).height;
 
     // Calculate aspect ratio fit (letterboxing / pillarboxing)
     const canvasAspect = cw / (ch || 1);
@@ -152,7 +154,7 @@ export function useDesktopStream({
       streamHeight: bh,
     };
 
-    // Draw background
+    // Draw true-black OLED background
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, cw, ch);
 
@@ -163,7 +165,7 @@ export function useDesktopStream({
     ctx.translate(-cw / 2, -ch / 2);
 
     const tPaint0 = performance.now();
-    ctx.drawImage(bitmap, ox, oy, rw, rh);
+    ctx.drawImage(frame as any, ox, oy, rw, rh);
     ctx.restore();
     lastPaintTimeRef.current = Math.round((performance.now() - tPaint0) * 10) / 10;
 
@@ -232,6 +234,28 @@ export function useDesktopStream({
         } catch {}
       };
 
+      // Initialize frame sink with WebCodecs H.264 or MJPEG fallback
+      const preferredCodec = typeof VideoDecoder !== 'undefined' ? 'h264' : 'mjpeg';
+      if (!frameSinkRef.current) {
+        frameSinkRef.current = new CanvasFrameSink({
+          preferredCodec,
+          onDecodedFrame: (frame, meta) => {
+            const tDecodeEnd = performance.now();
+            const decodeMs = Math.round((tDecodeEnd - (meta.timestampMs || tDecodeEnd)) * 10) / 10;
+            lastDecodeTimeRef.current = Math.max(0, decodeMs);
+
+            const prev = latestFrameRef.current;
+            latestFrameRef.current = frame;
+            if (prev) {
+              prev.close();
+            }
+
+            frameCountRef.current++;
+            setStreamState('live');
+          },
+        });
+      }
+
       ws.onmessage = async (event) => {
         if (!(event.data instanceof ArrayBuffer)) {
           // JSON signaling packet (e.g. stream_auth_ok or error)
@@ -256,55 +280,66 @@ export function useDesktopStream({
         const m2 = view.getUint8(2);
         const m3 = view.getUint8(3);
 
-        // Verify 'AERO' header
-        if (m0 !== 0x41 || m1 !== 0x45 || m2 !== 0x52 || m3 !== 0x4f) {
+        let seq = 0;
+        let serverTimestamp = 0;
+        let width = 0;
+        let height = 0;
+        let codec: 'h264' | 'mjpeg' = 'mjpeg';
+        let isKeyframe = true;
+        let payloadOffset = 16;
+
+        if (m0 === 0x41 && m1 === 0x45 && m2 === 0x52 && m3 === 0x32 && buf.byteLength >= 20) {
+          // 'AER2' v2 header (20 bytes)
+          seq = view.getUint32(4, true);
+          serverTimestamp = view.getUint32(8, true);
+          width = view.getUint16(12, true);
+          height = view.getUint16(14, true);
+          codec = view.getUint8(16) === 1 ? 'h264' : 'mjpeg';
+          isKeyframe = view.getUint8(17) === 1;
+          payloadOffset = 20;
+        } else if (m0 === 0x41 && m1 === 0x45 && m2 === 0x52 && m3 === 0x4f && buf.byteLength >= 16) {
+          // 'AERO' v1 legacy header (16 bytes)
+          seq = view.getUint32(4, true);
+          serverTimestamp = view.getUint32(8, true);
+          width = view.getUint16(12, true);
+          height = view.getUint16(14, true);
+          codec = 'mjpeg';
+          isKeyframe = true;
+          payloadOffset = 16;
+        } else {
           return;
         }
-
-        const seq = view.getUint32(4, true);
-        const serverTimestamp = view.getUint32(8, true);
-        const width = view.getUint16(12, true);
-        const height = view.getUint16(14, true);
 
         const nowMs = Date.now();
         let netLatency = (nowMs >>> 0) - serverTimestamp;
         if (netLatency < 0) netLatency += 0x100000000;
         netLatency = Math.max(1, Math.min(2000, netLatency));
 
-        // Decode JPEG blob off main thread
-        try {
-          const tDecode0 = performance.now();
-          const jpegBlob = new Blob([new Uint8Array(buf, 16)], { type: 'image/jpeg' });
-          const newBitmap = await createImageBitmap(jpegBlob);
-          const decodeMs = Math.round((performance.now() - tDecode0) * 10) / 10;
-          lastDecodeTimeRef.current = decodeMs;
+        byteCountRef.current += buf.byteLength;
 
-          const totalLatency = Math.round(netLatency + decodeMs + (lastPaintTimeRef.current || 0));
-          lastLatencyRef.current = totalLatency;
+        const payload = new Uint8Array(buf, payloadOffset);
+        frameSinkRef.current?.pushFrame(payload, {
+          sequence: seq,
+          timestampMs: serverTimestamp,
+          width,
+          height,
+          codec,
+          isKeyframe,
+        });
 
-          latencySamplesRef.current.push(totalLatency);
-          if (latencySamplesRef.current.length > 60) {
-            latencySamplesRef.current.shift();
-          }
+        const totalLatency = Math.round(netLatency + (lastDecodeTimeRef.current || 0) + (lastPaintTimeRef.current || 0));
+        lastLatencyRef.current = totalLatency;
 
-          const oldBitmap = latestBitmapRef.current;
-          latestBitmapRef.current = newBitmap;
-          if (oldBitmap) {
-            oldBitmap.close();
-          }
-
-          frameCountRef.current++;
-          byteCountRef.current += buf.byteLength;
-          setStreamState('live');
-        } catch {
-          // Ignore occasional corrupted JPEG frames on network hiccup
+        latencySamplesRef.current.push(totalLatency);
+        if (latencySamplesRef.current.length > 60) {
+          latencySamplesRef.current.shift();
         }
       };
 
       ws.onclose = (event) => {
-        if (latestBitmapRef.current) {
-          latestBitmapRef.current.close();
-          latestBitmapRef.current = null;
+        if (latestFrameRef.current) {
+          latestFrameRef.current.close();
+          latestFrameRef.current = null;
         }
 
         if (event.code === 4001) {
@@ -347,9 +382,9 @@ export function useDesktopStream({
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      if (latestBitmapRef.current) {
-        latestBitmapRef.current.close();
-        latestBitmapRef.current = null;
+      if (latestFrameRef.current) {
+        latestFrameRef.current.close();
+        latestFrameRef.current = null;
       }
     }
 
@@ -364,9 +399,13 @@ export function useDesktopStream({
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      if (latestBitmapRef.current) {
-        latestBitmapRef.current.close();
-        latestBitmapRef.current = null;
+      if (latestFrameRef.current) {
+        latestFrameRef.current.close();
+        latestFrameRef.current = null;
+      }
+      if (frameSinkRef.current) {
+        frameSinkRef.current.close?.();
+        frameSinkRef.current = null;
       }
     };
   }, [active, connectStream]);

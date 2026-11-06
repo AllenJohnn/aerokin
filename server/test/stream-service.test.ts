@@ -5,12 +5,13 @@ import { DeviceStore } from '../src/device-store.js';
 import { MonitorInfo } from '../src/desktop/types.js';
 
 class MockCaptureAdapter implements CaptureAdapter {
-  public frameCb: ((packet: Buffer, width: number, height: number, seq: number) => void) | null = null;
+  public frameCb: ((packet: Buffer, width: number, height: number, seq: number, nowMs?: number, isKeyframe?: boolean, codec?: any) => void) | null = null;
   public errorCb: ((err: Error, secure?: boolean) => void) | null = null;
   public exitCb: (() => void) | null = null;
   public isRunning = false;
+  public lastStartedOptions: any = null;
 
-  public onFrame(cb: (packet: Buffer, width: number, height: number, seq: number) => void) {
+  public onFrame(cb: any) {
     this.frameCb = cb;
   }
   public onError(cb: (err: Error, isSecureScreen?: boolean) => void) {
@@ -20,13 +21,33 @@ class MockCaptureAdapter implements CaptureAdapter {
     this.exitCb = cb;
   }
 
-  public async start(): Promise<boolean> {
+  public async start(options: any): Promise<void> {
     this.isRunning = true;
-    return true;
+    this.lastStartedOptions = options;
   }
 
   public async stop(): Promise<void> {
     this.isRunning = false;
+  }
+
+  public getActiveBackend(): any {
+    return 'ddagrab';
+  }
+
+  public getActiveCodec(): any {
+    return this.lastStartedOptions?.codec || 'h264';
+  }
+
+  public getActiveEncoder(): any {
+    return 'h264_nvenc';
+  }
+
+  public isAvailable(): boolean {
+    return true;
+  }
+
+  public getFfmpegPath(): string | null {
+    return '/usr/bin/ffmpeg';
   }
 }
 
@@ -124,6 +145,26 @@ describe('AEROKIN StreamService & Adaptive Backpressure', () => {
     mockAdapter.errorCb!(new Error('Desktop duplication access denied'), true);
     expect(service.getState()).toBe('secure_screen');
     expect(latestState).toBe('secure_screen');
+
+    await service.stopSession();
+  });
+
+  it('negotiates requested video codec and initializes capture with codec options', async () => {
+    // 1. Start with H.264
+    const resH264 = await service.startSession({ preset: 'high', codec: 'h264' });
+    expect(resH264.ok).toBe(true);
+    expect(mockAdapter.lastStartedOptions?.codec).toBe('h264');
+    expect(service.getActiveCodec()).toBe('h264');
+    expect(service.getStats().codec).toBe('h264');
+
+    await service.stopSession();
+
+    // 2. Start with MJPEG
+    const resMjpeg = await service.startSession({ preset: 'balanced', codec: 'mjpeg' });
+    expect(resMjpeg.ok).toBe(true);
+    expect(mockAdapter.lastStartedOptions?.codec).toBe('mjpeg');
+    expect(service.getActiveCodec()).toBe('mjpeg');
+    expect(service.getStats().codec).toBe('mjpeg');
 
     await service.stopSession();
   });

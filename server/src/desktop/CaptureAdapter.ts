@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MonitorInfo, CaptureBackend } from './types.js';
+import { MonitorInfo, CaptureBackend, VideoCodec, H264Encoder } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +13,10 @@ export interface CaptureOptions {
   fps: number;
   scale: number;
   quality: number;
+  codec?: VideoCodec;
+  encoder?: H264Encoder;
+  bitrateKbps?: number;
+  isTestMode?: boolean;
 }
 
 export type FrameCallback = (
@@ -20,7 +24,9 @@ export type FrameCallback = (
   width: number,
   height: number,
   sequence: number,
-  timestampMs: number
+  timestampMs: number,
+  isKeyframe?: boolean,
+  codec?: VideoCodec
 ) => void;
 
 export type ErrorCallback = (error: Error, isSecureScreen?: boolean) => void;
@@ -35,6 +41,8 @@ export interface CaptureAdapter {
   onExit(callback: ExitCallback): void;
   onBackendChange?(callback: BackendChangeCallback): void;
   getActiveBackend(): CaptureBackend;
+  getActiveCodec?(): VideoCodec;
+  getActiveEncoder?(): H264Encoder | null;
   getPid?(): number | null;
   isAvailable(): boolean;
   getFfmpegPath(): string | null;
@@ -69,13 +77,14 @@ export function mapMonitorToDdagrabIndex(monitor: MonitorInfo): number | null {
 }
 
 /**
- * Pure builder function for constructing FFmpeg command line arguments for either backend.
+ * Pure builder function for constructing FFmpeg command line arguments for desktop capture and encoding.
  */
 export function buildFfmpegArgs(
   options: CaptureOptions,
-  backend: CaptureBackend
+  backend: CaptureBackend,
+  encoder: H264Encoder = 'h264_nvenc'
 ): string[] {
-  const { monitor, fps, scale, quality } = options;
+  const { monitor, fps, scale, quality, codec = 'mjpeg', bitrateKbps = 2000 } = options;
   const targetWidth = Math.max(320, Math.round((monitor.bounds.width * scale) / 2) * 2);
   const targetHeight = Math.max(240, Math.round((monitor.bounds.height * scale) / 2) * 2);
 
@@ -89,7 +98,15 @@ export function buildFfmpegArgs(
     'low_delay',
   ];
 
-  if (backend === 'ddagrab') {
+  if (backend === 'testsrc') {
+    args.push(
+      '-re',
+      '-f',
+      'lavfi',
+      '-i',
+      `testsrc=size=${targetWidth}x${targetHeight}:rate=${fps}`
+    );
+  } else if (backend === 'ddagrab') {
     const outputIdx = mapMonitorToDdagrabIndex(monitor) ?? 0;
     args.push(
       '-f',
@@ -120,17 +137,110 @@ export function buildFfmpegArgs(
     );
   }
 
-  args.push(
-    '-c:v',
-    'mjpeg',
-    '-q:v',
-    String(quality),
-    '-threads',
-    '1',
-    '-f',
-    'image2pipe',
-    'pipe:1'
-  );
+  if (codec === 'h264') {
+    const gop = Math.max(15, fps * 2);
+    if (encoder === 'h264_nvenc') {
+      args.push(
+        '-c:v',
+        'h264_nvenc',
+        '-tune',
+        'ull',
+        '-zerolatency',
+        '1',
+        '-preset',
+        'p1',
+        '-rc',
+        'cbr',
+        '-b:v',
+        `${bitrateKbps}k`,
+        '-maxrate',
+        `${bitrateKbps}k`,
+        '-bufsize',
+        `${Math.round(bitrateKbps / 2)}k`,
+        '-g',
+        String(gop),
+        '-bf',
+        '0',
+        '-profile:v',
+        'baseline',
+        '-level',
+        '4.1',
+        '-pix_fmt',
+        'yuv420p',
+        '-bsf:v',
+        'h264_metadata=aud=insert',
+        '-f',
+        'h264',
+        'pipe:1'
+      );
+    } else if (encoder === 'h264_mf') {
+      args.push(
+        '-c:v',
+        'h264_mf',
+        '-rate_control',
+        'cbr',
+        '-b:v',
+        `${bitrateKbps}k`,
+        '-g',
+        String(gop),
+        '-bf',
+        '0',
+        '-profile:v',
+        'baseline',
+        '-pix_fmt',
+        'yuv420p',
+        '-bsf:v',
+        'h264_metadata=aud=insert',
+        '-f',
+        'h264',
+        'pipe:1'
+      );
+    } else {
+      // libx264 software encoder
+      args.push(
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-tune',
+        'zerolatency',
+        '-b:v',
+        `${bitrateKbps}k`,
+        '-maxrate',
+        `${bitrateKbps}k`,
+        '-bufsize',
+        `${Math.round(bitrateKbps / 2)}k`,
+        '-g',
+        String(gop),
+        '-bf',
+        '0',
+        '-profile:v',
+        'baseline',
+        '-level',
+        '4.1',
+        '-pix_fmt',
+        'yuv420p',
+        '-bsf:v',
+        'h264_metadata=aud=insert',
+        '-f',
+        'h264',
+        'pipe:1'
+      );
+    }
+  } else {
+    // MJPEG fallback
+    args.push(
+      '-c:v',
+      'mjpeg',
+      '-q:v',
+      String(quality),
+      '-threads',
+      '1',
+      '-f',
+      'image2pipe',
+      'pipe:1'
+    );
+  }
 
   return args;
 }
@@ -219,6 +329,8 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
   private exitCallback: ExitCallback | null = null;
   private backendChangeCallback: BackendChangeCallback | null = null;
   private activeBackend: CaptureBackend = 'ddagrab';
+  private activeCodec: VideoCodec = 'h264';
+  private activeEncoder: H264Encoder = 'h264_nvenc';
   private hasReceivedFrame = false;
   private noFrameTimer: NodeJS.Timeout | null = null;
   private frameSequence = 0;
@@ -244,6 +356,14 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
 
   public getActiveBackend(): CaptureBackend {
     return this.activeBackend;
+  }
+
+  public getActiveCodec(): VideoCodec {
+    return this.activeCodec;
+  }
+
+  public getActiveEncoder(): H264Encoder | null {
+    return this.activeCodec === 'h264' ? this.activeEncoder : null;
   }
 
   public getPid(): number | null {
@@ -283,6 +403,15 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     this.isRunning = true;
     this.currentOptions = options;
     this.restartAttempts = 0;
+    this.activeCodec = options.codec || 'h264';
+    this.activeEncoder = options.encoder || 'h264_nvenc';
+
+    // If explicit test mode requested, use testsrc directly
+    if (options.isTestMode) {
+      this.activeBackend = 'testsrc';
+      await this.spawnCapture(ffmpegPath, options, false, 'testsrc');
+      return;
+    }
 
     // Check remembered working backend for the session
     let isFallbackGdi = false;
@@ -333,22 +462,28 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
   private async spawnCapture(
     ffmpegPath: string,
     options: CaptureOptions,
-    isFallbackGdi = false
+    isFallbackGdi = false,
+    forcedBackend?: CaptureBackend
   ): Promise<void> {
     this.clearNoFrameTimer();
     this.hasReceivedFrame = false;
 
-    this.activeBackend = isFallbackGdi ? 'gdigrab' : 'ddagrab';
+    if (forcedBackend) {
+      this.activeBackend = forcedBackend;
+    } else {
+      this.activeBackend = isFallbackGdi ? 'gdigrab' : 'ddagrab';
+    }
+
     const ddaIndex = mapMonitorToDdagrabIndex(options.monitor) ?? 0;
 
     console.log(
       `[DesktopStream] Active capture backend: ${this.activeBackend}${
-        !isFallbackGdi ? ` (output_idx=${ddaIndex})` : ''
-      }`
+        this.activeBackend === 'ddagrab' ? ` (output_idx=${ddaIndex})` : ''
+      }, codec: ${this.activeCodec}${this.activeCodec === 'h264' ? ` (${this.activeEncoder})` : ''}`
     );
     this.backendChangeCallback?.(this.activeBackend);
 
-    const args = buildFfmpegArgs(options, this.activeBackend);
+    const args = buildFfmpegArgs(options, this.activeBackend, this.activeEncoder);
 
     const { monitor, scale } = options;
     const targetWidth = Math.max(320, Math.round((monitor.bounds.width * scale) / 2) * 2);
@@ -365,7 +500,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
     this.ffmpegProc = proc;
 
     // If using ddagrab, monitor for first frame arrival within 3s; retry with gdigrab on timeout
-    if (!isFallbackGdi) {
+    if (this.activeBackend === 'ddagrab') {
       this.noFrameTimer = setTimeout(() => {
         if (this.isRunning && !this.hasReceivedFrame && this.activeBackend === 'ddagrab') {
           console.warn(
@@ -395,8 +530,37 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
         );
       }
 
+      // On NVENC hardware initialization error, fallback to h264_mf or libx264
+      if (
+        !this.hasReceivedFrame &&
+        this.isRunning &&
+        this.activeCodec === 'h264' &&
+        this.activeEncoder === 'h264_nvenc' &&
+        (msg.includes('Cannot load nvcuda.dll') ||
+          msg.includes('No NVENC capable devices') ||
+          msg.includes('Failed to create NVENC') ||
+          msg.includes('InitializeEncoder failed'))
+      ) {
+        console.warn(
+          '[DesktopStream] NVENC initialization failed. Falling back to libx264 software encoder...'
+        );
+        this.activeEncoder = 'libx264';
+        if (this.ffmpegProc) {
+          const p = this.ffmpegProc;
+          this.ffmpegProc = null;
+          (p as any)._isStopping = true;
+          try {
+            p.kill('SIGKILL');
+          } catch {}
+        }
+        this.spawnCapture(ffmpegPath, options, isFallbackGdi, forcedBackend).catch((e) => {
+          this.errorCallback?.(e);
+        });
+        return;
+      }
+
       // On first ffmpeg stderr error on ddagrab before receiving any frame, automatically retry with gdigrab
-      if (!isFallbackGdi && !this.hasReceivedFrame && this.isRunning) {
+      if (!isFallbackGdi && !this.hasReceivedFrame && this.isRunning && this.activeBackend === 'ddagrab') {
         console.warn(
           `[DesktopStream] ddagrab stderr error detected: ${msg.trim()}. Automatically retrying with gdigrab...`
         );
@@ -404,62 +568,148 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
       }
     });
 
-    // JPEG SOI = 0xFF 0xD8, EOI = 0xFF 0xD9
+    // Slicing helpers
     const SOI = Buffer.from([0xff, 0xd8]);
     const EOI = Buffer.from([0xff, 0xd9]);
+
+    const findAud = (buf: Buffer, start: number): number => {
+      for (let i = start; i <= buf.length - 5; i++) {
+        if (buf[i] === 0 && buf[i + 1] === 0) {
+          if (buf[i + 2] === 0 && buf[i + 3] === 1 && (buf[i + 4] & 0x1f) === 9) {
+            return i;
+          }
+          if (buf[i + 2] === 1 && (buf[i + 3] & 0x1f) === 9) {
+            return i;
+          }
+        }
+      }
+      return -1;
+    };
+
+    const checkKeyframe = (au: Buffer): boolean => {
+      for (let i = 0; i <= au.length - 4; i++) {
+        if (au[i] === 0 && au[i + 1] === 0) {
+          let scLen = 0;
+          if (au[i + 2] === 0 && au[i + 3] === 1) scLen = 4;
+          else if (au[i + 2] === 1) scLen = 3;
+
+          if (scLen > 0 && i + scLen < au.length) {
+            const nalType = au[i + scLen] & 0x1f;
+            if (nalType === 5 || nalType === 7) return true;
+            i += scLen;
+          }
+        }
+      }
+      return false;
+    };
 
     proc.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuffer = Buffer.concat([stdoutBuffer, chunk]);
 
-      let searchOffset = 0;
-      while (true) {
-        const soiIdx = stdoutBuffer.indexOf(SOI, searchOffset);
-        if (soiIdx === -1) {
-          if (stdoutBuffer.length > 2) {
-            stdoutBuffer = stdoutBuffer.subarray(stdoutBuffer.length - 2);
+      if (this.activeCodec === 'h264') {
+        while (true) {
+          const firstAud = findAud(stdoutBuffer, 0);
+          if (firstAud === -1) {
+            if (stdoutBuffer.length > 5) {
+              stdoutBuffer = stdoutBuffer.subarray(stdoutBuffer.length - 4);
+            }
+            break;
           }
-          break;
+
+          if (firstAud > 0) {
+            stdoutBuffer = stdoutBuffer.subarray(firstAud);
+          }
+
+          const nextAud = findAud(stdoutBuffer, 4);
+          if (nextAud === -1) {
+            break;
+          }
+
+          const accessUnit = stdoutBuffer.subarray(0, nextAud);
+          stdoutBuffer = stdoutBuffer.subarray(nextAud);
+
+          if (this.isRunning && this.frameCallback && accessUnit.length > 10) {
+            if (!this.hasReceivedFrame) {
+              this.hasReceivedFrame = true;
+              this.clearNoFrameTimer();
+              WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = this.activeBackend;
+            }
+
+            const isKeyframe = checkKeyframe(accessUnit);
+            const seq = ++this.frameSequence;
+            const nowMs = Date.now();
+
+            // 20-byte AER2 binary header:
+            // [0..3]: 'AER2' (magic)
+            // [4..7]: uint32 sequence
+            // [8..11]: uint32 timestamp
+            // [12..13]: uint16 width
+            // [14..15]: uint16 height
+            // [16]: uint8 codec (1 = h264, 0 = mjpeg)
+            // [17]: uint8 isKeyframe (1 = keyframe, 0 = delta)
+            // [18..19]: uint16 reserved (0)
+            const header = Buffer.alloc(20);
+            header.write('AER2', 0, 4, 'ascii');
+            header.writeUInt32LE(seq, 4);
+            header.writeUInt32LE(nowMs >>> 0, 8);
+            header.writeUInt16LE(targetWidth, 12);
+            header.writeUInt16LE(targetHeight, 14);
+            header.writeUInt8(1, 16);
+            header.writeUInt8(isKeyframe ? 1 : 0, 17);
+            header.writeUInt16LE(0, 18);
+
+            const fullPacket = Buffer.concat([header, accessUnit]);
+            this.frameCallback(fullPacket, targetWidth, targetHeight, seq, nowMs, isKeyframe, 'h264');
+          }
         }
-
-        const eoiIdx = stdoutBuffer.indexOf(EOI, soiIdx + 2);
-        if (eoiIdx === -1) {
-          // Incomplete JPEG; keep remaining buffer starting from SOI
-          if (soiIdx > 0) {
-            stdoutBuffer = stdoutBuffer.subarray(soiIdx);
-          }
-          break;
-        }
-
-        // Full JPEG frame extracted
-        const jpegFrame = stdoutBuffer.subarray(soiIdx, eoiIdx + 2);
-        stdoutBuffer = stdoutBuffer.subarray(eoiIdx + 2);
-        searchOffset = 0;
-
-        if (this.isRunning && this.frameCallback && jpegFrame.length > 100) {
-          if (!this.hasReceivedFrame) {
-            this.hasReceivedFrame = true;
-            this.clearNoFrameTimer();
-            WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = this.activeBackend;
+      } else {
+        // MJPEG slicing
+        let searchOffset = 0;
+        while (true) {
+          const soiIdx = stdoutBuffer.indexOf(SOI, searchOffset);
+          if (soiIdx === -1) {
+            if (stdoutBuffer.length > 2) {
+              stdoutBuffer = stdoutBuffer.subarray(stdoutBuffer.length - 2);
+            }
+            break;
           }
 
-          const seq = ++this.frameSequence;
-          const nowMs = Date.now();
+          const eoiIdx = stdoutBuffer.indexOf(EOI, soiIdx + 2);
+          if (eoiIdx === -1) {
+            if (soiIdx > 0) {
+              stdoutBuffer = stdoutBuffer.subarray(soiIdx);
+            }
+            break;
+          }
 
-          // 16-byte binary metadata header:
-          // [0..3]: 'AERO' (magic)
-          // [4..7]: uint32 sequence
-          // [8..11]: uint32 timestamp
-          // [12..13]: uint16 width
-          // [14..15]: uint16 height
-          const header = Buffer.alloc(16);
-          header.write('AERO', 0, 4, 'ascii');
-          header.writeUInt32LE(seq, 4);
-          header.writeUInt32LE(nowMs >>> 0, 8);
-          header.writeUInt16LE(targetWidth, 12);
-          header.writeUInt16LE(targetHeight, 14);
+          const jpegFrame = stdoutBuffer.subarray(soiIdx, eoiIdx + 2);
+          stdoutBuffer = stdoutBuffer.subarray(eoiIdx + 2);
+          searchOffset = 0;
 
-          const fullPacket = Buffer.concat([header, jpegFrame]);
-          this.frameCallback(fullPacket, targetWidth, targetHeight, seq, nowMs);
+          if (this.isRunning && this.frameCallback && jpegFrame.length > 100) {
+            if (!this.hasReceivedFrame) {
+              this.hasReceivedFrame = true;
+              this.clearNoFrameTimer();
+              WindowsFfmpegCaptureAdapter.rememberedWorkingBackend = this.activeBackend;
+            }
+
+            const seq = ++this.frameSequence;
+            const nowMs = Date.now();
+
+            // 20-byte AER2 header with codec=0 (MJPEG)
+            const header = Buffer.alloc(20);
+            header.write('AER2', 0, 4, 'ascii');
+            header.writeUInt32LE(seq, 4);
+            header.writeUInt32LE(nowMs >>> 0, 8);
+            header.writeUInt16LE(targetWidth, 12);
+            header.writeUInt16LE(targetHeight, 14);
+            header.writeUInt8(0, 16);
+            header.writeUInt8(1, 17);
+            header.writeUInt16LE(0, 18);
+
+            const fullPacket = Buffer.concat([header, jpegFrame]);
+            this.frameCallback(fullPacket, targetWidth, targetHeight, seq, nowMs, true, 'mjpeg');
+          }
         }
       }
     });
@@ -478,7 +728,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
       this.ffmpegProc = null;
 
       // If primary ddagrab failed/exited before or during session, automatically retry with gdigrab
-      if (!isFallbackGdi) {
+      if (this.activeBackend === 'ddagrab') {
         console.warn(
           `[DesktopStream] ddagrab exited with code ${code}. Automatically retrying with gdigrab...`
         );
@@ -491,7 +741,7 @@ export class WindowsFfmpegCaptureAdapter implements CaptureAdapter {
         this.restartAttempts++;
         const delayMs = Math.min(3000, 500 * Math.pow(2, this.restartAttempts - 1));
         console.warn(
-          `[DesktopStream] FFmpeg (gdigrab) exited with code ${code}. Reconnecting in ${delayMs}ms (attempt ${this.restartAttempts}/${this.maxRestarts})...`
+          `[DesktopStream] FFmpeg (${this.activeBackend}) exited with code ${code}. Reconnecting in ${delayMs}ms (attempt ${this.restartAttempts}/${this.maxRestarts})...`
         );
         this.restartTimeout = setTimeout(() => {
           if (this.isRunning && this.currentOptions) {

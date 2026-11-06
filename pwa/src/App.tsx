@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AerokinLogo } from '@ui';
 import { useAerokinSocket } from './hooks/useAerokinSocket';
 import { ManualTokenModal } from './components/ManualTokenModal';
+import { ConnectionModeBadge } from './components/ConnectionModeBadge';
 import { TrackpadTab } from './components/TrackpadTab';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { triggerHaptic } from './utils/haptics';
@@ -517,39 +518,13 @@ export const App: React.FC = () => {
           )}
 
           {/* Small connection status: dot + latency / status */}
-          <button
-            onClick={() => {
-              if (status === 'unauthorized') {
-                setShowAuthModal(true);
-              }
-            }}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer py-1.5 px-2 rounded-lg"
-            title={status}
-            aria-label={`Connection status: ${status}`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                status === 'connected'
-                  ? 'bg-success'
-                  : status === 'reconnecting'
-                  ? 'bg-amber-400'
-                  : status === 'unauthorized'
-                  ? 'bg-optic-red'
-                  : 'bg-muted-foreground/40'
-              }`}
-            />
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
-              {status === 'connected'
-                ? latency !== null
-                  ? `${latency} ms`
-                  : 'Connected'
-                : status === 'reconnecting'
-                ? 'Reconnecting'
-                : status === 'unauthorized'
-                ? 'Auth required'
-                : 'Disconnected'}
-            </span>
-          </button>
+          <ConnectionModeBadge
+            status={status}
+            latency={latency}
+            bitrateKbps={desktopStats?.bitrateKbps}
+            fps={desktopStats?.fps}
+            onOpenSettings={() => setShowSettingsDrawer(true)}
+          />
         </div>
 
         {/* Right side: Settings icon + optional simulator toggle */}

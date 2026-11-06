@@ -124,6 +124,7 @@ export type ValidClientMessage =
       preset?: 'low' | 'balanced' | 'high' | 'ultra';
       customScale?: number;
       customFps?: number;
+      codec?: 'h264' | 'mjpeg';
     }
   | { type: 'desktop_stop' }
   | { type: 'desktop_monitors' }
@@ -427,12 +428,17 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       if (typeof msg.customFps === 'number' && Number.isFinite(msg.customFps)) {
         customFps = Math.max(5, Math.min(60, Math.round(msg.customFps)));
       }
+      let codec: 'h264' | 'mjpeg' | undefined = undefined;
+      if (msg.codec === 'h264' || msg.codec === 'mjpeg') {
+        codec = msg.codec;
+      }
       return {
         type: 'desktop_start',
         monitorId,
         preset,
         customScale,
         customFps,
+        codec,
       };
     }
 

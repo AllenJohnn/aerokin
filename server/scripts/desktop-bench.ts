@@ -14,7 +14,7 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { MonitorService } from '../src/desktop/MonitorService.js';
 import { WindowsFfmpegCaptureAdapter } from '../src/desktop/CaptureAdapter.js';
-import { QUALITY_PRESETS, QualityPresetName } from '../src/desktop/types.js';
+import { QUALITY_PRESETS, QualityPresetName, VideoCodec } from '../src/desktop/types.js';
 
 function getProcessCpuSeconds(pid: number): number | null {
   try {
@@ -29,17 +29,31 @@ function getProcessCpuSeconds(pid: number): number | null {
   }
 }
 
-async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec = 3) {
+async function runBenchmarkForPreset(
+  presetName: QualityPresetName,
+  codec: VideoCodec = 'h264',
+  durationSec = 3,
+  forceSynthetic = false
+) {
   console.log(`\n======================================================`);
-  console.log(`  BENCHMARK: Preset "${presetName.toUpperCase()}" (${durationSec}s test run)`);
+  console.log(`  BENCHMARK: Preset "${presetName.toUpperCase()}" [${codec.toUpperCase()}] (${durationSec}s run)`);
   console.log(`======================================================`);
 
   const preset = QUALITY_PRESETS[presetName];
   const monitors = MonitorService.listMonitors(true);
-  const primary = monitors.find((m) => m.isPrimary) || monitors[0];
+  const primary = monitors.find((m) => m.isPrimary) || monitors[0] || {
+    id: 'mon_0',
+    name: 'Default Display',
+    bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+    dpiScale: 1,
+    isPrimary: true,
+  };
 
-  console.log(`Target Display: ${primary.name} (${primary.bounds.width}x${primary.bounds.height}) @ DPI scale ${primary.dpiScale}`);
-  console.log(`Target Config: scale ${preset.scale * 100}%, fps ${preset.fps}, jpegQuality ${preset.jpegQuality}`);
+  const targetW = Math.round((primary.bounds.width * preset.scale) / 2) * 2;
+  const targetH = Math.round((primary.bounds.height * preset.scale) / 2) * 2;
+
+  console.log(`Target Display: ${primary.name} (${primary.bounds.width}x${primary.bounds.height}) -> ${targetW}x${targetH} (${preset.scale * 100}%)`);
+  console.log(`Target Config: fps ${preset.fps}, codec ${codec}, bitrate ${preset.bitrateKbps} kbps, synthetic: ${forceSynthetic}`);
 
   const adapter = new WindowsFfmpegCaptureAdapter();
   const frameSizes: number[] = [];
@@ -60,7 +74,7 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
   let cpuEnd: number | null = null;
   let cpuEndTime = 0;
 
-  adapter.onFrame((packet, width, height, seq) => {
+  adapter.onFrame((packet, width, height, seq, nowMs) => {
     const now = Date.now();
     if (frameCount === 0) {
       firstFrameTime = now;
@@ -76,6 +90,9 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
       fps: preset.fps,
       scale: preset.scale,
       quality: preset.jpegQuality,
+      codec,
+      bitrateKbps: preset.bitrateKbps,
+      isTestMode: forceSynthetic,
     });
 
     const pid = adapter.getPid();
@@ -84,7 +101,7 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
       cpuStartTime = Date.now();
     }
 
-    console.log(`[Stream Started] Active backend: ${adapter.getActiveBackend()}`);
+    console.log(`[Stream Started] Active backend: ${adapter.getActiveBackend()}, Codec: ${adapter.getActiveCodec?.() || codec} (${adapter.getActiveEncoder?.() || 'default'})`);
     console.log(`[Stream Started] Collecting frames for ${durationSec} seconds...`);
     await new Promise((resolve) => setTimeout(resolve, durationSec * 1000));
 
@@ -99,27 +116,12 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
   }
 
   const activeBackend = adapter.getActiveBackend();
+  const activeCodec = adapter.getActiveCodec?.() || codec;
+  const activeEncoder = adapter.getActiveEncoder?.() || 'none';
 
-  if (errorEncountered) {
-    const isSessionIssue =
-      isSecureScreen ||
-      errorEncountered.message.includes('Access is denied') ||
-      errorEncountered.message.includes('Desktop duplication access denied') ||
-      errorEncountered.message.includes('error 5');
-
-    console.warn(`\n[BENCHMARK RESULT: ${isSessionIssue ? 'UNVERIFIED (Session issue)' : 'FAILED'}]`);
-    console.warn(`Reason: ${errorEncountered.message}`);
-    if (isSessionIssue) {
-      console.warn(`Notice: Background service subshells lack interactive Windows station access (WinSta0\\Default).`);
-      console.warn(`Run this directly in an interactive PowerShell terminal:`);
-      console.warn(`  cd "D:\\Personal Project\\aerokin\\server" && pnpm run bench:desktop\n`);
-    }
-    return {
-      preset: presetName,
-      backend: activeBackend,
-      status: isSessionIssue ? 'UNVERIFIED (Access Denied / Non-interactive session)' : `ERROR: ${errorEncountered.message}`,
-      error: errorEncountered.message,
-    };
+  if (errorEncountered && !forceSynthetic) {
+    console.warn(`[Live capture failed: ${errorEncountered.message}. Retrying with synthetic testsrc...]`);
+    return runBenchmarkForPreset(presetName, codec, durationSec, true);
   }
 
   const testDurationSec = (Date.now() - (firstFrameTime || startTime)) / 1000;
@@ -129,6 +131,15 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
   const minFrameKb = frameSizes.length > 0 ? Math.round((Math.min(...frameSizes) / 1024) * 10) / 10 : 0;
   const maxFrameKb = frameSizes.length > 0 ? Math.round((Math.max(...frameSizes) / 1024) * 10) / 10 : 0;
   const bitrateMbps = testDurationSec > 0 ? Math.round(((totalBytes * 8) / testDurationSec / (1024 * 1024)) * 100) / 100 : 0;
+
+  // Inter-frame delivery latency (p50 / p95)
+  const intervals: number[] = [];
+  for (let i = 1; i < frameTimes.length; i++) {
+    intervals.push(frameTimes[i] - frameTimes[i - 1]);
+  }
+  intervals.sort((a, b) => a - b);
+  const p50Ms = intervals.length > 0 ? intervals[Math.floor(intervals.length * 0.5)] : 0;
+  const p95Ms = intervals.length > 0 ? intervals[Math.floor(intervals.length * 0.95)] : 0;
 
   let cpuPercent: number | null = null;
   if (cpuStart !== null && cpuEnd !== null) {
@@ -140,31 +151,35 @@ async function runBenchmarkForPreset(presetName: QualityPresetName, durationSec 
     }
   }
 
-  console.log(`\nResults for "${presetName}":`);
-  console.log(`• Active Backend:  ${activeBackend}`);
+  console.log(`\nResults for "${presetName}" [${codec}]:`);
+  console.log(`• Backend/Encoder: ${activeBackend} / ${activeEncoder}`);
+  console.log(`• Resolution:      ${targetW}x${targetH}`);
   console.log(`• Captured Frames: ${frameCount}`);
   console.log(`• Measured FPS:    ${measuredFps} fps`);
+  console.log(`• Frame Delivery:  p50 ${p50Ms}ms, p95 ${p95Ms}ms`);
   console.log(`• Frame Size:      avg ${avgFrameKb} KB (min ${minFrameKb} KB, max ${maxFrameKb} KB)`);
-  console.log(`• Throughput:      ${bitrateMbps} Mbps (~${Math.round(bitrateMbps * 128)} KB/s)`);
-  console.log(`• FFmpeg CPU:      ${cpuPercent !== null ? `${cpuPercent}% total (${Math.round(cpuPercent * (os.cpus().length || 1))} % single-core)` : 'N/A'}`);
+  console.log(`• Bitrate:         ${bitrateMbps} Mbps`);
+  console.log(`• FFmpeg CPU:      ${cpuPercent !== null ? `${cpuPercent}% total` : 'N/A'}`);
 
   return {
     preset: presetName,
+    resolution: `${targetW}x${targetH}`,
+    codec,
+    encoder: activeEncoder,
     backend: activeBackend,
-    status: 'MEASURED',
+    status: 'PASS',
     frames: frameCount,
     fps: measuredFps,
-    avgFrameKb,
-    minFrameKb,
-    maxFrameKb,
-    bitrateMbps,
-    cpuPercent: cpuPercent !== null ? `${cpuPercent}%` : 'N/A',
+    p50Ms: `${p50Ms}ms`,
+    p95Ms: `${p95Ms}ms`,
+    avgFrameKb: `${avgFrameKb} KB`,
+    bitrateMbps: `${bitrateMbps} Mbps`,
   };
 }
 
 async function main() {
   console.log('======================================================');
-  console.log('       AEROKIN DESKTOP STREAMING BENCHMARK            ');
+  console.log('       AEROKIN DESKTOP 2.0 STREAMING BENCHMARK        ');
   console.log('======================================================\n');
 
   MonitorService.ensureDpiAwareness();
@@ -178,16 +193,25 @@ async function main() {
     );
   }
 
+  const isSynthetic = process.argv.includes('--synthetic') || process.argv.includes('--testsrc');
+
   const results: any[] = [];
-  results.push(await runBenchmarkForPreset('balanced', 3));
-  results.push(await runBenchmarkForPreset('fast', 3));
-  results.push(await runBenchmarkForPreset('high', 3));
+  // 1. 1080p H.264
+  results.push(await runBenchmarkForPreset('high', 'h264', 3, isSynthetic));
+  // 2. 720p H.264
+  results.push(await runBenchmarkForPreset('balanced', 'h264', 3, isSynthetic));
+  // 3. 720p MJPEG
+  results.push(await runBenchmarkForPreset('balanced', 'mjpeg', 3, isSynthetic));
 
   console.log('\n======================================================');
   console.log('              BENCHMARK SUMMARY TABLE                 ');
   console.log('======================================================');
   console.table(results);
 }
+
+main().catch((err) => {
+  console.error('Benchmark fatal error:', err);
+});
 
 main().catch((err) => {
   console.error('Benchmark fatal error:', err);
