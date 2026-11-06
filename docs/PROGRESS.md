@@ -6,8 +6,8 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 6 Complete (Full Feature Parity over WebRTC Transport & Signaling Bridge); proceeding to commit Part 6 and tag `stable-p6`.
-- **Exact Next Step**: Commit `feat(transport): wire end-to-end WebRTC DataChannel transport and server signaling client`, push, tag `stable-p6`, then proceed to Part 7 (User Experience Refinement).
+- **Current Milestone**: Part 7 (User Experience Refinement - Trackpad, Mobile Keyboard, Multi-touch Gestures, Zoom/Pan).
+- **Exact Next Step**: Implement Part 7 UX refinements, commit and tag `stable-p7`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
