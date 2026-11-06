@@ -15,7 +15,15 @@
 import { EventEmitter } from 'node:events';
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
-export type LogCategory = 'pairing' | 'desktop' | 'media' | 'input' | 'security' | 'system';
+export type LogCategory =
+  | 'pairing'
+  | 'desktop'
+  | 'media'
+  | 'input'
+  | 'security'
+  | 'system'
+  | 'actions'
+  | 'clipboard';
 
 export interface LogEntry {
   id: string;

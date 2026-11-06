@@ -41,3 +41,5 @@ dist-ssr
 # Tools & Binaries
 tools/
 *.exe
+launcher.json
+server/launcher.json

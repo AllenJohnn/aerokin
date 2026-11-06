@@ -30,6 +30,11 @@ import { MediaManager } from './media-manager.js';
 import { DeviceStore, DevicePublicInfo } from './device-store.js';
 import { PairingManager } from './pairing-manager.js';
 import { StreamService, MonitorService } from './desktop/index.js';
+import { FeatureManager } from './features/FeatureManager.js';
+import { SystemStatsService } from './stats/SystemStatsService.js';
+import { ClipboardService } from './clipboard/ClipboardService.js';
+import { ScreenshotService } from './screenshot/ScreenshotService.js';
+import { QuickActionService } from './actions/QuickActionService.js';
 
 export interface ServerConfig {
   port: number;
@@ -42,6 +47,11 @@ export interface ServerConfig {
   deviceStore?: DeviceStore;
   pairingManager?: PairingManager;
   streamService?: StreamService;
+  featureManager?: FeatureManager;
+  statsService?: SystemStatsService;
+  clipboardService?: ClipboardService;
+  screenshotService?: ScreenshotService;
+  quickActionService?: QuickActionService;
 }
 
 export interface ActivityEvent {
@@ -64,6 +74,11 @@ export function startServer(config: ServerConfig): {
   mediaManager: MediaManager;
   deviceStore: DeviceStore;
   pairingManager: PairingManager;
+  featureManager: FeatureManager;
+  statsService: SystemStatsService;
+  clipboardService: ClipboardService;
+  screenshotService: ScreenshotService;
+  quickActionService: QuickActionService;
   revokeDevice: (deviceId: string) => void;
   revokeAll: (exceptDeviceId?: string) => void;
   broadcastDevices: () => void;
@@ -74,6 +89,11 @@ export function startServer(config: ServerConfig): {
 
   const deviceStore = config.deviceStore || new DeviceStore(config.certsDir);
   const pairingManager = config.pairingManager || new PairingManager();
+  const featureManager = config.featureManager || new FeatureManager();
+  const statsService = config.statsService || new SystemStatsService();
+  const clipboardService = config.clipboardService || new ClipboardService();
+  const screenshotService = config.screenshotService || new ScreenshotService();
+  const quickActionService = config.quickActionService || new QuickActionService();
 
   // In-memory state for desktop localhost dashboard
   const activeSockets = new Set<WebSocket>();
@@ -97,6 +117,24 @@ export function startServer(config: ServerConfig): {
       }
     }
   }
+
+  // Hook action countdown changes to SSE
+  quickActionService.onCountdownChange((state) => {
+    broadcastDashboardEvent('countdown_update', state);
+  });
+
+  // Hook feature flag changes to SSE and active sockets
+  featureManager.onFlagsChange((flags) => {
+    broadcastDashboardEvent('features_update', flags);
+    const flagsPayload = JSON.stringify({ type: 'features_status', flags });
+    for (const ws of activeSockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(flagsPayload);
+        } catch {}
+      }
+    }
+  });
 
   function recordDeviceLatency(deviceId: string, rtt: number) {
     let hist = latencyHistoryByDevice.get(deviceId);
@@ -171,6 +209,13 @@ export function startServer(config: ServerConfig): {
         power: getHostPowerStatus(),
       },
       recentEvents: eventBuffer.slice(-25),
+      systemStats: statsService.collectSynchronousMetrics(),
+      actions: {
+        recent: quickActionService.getRecentActions(),
+        countdown: quickActionService.getCountdownState(),
+      },
+      features: featureManager.getFlags(),
+      clipboardSharedCount: clipboardService.getHistory().length,
     };
   }
 
@@ -200,6 +245,15 @@ export function startServer(config: ServerConfig): {
 
   pairingManager.on('approval_resolved', (ev) => {
     broadcastDashboardEvent('approval_resolved', ev);
+  });
+
+  // Hook feature flags and action countdowns to dashboard event stream
+  featureManager.onFlagsChange((flags) => {
+    broadcastDashboardEvent('features_update', flags);
+  });
+
+  quickActionService.onCountdownChange((state) => {
+    broadcastDashboardEvent('countdown_update', state);
   });
 
   function recordEvent(type: ActivityEvent['type'], summary: string) {
@@ -626,6 +680,56 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true });
   });
 
+  // REST API: Cancel Action Countdown - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/dashboard/actions/cancel', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    const result = quickActionService.cancelCountdown();
+    res.json(result);
+  });
+
+  // REST API: Get/Update Feature Flags - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/features', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    res.json(featureManager.getFlags());
+  });
+
+  app.post('/api/dashboard/features', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    const updated = featureManager.updateFlags(req.body || {});
+    res.json({ ok: true, flags: updated });
+  });
+
+  // REST API: Live System Stats - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/stats', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    res.json(statsService.collectSynchronousMetrics());
+  });
+
+  // REST API: Quick Actions & Launcher Info - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/actions', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    res.json({
+      recent: quickActionService.getRecentActions(),
+      countdown: quickActionService.getCountdownState(),
+      launcherEntries: quickActionService.getLauncherEntries(),
+    });
+  });
+
   // REST API: Fetch In-Memory Log Entries - LOOPBACK ONLY (403 for LAN)
   app.get('/api/logs', (req, res) => {
     if (!isLoopback(req)) {
@@ -926,6 +1030,7 @@ export function startServer(config: ServerConfig): {
         scroller.destroy();
         scroller = null;
       }
+      statsService.unsubscribe(`${clientIp}_${authenticatedDeviceId || 'client'}`);
       recordEvent('disconnect', 'Client disconnected');
     };
 
@@ -992,6 +1097,9 @@ export function startServer(config: ServerConfig): {
 
       // Send current device list
       ws.send(JSON.stringify({ type: 'devices', list: deviceStore.listDevices() }));
+
+      // Send initial feature flags
+      ws.send(JSON.stringify({ type: 'features_status', flags: featureManager.getFlags() }));
 
       // Send initial desktop status and monitors
       ws.send(JSON.stringify({ type: 'desktop_monitors', monitors: MonitorService.listMonitors() }));
@@ -1287,6 +1395,202 @@ export function startServer(config: ServerConfig): {
             recordEvent('move', `text (${msg.text.length} chars)`);
             break;
           }
+
+          case 'screenshot_request': {
+            if (!featureManager.isEnabled('screenshot')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'screenshot_response',
+                    success: false,
+                    error: 'Screenshot feature is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            const result = await screenshotService.capture({
+              target: msg.target,
+              monitorId: msg.monitorId,
+              includeCursor: msg.includeCursor,
+            });
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'screenshot_response',
+                  ...result,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'stats_subscribe': {
+            const subId = `${clientIp}_${authenticatedDeviceId || 'client'}`;
+            statsService.subscribe(subId, (sample) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                try {
+                  ws.send(JSON.stringify({ type: 'stats_data', data: sample }));
+                } catch {}
+              }
+            });
+            break;
+          }
+
+          case 'stats_unsubscribe': {
+            const subId = `${clientIp}_${authenticatedDeviceId || 'client'}`;
+            statsService.unsubscribe(subId);
+            break;
+          }
+
+          case 'clipboard_get': {
+            if (!featureManager.isEnabled('clipboard')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'clipboard_error',
+                    error: 'Clipboard feature is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            const clip = await clipboardService.getPcClipboard();
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'clipboard_data',
+                  text: clip.text,
+                  length: clip.length,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'clipboard_set': {
+            if (!featureManager.isEnabled('clipboard')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'clipboard_error',
+                    error: 'Clipboard feature is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            const setRes = await clipboardService.setPcClipboard(msg.text);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'clipboard_ack',
+                  success: setRes.success,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'clipboard_set_and_paste': {
+            if (!featureManager.isEnabled('clipboard')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'clipboard_error',
+                    error: 'Clipboard feature is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            const pasteRes = await clipboardService.setPcClipboard(msg.text);
+            if (pasteRes.success) {
+              await handleKey('v', 'tap', ['ctrl']);
+            }
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'clipboard_ack',
+                  success: pasteRes.success,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'clipboard_clear_history': {
+            clipboardService.clearHistory();
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'clipboard_history', history: [] }));
+            }
+            break;
+          }
+
+          case 'quick_action': {
+            if (!featureManager.isEnabled('quickActions') && msg.action !== 'cancel_shutdown') {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'action_result',
+                    success: false,
+                    action: msg.action,
+                    error: 'Quick Actions feature is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            if (msg.action === 'launch_app' && !featureManager.isEnabled('launcher')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'action_result',
+                    success: false,
+                    action: msg.action,
+                    error: 'App Launcher is disabled on PC dashboard',
+                  })
+                );
+              }
+              break;
+            }
+            const actionRes = await quickActionService.executeAction(msg.action, msg.payload);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'action_result',
+                  ...actionRes,
+                })
+              );
+            }
+            break;
+          }
+
+          case 'launcher_list': {
+            if (!featureManager.isEnabled('launcher')) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'launcher_list', entries: [] }));
+              }
+              break;
+            }
+            const entries = quickActionService.getLauncherEntries();
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'launcher_list', entries }));
+            }
+            break;
+          }
+
+          case 'features_get': {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'features_status',
+                  flags: featureManager.getFlags(),
+                })
+              );
+            }
+            break;
+          }
         }
       } catch {
         // Ignore parse errors or handler rejections; never crash
@@ -1311,6 +1615,11 @@ export function startServer(config: ServerConfig): {
     mediaManager,
     deviceStore,
     pairingManager,
+    featureManager,
+    statsService,
+    clipboardService,
+    screenshotService,
+    quickActionService,
     revokeDevice,
     revokeAll,
     broadcastDevices,

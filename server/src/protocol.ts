@@ -2,7 +2,7 @@
  * AEROKIN Protocol Validation, Constants, and Rate Limiting
  */
 
-export const WS_MAX_PAYLOAD_BYTES = 4096; // 4 KB limit for incoming frames
+export const WS_MAX_PAYLOAD_BYTES = 131072; // 128 KB limit for authenticated frames (e.g. 100 KB clipboard)
 export const WS_CLOSE_POLICY_VIOLATION = 1008;
 
 export const MAX_MOVE_DELTA = 200;
@@ -10,6 +10,30 @@ export const MAX_SCROLL_DELTA = 500;
 export const MAX_SEEKBY_SECONDS = 86400; // ±24 hours
 export const MAX_SEEKTO_SECONDS = 864000; // 10 days
 export const MAX_SESSION_ID_LENGTH = 256;
+export const MAX_CLIPBOARD_TEXT_BYTES = 102400; // 100 KB limit for text clipboard
+export const MAX_TYPE_TEXT_CHARS = 1000;
+export const MAX_URL_LENGTH = 2048;
+
+export const ALLOWED_QUICK_ACTIONS = [
+  'lock_pc',
+  'sleep',
+  'monitor_off',
+  'show_desktop',
+  'task_view',
+  'task_manager',
+  'volume_mute',
+  'brightness_up',
+  'brightness_down',
+  'send_link',
+  'type_text',
+  'shutdown',
+  'restart',
+  'sign_out',
+  'cancel_shutdown',
+  'launch_app',
+] as const;
+
+export type AllowedQuickAction = typeof ALLOWED_QUICK_ACTIONS[number];
 
 export const ALLOWED_MEDIA_ACTIONS = [
   'playpause',
@@ -126,7 +150,26 @@ export type ValidClientMessage =
       action?: 'down' | 'up' | 'tap';
       modifiers?: string[];
     }
-  | { type: 'text'; text: string };
+  | { type: 'text'; text: string }
+  | {
+      type: 'screenshot_request';
+      target?: 'all' | 'active_window' | 'monitor';
+      monitorId?: string;
+      includeCursor?: boolean;
+    }
+  | { type: 'stats_subscribe'; intervalMs?: number }
+  | { type: 'stats_unsubscribe' }
+  | { type: 'clipboard_get' }
+  | { type: 'clipboard_set'; text: string }
+  | { type: 'clipboard_set_and_paste'; text: string }
+  | { type: 'clipboard_clear_history' }
+  | {
+      type: 'quick_action';
+      action: AllowedQuickAction;
+      payload?: string;
+    }
+  | { type: 'launcher_list' }
+  | { type: 'features_get' };
 
 /**
  * Validates and clamps an incoming message payload.
@@ -520,6 +563,113 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
       return { type: 'text', text: sanitized };
     }
 
+    case 'screenshot_request': {
+      let target: 'all' | 'active_window' | 'monitor' = 'all';
+      if (typeof msg.target === 'string') {
+        if (msg.target === 'all' || msg.target === 'active_window' || msg.target === 'monitor') {
+          target = msg.target;
+        } else {
+          return null;
+        }
+      }
+      let monitorId: string | undefined = undefined;
+      if (typeof msg.monitorId === 'string') {
+        const trimmed = msg.monitorId.trim();
+        if (trimmed.length > 0 && trimmed.length <= 64) {
+          monitorId = trimmed;
+        }
+      }
+      const includeCursor = typeof msg.includeCursor === 'boolean' ? msg.includeCursor : undefined;
+      return { type: 'screenshot_request', target, monitorId, includeCursor };
+    }
+
+    case 'stats_subscribe': {
+      let intervalMs = 1000;
+      if (typeof msg.intervalMs === 'number' && Number.isFinite(msg.intervalMs)) {
+        intervalMs = Math.max(500, Math.min(5000, Math.round(msg.intervalMs)));
+      }
+      return { type: 'stats_subscribe', intervalMs };
+    }
+
+    case 'stats_unsubscribe': {
+      return { type: 'stats_unsubscribe' };
+    }
+
+    case 'clipboard_get': {
+      return { type: 'clipboard_get' };
+    }
+
+    case 'clipboard_set': {
+      if (typeof msg.text !== 'string' || msg.text.length > MAX_CLIPBOARD_TEXT_BYTES) {
+        return null;
+      }
+      return { type: 'clipboard_set', text: msg.text };
+    }
+
+    case 'clipboard_set_and_paste': {
+      if (typeof msg.text !== 'string' || msg.text.length > MAX_CLIPBOARD_TEXT_BYTES) {
+        return null;
+      }
+      return { type: 'clipboard_set_and_paste', text: msg.text };
+    }
+
+    case 'clipboard_clear_history': {
+      return { type: 'clipboard_clear_history' };
+    }
+
+    case 'quick_action': {
+      if (typeof msg.action !== 'string') {
+        return null;
+      }
+      if (!ALLOWED_QUICK_ACTIONS.includes(msg.action as AllowedQuickAction)) {
+        return null;
+      }
+      const action = msg.action as AllowedQuickAction;
+      let payload: string | undefined = undefined;
+
+      if (action === 'send_link') {
+        if (typeof msg.payload !== 'string' || msg.payload.length === 0 || msg.payload.length > MAX_URL_LENGTH) {
+          return null;
+        }
+        try {
+          const parsedUrl = new URL(msg.payload.trim());
+          if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return null; // Strictly reject non-http schemes (javascript:, file:, etc.)
+          }
+          payload = parsedUrl.href;
+        } catch {
+          return null;
+        }
+      } else if (action === 'type_text') {
+        if (typeof msg.payload !== 'string' || msg.payload.length === 0 || msg.payload.length > MAX_TYPE_TEXT_CHARS) {
+          return null;
+        }
+        payload = msg.payload;
+      } else if (action === 'launch_app') {
+        if (
+          typeof msg.payload !== 'string' ||
+          msg.payload.trim().length === 0 ||
+          msg.payload.length > 64 ||
+          !/^[a-zA-Z0-9_\-.]+$/.test(msg.payload.trim())
+        ) {
+          return null;
+        }
+        payload = msg.payload.trim();
+      } else if (typeof msg.payload === 'string') {
+        payload = msg.payload.slice(0, 256);
+      }
+
+      return { type: 'quick_action', action, payload };
+    }
+
+    case 'launcher_list': {
+      return { type: 'launcher_list' };
+    }
+
+    case 'features_get': {
+      return { type: 'features_get' };
+    }
+
     default:
       return null;
   }
@@ -574,6 +724,10 @@ export const RATE_LIMIT_CONFIGS: Record<string, RateLimitCategoryConfig> = {
   ping: { capacity: 10, refillRate: 5 }, // Keepalive pings (phone sends ~0.5Hz)
   device: { capacity: 20, refillRate: 5 }, // Device list, rename, revoke
   auth: { capacity: 5, refillRate: 1 }, // Handshake auth message
+  screenshot: { capacity: 4, refillRate: 2 }, // One-shot screenshot captures
+  stats: { capacity: 10, refillRate: 5 }, // System stats subscription
+  clipboard: { capacity: 20, refillRate: 10 }, // Clipboard read/write
+  action: { capacity: 20, refillRate: 10 }, // Safe PC actions & app launcher
 };
 
 export const MAX_CONSECUTIVE_RATE_LIMIT_VIOLATIONS = 50;
@@ -630,7 +784,21 @@ export class ConnectionRateLimiter {
       case 'device_revoke':
       case 'device_revoke_all':
       case 'logout':
+      case 'features_get':
         return 'device';
+      case 'screenshot_request':
+        return 'screenshot';
+      case 'stats_subscribe':
+      case 'stats_unsubscribe':
+        return 'stats';
+      case 'clipboard_get':
+      case 'clipboard_set':
+      case 'clipboard_set_and_paste':
+      case 'clipboard_clear_history':
+        return 'clipboard';
+      case 'quick_action':
+      case 'launcher_list':
+        return 'action';
     }
   }
 

@@ -220,4 +220,41 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
     expect(res.headers['content-disposition']).toContain('attachment; filename="aerokin-logs-');
     expect(res.text).toContain('System test event for download');
   });
+
+  it('provides systemStats, actions, features, and clipboardSharedCount in status snapshot', async () => {
+    const res = await mockRequest('GET', '/api/dashboard/status', '127.0.0.1');
+    expect(res.status).toBe(200);
+    expect(res.body.systemStats).toBeDefined();
+    expect(res.body.actions).toBeDefined();
+    expect(res.body.features).toBeDefined();
+    expect(res.body.features.clipboard).toBe(true);
+    expect(typeof res.body.clipboardSharedCount).toBe('number');
+  });
+
+  it('manages feature flags via GET and POST /api/dashboard/features', async () => {
+    // GET features
+    const getRes = await mockRequest('GET', '/api/dashboard/features', '127.0.0.1');
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.clipboard).toBe(true);
+
+    // POST features update
+    const postRes = await mockRequest('POST', '/api/dashboard/features', '127.0.0.1', {
+      clipboard: false,
+      screenshot: false,
+    });
+    expect(postRes.status).toBe(200);
+    expect(postRes.body.ok).toBe(true);
+    expect(postRes.body.flags.clipboard).toBe(false);
+    expect(postRes.body.flags.screenshot).toBe(false);
+
+    // Verify GET reflects update
+    const verifyRes = await mockRequest('GET', '/api/dashboard/features', '127.0.0.1');
+    expect(verifyRes.body.clipboard).toBe(false);
+  });
+
+  it('handles action cancel countdown via POST /api/dashboard/actions/cancel', async () => {
+    const res = await mockRequest('POST', '/api/dashboard/actions/cancel', '127.0.0.1');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.success).toBe('boolean');
+  });
 });

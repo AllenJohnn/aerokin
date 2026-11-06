@@ -1,0 +1,34 @@
+[
+  {
+    "id": "notepad",
+    "name": "Notepad",
+    "icon": "note",
+    "description": "Windows Text Editor",
+    "path": "notepad.exe",
+    "args": []
+  },
+  {
+    "id": "calc",
+    "name": "Calculator",
+    "icon": "calculator",
+    "description": "Windows Calculator",
+    "path": "calc.exe",
+    "args": []
+  },
+  {
+    "id": "explorer",
+    "name": "File Explorer",
+    "icon": "folder",
+    "description": "Browse PC files and folders",
+    "path": "explorer.exe",
+    "args": []
+  },
+  {
+    "id": "taskmgr",
+    "name": "Task Manager",
+    "icon": "activity",
+    "description": "Windows Task Manager",
+    "path": "taskmgr.exe",
+    "args": []
+  }
+]
