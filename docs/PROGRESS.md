@@ -6,8 +6,8 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 5 Complete (Remote Pairing, Persistent PC Identity, Multi-PC SavedPc Storage & Token Revocation); proceeding to commit Part 5 and tag `stable-p5`.
-- **Exact Next Step**: Commit `feat(pairing): implement remote pairing, persistent PC identity, and token revocation`, push, tag `stable-p5`, then proceed to Part 6 (All Existing Features over New Transport).
+- **Current Milestone**: Part 6 (All Existing Features over New Transport - Input, Stats, Media, Clipboard, Desktop 2.0).
+- **Exact Next Step**: Verify and implement end-to-end feature parity across ConnectionManager and RtcTransport, commit and tag `stable-p6`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
