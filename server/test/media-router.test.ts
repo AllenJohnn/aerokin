@@ -214,10 +214,10 @@ describe('MediaCommandRouter & Capability Model (Media 2.0)', () => {
       expect(spotify.seekBackward.key).toBe('Shift+Left');
     });
 
-    it('matches VLC media player profile to Right and Left arrows', () => {
+    it('matches VLC media player profile to Alt+Right and Alt+Left arrows', () => {
       const vlc = profiles.getProfile('vlc.exe', 'Video.mp4 - VLC media player');
-      expect(vlc.seekForward.key).toBe('Right');
-      expect(vlc.seekBackward.key).toBe('Left');
+      expect(vlc.seekForward.key).toBe('Alt+Right');
+      expect(vlc.seekBackward.key).toBe('Alt+Left');
       expect(vlc.fullscreen.key).toBe('f');
     });
 

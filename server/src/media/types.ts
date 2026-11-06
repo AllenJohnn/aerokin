@@ -67,6 +67,7 @@ export interface ProfileEntry {
   key: string;
   verified: boolean;
   note: string;
+  verifiedOn?: string;
 }
 
 export interface AppProfile {

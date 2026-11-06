@@ -8,18 +8,18 @@ const __dirname = path.dirname(__filename);
 
 export const DEFAULT_PROFILES_CONFIG: ProfilesConfig = {
   defaults: {
-    seekForward: { key: 'Right', verified: true, note: 'Standard right arrow seek' },
-    seekBackward: { key: 'Left', verified: true, note: 'Standard left arrow seek' },
-    fullscreen: { key: 'f', verified: true, note: 'Standard fullscreen toggle (F)' },
+    seekForward: { key: 'Right', verified: false, note: 'Standard right arrow seek' },
+    seekBackward: { key: 'Left', verified: false, note: 'Standard left arrow seek' },
+    fullscreen: { key: 'f', verified: false, note: 'Standard fullscreen toggle (F)' },
   },
   profiles: {
     'chrome.exe': {
       name: 'Google Chrome',
       byTitle: {
         YouTube: {
-          seekForward: { key: 'l', verified: true, note: 'YouTube native +10s (L)' },
-          seekBackward: { key: 'j', verified: true, note: 'YouTube native -10s (J)' },
-          fullscreen: { key: 'f', verified: true, note: 'YouTube fullscreen (F)' },
+          seekForward: { key: 'l', verified: false, note: 'YouTube native +10s (L)' },
+          seekBackward: { key: 'j', verified: false, note: 'YouTube native -10s (J)' },
+          fullscreen: { key: 'f', verified: false, note: 'YouTube fullscreen (F)' },
         },
         Netflix: {
           seekForward: { key: 'Right', verified: false, note: 'Netflix 10s seek (UNVERIFIED)' },
@@ -32,9 +32,9 @@ export const DEFAULT_PROFILES_CONFIG: ProfilesConfig = {
       name: 'Microsoft Edge',
       byTitle: {
         YouTube: {
-          seekForward: { key: 'l', verified: true, note: 'YouTube native +10s (L)' },
-          seekBackward: { key: 'j', verified: true, note: 'YouTube native -10s (J)' },
-          fullscreen: { key: 'f', verified: true, note: 'YouTube fullscreen (F)' },
+          seekForward: { key: 'l', verified: false, note: 'YouTube native +10s (L)' },
+          seekBackward: { key: 'j', verified: false, note: 'YouTube native -10s (J)' },
+          fullscreen: { key: 'f', verified: false, note: 'YouTube fullscreen (F)' },
         },
         Netflix: {
           seekForward: { key: 'Right', verified: false, note: 'Netflix 10s seek (UNVERIFIED)' },
@@ -47,9 +47,9 @@ export const DEFAULT_PROFILES_CONFIG: ProfilesConfig = {
       name: 'Mozilla Firefox',
       byTitle: {
         YouTube: {
-          seekForward: { key: 'l', verified: true, note: 'YouTube native +10s (L)' },
-          seekBackward: { key: 'j', verified: true, note: 'YouTube native -10s (J)' },
-          fullscreen: { key: 'f', verified: true, note: 'YouTube fullscreen (F)' },
+          seekForward: { key: 'l', verified: false, note: 'YouTube native +10s (L)' },
+          seekBackward: { key: 'j', verified: false, note: 'YouTube native -10s (J)' },
+          fullscreen: { key: 'f', verified: false, note: 'YouTube fullscreen (F)' },
         },
         Netflix: {
           seekForward: { key: 'Right', verified: false, note: 'Netflix 10s seek (UNVERIFIED)' },
@@ -60,21 +60,29 @@ export const DEFAULT_PROFILES_CONFIG: ProfilesConfig = {
     },
     'vlc.exe': {
       name: 'VLC Media Player',
-      seekForward: { key: 'Ctrl+Right', verified: true, note: 'VLC short jump 10s (Ctrl+Right; Shift+Right is 3s, Alt+Right is 1m)' },
-      seekBackward: { key: 'Ctrl+Left', verified: true, note: 'VLC short jump 10s (Ctrl+Left; Shift+Left is 3s, Alt+Left is 1m)' },
-      fullscreen: { key: 'f', verified: true, note: 'VLC toggle fullscreen (F)' },
+      seekForward: {
+        key: 'Alt+Right',
+        verified: false,
+        note: 'VLC short jump 10s (Alt+Right). Documented jumps: Shift+Arrow=3s, Alt+Arrow=10s, Ctrl+Arrow=1m, Ctrl+Alt+Arrow=5m. Arbitrary seeks map to nearest jump or repeated keys.',
+      },
+      seekBackward: {
+        key: 'Alt+Left',
+        verified: false,
+        note: 'VLC short jump 10s (Alt+Left). Documented jumps: Shift+Arrow=3s, Alt+Arrow=10s, Ctrl+Arrow=1m, Ctrl+Alt+Arrow=5m. Arbitrary seeks map to nearest jump or repeated keys.',
+      },
+      fullscreen: { key: 'f', verified: false, note: 'VLC toggle fullscreen (F)' },
     },
     'mpc-hc64.exe': {
       name: 'MPC-HC',
-      seekForward: { key: 'Right', verified: true, note: 'MPC-HC jump forward (Right arrow)' },
-      seekBackward: { key: 'Left', verified: true, note: 'MPC-HC jump backward (Left arrow)' },
-      fullscreen: { key: 'Alt+Enter', verified: true, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
+      seekForward: { key: 'Right', verified: false, note: 'MPC-HC jump forward (Right arrow)' },
+      seekBackward: { key: 'Left', verified: false, note: 'MPC-HC jump backward (Left arrow)' },
+      fullscreen: { key: 'Alt+Enter', verified: false, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
     },
     'mpc-hc.exe': {
       name: 'MPC-HC',
-      seekForward: { key: 'Right', verified: true, note: 'MPC-HC jump forward (Right arrow)' },
-      seekBackward: { key: 'Left', verified: true, note: 'MPC-HC jump backward (Left arrow)' },
-      fullscreen: { key: 'Alt+Enter', verified: true, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
+      seekForward: { key: 'Right', verified: false, note: 'MPC-HC jump forward (Right arrow)' },
+      seekBackward: { key: 'Left', verified: false, note: 'MPC-HC jump backward (Left arrow)' },
+      fullscreen: { key: 'Alt+Enter', verified: false, note: 'MPC-HC fullscreen toggle (Alt+Enter)' },
     },
     'potplayermini64.exe': {
       name: 'PotPlayer',

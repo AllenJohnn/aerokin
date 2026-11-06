@@ -1,33 +1,33 @@
 {
   "$schema": "./profiles.schema.json",
   "defaults": {
-    "seekForward": { "key": "Right", "verified": true, "note": "Standard right arrow seek" },
-    "seekBackward": { "key": "Left", "verified": true, "note": "Standard left arrow seek" },
-    "fullscreen": { "key": "f", "verified": true, "note": "Standard fullscreen toggle (F)" }
+    "seekForward": { "key": "Right", "verified": false, "note": "Standard right arrow seek" },
+    "seekBackward": { "key": "Left", "verified": false, "note": "Standard left arrow seek" },
+    "fullscreen": { "key": "f", "verified": false, "note": "Standard fullscreen toggle (F)" }
   },
   "profiles": {
     "chrome.exe": {
       "name": "Google Chrome",
       "byTitle": {
         "YouTube": {
-          "seekForward": { "key": "l", "verified": true, "note": "YouTube native +10s (L)" },
-          "seekBackward": { "key": "j", "verified": true, "note": "YouTube native -10s (J)" },
-          "fullscreen": { "key": "f", "verified": true, "note": "YouTube fullscreen (F)" }
+          "seekForward": { "key": "l", "verified": false, "note": "YouTube native +10s (L)" },
+          "seekBackward": { "key": "j", "verified": false, "note": "YouTube native -10s (J)" },
+          "fullscreen": { "key": "f", "verified": false, "note": "YouTube fullscreen (F)" }
         },
         "Netflix": {
-          "seekForward": { "key": "Right", "verified": true, "note": "Netflix 10s seek" },
-          "seekBackward": { "key": "Left", "verified": true, "note": "Netflix 10s seek" },
-          "fullscreen": { "key": "f", "verified": true, "note": "Netflix fullscreen" }
+          "seekForward": { "key": "Right", "verified": false, "note": "Netflix 10s seek" },
+          "seekBackward": { "key": "Left", "verified": false, "note": "Netflix 10s seek" },
+          "fullscreen": { "key": "f", "verified": false, "note": "Netflix fullscreen" }
         },
         "Prime Video": {
-          "seekForward": { "key": "Right", "verified": true, "note": "Prime Video 10s seek" },
-          "seekBackward": { "key": "Left", "verified": true, "note": "Prime Video 10s seek" },
-          "fullscreen": { "key": "f", "verified": true, "note": "Prime Video fullscreen" }
+          "seekForward": { "key": "Right", "verified": false, "note": "Prime Video 10s seek" },
+          "seekBackward": { "key": "Left", "verified": false, "note": "Prime Video 10s seek" },
+          "fullscreen": { "key": "f", "verified": false, "note": "Prime Video fullscreen" }
         },
         "Hotstar": {
-          "seekForward": { "key": "Right", "verified": true, "note": "Hotstar forward seek" },
-          "seekBackward": { "key": "Left", "verified": true, "note": "Hotstar backward seek" },
-          "fullscreen": { "key": "f", "verified": true, "note": "Hotstar fullscreen" }
+          "seekForward": { "key": "Right", "verified": false, "note": "Hotstar forward seek" },
+          "seekBackward": { "key": "Left", "verified": false, "note": "Hotstar backward seek" },
+          "fullscreen": { "key": "f", "verified": false, "note": "Hotstar fullscreen" }
         }
       }
     },
@@ -35,19 +35,19 @@
       "name": "Microsoft Edge",
       "byTitle": {
         "YouTube": {
-          "seekForward": { "key": "l", "verified": true, "note": "YouTube native +10s (L)" },
-          "seekBackward": { "key": "j", "verified": true, "note": "YouTube native -10s (J)" },
-          "fullscreen": { "key": "f", "verified": true, "note": "YouTube fullscreen (F)" }
+          "seekForward": { "key": "l", "verified": false, "note": "YouTube native +10s (L)" },
+          "seekBackward": { "key": "j", "verified": false, "note": "YouTube native -10s (J)" },
+          "fullscreen": { "key": "f", "verified": false, "note": "YouTube fullscreen (F)" }
         },
         "Netflix": {
-          "seekForward": { "key": "Right", "verified": true, "note": "Netflix 10s seek" },
-          "seekBackward": { "key": "Left", "verified": true, "note": "Netflix 10s seek" },
-          "fullscreen": { "key": "f", "verified": true, "note": "Netflix fullscreen" }
+          "seekForward": { "key": "Right", "verified": false, "note": "Netflix 10s seek" },
+          "seekBackward": { "key": "Left", "verified": false, "note": "Netflix 10s seek" },
+          "fullscreen": { "key": "f", "verified": false, "note": "Netflix fullscreen" }
         },
         "Prime Video": {
-          "seekForward": { "key": "Right", "verified": true, "note": "Prime Video 10s seek" },
-          "seekBackward": { "key": "Left", "verified": true, "note": "Prime Video 10s seek" },
-          "fullscreen": { "key": "f", "verified": true, "note": "Prime Video fullscreen" }
+          "seekForward": { "key": "Right", "verified": false, "note": "Prime Video 10s seek" },
+          "seekBackward": { "key": "Left", "verified": false, "note": "Prime Video 10s seek" },
+          "fullscreen": { "key": "f", "verified": false, "note": "Prime Video fullscreen" }
         }
       }
     },
@@ -55,41 +55,49 @@
       "name": "Mozilla Firefox",
       "byTitle": {
         "YouTube": {
-          "seekForward": { "key": "l", "verified": true, "note": "YouTube native +10s (L)" },
-          "seekBackward": { "key": "j", "verified": true, "note": "YouTube native -10s (J)" },
-          "fullscreen": { "key": "f", "verified": true, "note": "YouTube fullscreen (F)" }
+          "seekForward": { "key": "l", "verified": false, "note": "YouTube native +10s (L)" },
+          "seekBackward": { "key": "j", "verified": false, "note": "YouTube native -10s (J)" },
+          "fullscreen": { "key": "f", "verified": false, "note": "YouTube fullscreen (F)" }
         }
       }
     },
     "vlc.exe": {
       "name": "VLC Media Player",
-      "seekForward": { "key": "Right", "verified": true, "note": "VLC short jump 10s" },
-      "seekBackward": { "key": "Left", "verified": true, "note": "VLC short jump 10s" },
-      "fullscreen": { "key": "f", "verified": true, "note": "VLC toggle fullscreen" }
+      "seekForward": {
+        "key": "Alt+Right",
+        "verified": false,
+        "note": "VLC short jump 10s (Alt+Right). Documented jumps: Shift+Arrow=3s, Alt+Arrow=10s, Ctrl+Arrow=1m, Ctrl+Alt+Arrow=5m. Arbitrary seeks map to nearest jump or repeated keys."
+      },
+      "seekBackward": {
+        "key": "Alt+Left",
+        "verified": false,
+        "note": "VLC short jump 10s (Alt+Left). Documented jumps: Shift+Arrow=3s, Alt+Arrow=10s, Ctrl+Arrow=1m, Ctrl+Alt+Arrow=5m. Arbitrary seeks map to nearest jump or repeated keys."
+      },
+      "fullscreen": { "key": "f", "verified": false, "note": "VLC toggle fullscreen" }
     },
     "mpv.exe": {
       "name": "mpv Video Player",
-      "seekForward": { "key": "Right", "verified": true, "note": "mpv forward 5s" },
-      "seekBackward": { "key": "Left", "verified": true, "note": "mpv backward 5s" },
-      "fullscreen": { "key": "f", "verified": true, "note": "mpv toggle fullscreen" }
+      "seekForward": { "key": "Right", "verified": false, "note": "mpv forward 5s" },
+      "seekBackward": { "key": "Left", "verified": false, "note": "mpv backward 5s" },
+      "fullscreen": { "key": "f", "verified": false, "note": "mpv toggle fullscreen" }
     },
     "mpc-hc64.exe": {
       "name": "Media Player Classic (MPC-HC)",
-      "seekForward": { "key": "Right", "verified": true, "note": "MPC-HC forward" },
-      "seekBackward": { "key": "Left", "verified": true, "note": "MPC-HC backward" },
+      "seekForward": { "key": "Right", "verified": false, "note": "MPC-HC forward" },
+      "seekBackward": { "key": "Left", "verified": false, "note": "MPC-HC backward" },
       "fullscreen": { "key": "f", "verified": false, "note": "MPC-HC fullscreen or Alt+Enter" }
     },
     "mpc-be64.exe": {
       "name": "MPC-BE",
-      "seekForward": { "key": "Right", "verified": true, "note": "MPC-BE forward" },
-      "seekBackward": { "key": "Left", "verified": true, "note": "MPC-BE backward" },
+      "seekForward": { "key": "Right", "verified": false, "note": "MPC-BE forward" },
+      "seekBackward": { "key": "Left", "verified": false, "note": "MPC-BE backward" },
       "fullscreen": { "key": "f", "verified": false, "note": "MPC-BE fullscreen" }
     },
     "potplayer64.exe": {
       "name": "Daum PotPlayer",
-      "seekForward": { "key": "Right", "verified": true, "note": "PotPlayer 5s jump" },
-      "seekBackward": { "key": "Left", "verified": true, "note": "PotPlayer 5s jump" },
-      "fullscreen": { "key": "Enter", "verified": true, "note": "PotPlayer fullscreen toggle" }
+      "seekForward": { "key": "Right", "verified": false, "note": "PotPlayer 5s jump" },
+      "seekBackward": { "key": "Left", "verified": false, "note": "PotPlayer 5s jump" },
+      "fullscreen": { "key": "Enter", "verified": false, "note": "PotPlayer fullscreen toggle" }
     },
     "spotify.exe": {
       "name": "Spotify Desktop",

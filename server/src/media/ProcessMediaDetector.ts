@@ -176,8 +176,10 @@ export function synthesizeProcessSessions(
 /**
  * Maps seek delta in seconds to VLC hotkey.
  * Shift+Left/Right: very short jump (3s)
- * Ctrl+Left/Right: short jump (10s)
- * Alt+Left/Right: medium jump (1m)
+ * Alt+Left/Right: short jump (10s)
+ * Ctrl+Left/Right: medium jump (1m)
+ * Ctrl+Alt+Left/Right: long jump (5m)
+ * Note: Until confirmed on Allen's PC, verified is false.
  */
 export function mapSeekSecondsToVlcHotkey(seconds: number): { key: string; verified: boolean; label: string } {
   const abs = Math.abs(seconds);
@@ -186,22 +188,30 @@ export function mapSeekSecondsToVlcHotkey(seconds: number): { key: string; verif
   if (abs <= 3) {
     return {
       key: isFwd ? 'Shift+Right' : 'Shift+Left',
-      verified: true,
+      verified: false,
       label: 'VLC very short jump 3s (Shift+Arrow)',
     };
   }
 
   if (abs <= 15) {
     return {
+      key: isFwd ? 'Alt+Right' : 'Alt+Left',
+      verified: false,
+      label: 'VLC short jump 10s (Alt+Arrow)',
+    };
+  }
+
+  if (abs <= 120) {
+    return {
       key: isFwd ? 'Ctrl+Right' : 'Ctrl+Left',
-      verified: true,
-      label: 'VLC short jump 10s (Ctrl+Arrow)',
+      verified: false,
+      label: 'VLC medium jump 1m (Ctrl+Arrow)',
     };
   }
 
   return {
-    key: isFwd ? 'Alt+Right' : 'Alt+Left',
-    verified: true,
-    label: 'VLC medium jump 1m (Alt+Arrow)',
+    key: isFwd ? 'Ctrl+Alt+Right' : 'Ctrl+Alt+Left',
+    verified: false,
+    label: 'VLC long jump 5m (Ctrl+Alt+Arrow)',
   };
 }

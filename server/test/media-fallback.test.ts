@@ -128,37 +128,37 @@ describe('Media Fallback Detection & Session Synthesis', () => {
       // 3s very short jump
       expect(mapSeekSecondsToVlcHotkey(3)).toEqual({
         key: 'Shift+Right',
-        verified: true,
+        verified: false,
         label: 'VLC very short jump 3s (Shift+Arrow)',
       });
       expect(mapSeekSecondsToVlcHotkey(-3)).toEqual({
         key: 'Shift+Left',
-        verified: true,
+        verified: false,
         label: 'VLC very short jump 3s (Shift+Arrow)',
       });
 
       // 10s short jump
       expect(mapSeekSecondsToVlcHotkey(10)).toEqual({
-        key: 'Ctrl+Right',
-        verified: true,
-        label: 'VLC short jump 10s (Ctrl+Arrow)',
+        key: 'Alt+Right',
+        verified: false,
+        label: 'VLC short jump 10s (Alt+Arrow)',
       });
       expect(mapSeekSecondsToVlcHotkey(-10)).toEqual({
-        key: 'Ctrl+Left',
-        verified: true,
-        label: 'VLC short jump 10s (Ctrl+Arrow)',
+        key: 'Alt+Left',
+        verified: false,
+        label: 'VLC short jump 10s (Alt+Arrow)',
       });
 
       // 60s medium jump
       expect(mapSeekSecondsToVlcHotkey(60)).toEqual({
-        key: 'Alt+Right',
-        verified: true,
-        label: 'VLC medium jump 1m (Alt+Arrow)',
+        key: 'Ctrl+Right',
+        verified: false,
+        label: 'VLC medium jump 1m (Ctrl+Arrow)',
       });
       expect(mapSeekSecondsToVlcHotkey(-60)).toEqual({
-        key: 'Alt+Left',
-        verified: true,
-        label: 'VLC medium jump 1m (Alt+Arrow)',
+        key: 'Ctrl+Left',
+        verified: false,
+        label: 'VLC medium jump 1m (Ctrl+Arrow)',
       });
     });
 
@@ -191,21 +191,21 @@ describe('Media Fallback Detection & Session Synthesis', () => {
         getForegroundApp: () => ({ processName: 'explorer.exe', title: 'File Explorer' }),
       });
 
-      // Seek forward 10 seconds (Ctrl+Right)
+      // Seek forward 10 seconds (Alt+Right)
       const res10 = await router.route('seekby', 10, vlcSession.id);
       expect(res10.handled).toBe(true);
       expect(res10.tier).toBe(3);
-      expect(keyComboSpy).toHaveBeenCalledWith('Ctrl+Right');
+      expect(keyComboSpy).toHaveBeenCalledWith('Alt+Right');
 
       // Seek backward 3 seconds (Shift+Left)
       const res3 = await router.route('seekby', -3, vlcSession.id);
       expect(res3.handled).toBe(true);
       expect(keyComboSpy).toHaveBeenCalledWith('Shift+Left');
 
-      // Seek forward 60 seconds (Alt+Right)
+      // Seek forward 60 seconds (Ctrl+Right)
       const res60 = await router.route('seekby', 60, vlcSession.id);
       expect(res60.handled).toBe(true);
-      expect(keyComboSpy).toHaveBeenCalledWith('Alt+Right');
+      expect(keyComboSpy).toHaveBeenCalledWith('Ctrl+Right');
 
       keyComboSpy.mockRestore();
     });
