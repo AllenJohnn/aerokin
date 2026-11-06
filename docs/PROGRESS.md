@@ -6,14 +6,17 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: PART A COMPLETED (Remote Auth Redesign, Signaling Hardening, Real WebRTC Host & Integration Tests).
-  - **A1 Completed**: Signaling auth redesigned with random 256-bit `agentSecret` (stored in `.certs/pc-identity.json`, never logged), derived client `signalingToken = HMAC-SHA256(rawCredential, "aerokin-signaling-v1")`, and `clientTokenHashes` dynamic registration. Completely removed `sha256(pcId)` fallback.
-  - **A2 Completed**: Signaling hardened with strict `ALLOWED_ORIGINS`, authenticated `/turn-credentials`, rate limiting, temporary IP ban after 5 auth failures, max 8 sessions, 60s idle timeout, coturn template with private IP denial ranges and quotas, `deploy/.env.example`, and secret generation scripts (`generate-secrets.sh`, `generate-secrets.ps1`).
-  - **A3 Completed**: Real-socket integration test suite (`server/test/real-remote-auth.test.ts`) on loopback proving end-to-end registration, phone join with derived token, offer/answer/ICE candidate exchange, DataChannel open, in-band auth verification, control round-trip, revoked token rejection, wrong token rejection, and IP lockout.
-  - **A4 Completed**: Remote pairing over RTC control channel with 8-digit code, PC approval, lockout throttles; replaced `aerokin://pair` link with HTTPS link to hosted PWA with URL fragment: `https://<hosted-pwa>/#agent=<id>&signal=<host>&code=<8-digit>` (PWA reads and immediately strips fragment from history). Added `remoteAccess` toggle (default OFF) and `remotePower` toggle (power actions disabled by default for remote devices).
-  - **A5 Completed**: Honest connection state derived strictly from WebRTC `getStats()` selected candidate pair (`host`/`srflx` = direct, `relay` = relay); telemetry tracks RTT/jitter/bitrate; clear error states; automatic ICE restart on network reconnect.
-  - **C2 Completed**: File transfer upload disabled by default with `fileUpload` setting toggle; verified with unit tests.
-- **Exact Next Step**: Part B1 - Author comprehensive documentation suite (`docs/DEPLOY-VPS.md`, `docs/REMOTE-TEST.md`, `docs/architecture.md`, `docs/protocol.md` + drift test, `docs/webrtc-decision.md`, `docs/ROADMAP.md`, `docs/security-model.md`, `docs/TEST-MATRIX.md`, `docs/DEVICE-TEST-CHECKLIST.md`).
+- **Current Milestone**: PART B1 COMPLETED (Comprehensive Documentation Suite & Automated Protocol Drift Test).
+  - **B1 Completed**:
+    - `docs/DEPLOY-VPS.md`: Complete Ubuntu 24.04 VPS guide for Hetzner/DigitalOcean/OVH, UFW firewall rules, Docker compose deployment, secret generation, certificate management, logging, rollback, and bandwidth warning (video relay over cellular).
+    - `docs/REMOTE-TEST.md`: Step-by-step instructions for Allen's iPhone mobile-data test (WiFi OFF, cellular ON, expected connection badge DIRECT P2P vs TURN RELAY, latency, video feed).
+    - `docs/architecture.md`: Architectural diagrams covering multi-path transport hierarchy (LAN Direct vs WebRTC P2P vs Coturn Relay), signaling protocol & in-band mutual authentication sequence, remote URL fragment pairing, and Windows desktop capture pipeline.
+    - `docs/protocol.md` + `server/test/protocol-drift.test.ts`: Complete protocol specification and automated CI test verifying 0 drift between protocol definitions, constants, and documentation.
+    - `docs/webrtc-decision.md`: ADR detailing node-datachannel vs WebSocket relay, Head-of-Line blocking mitigation, and NAT traversal benchmarks.
+    - `docs/ROADMAP.md`: Honest capability breakdown across Done, Partial, and Not Started milestones.
+    - `docs/security-model.md`: Updated threat model defining exactly what signaling server sees (ephemeral token hashes, candidate metadata) vs what it cannot see (raw credentials, input packets, video stream).
+    - `docs/TEST-MATRIX.md` & `docs/DEVICE-TEST-CHECKLIST.md`: Full verification coverage matrix (341 tests) and physical iPhone test protocol.
+- **Exact Next Step**: Part B2 - Multi-viewport UI audit across 7 viewports (375x667, 390x844@3x, 430x932, 360x740, 768x1024, landscape 844x390, dashboard 1440x900/1024x768) in light and dark mode, layout verifier, and `docs/UI-AUDIT.md`.
 - **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
