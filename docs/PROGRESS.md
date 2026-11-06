@@ -6,10 +6,27 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 9 (Windows CI, Installer, FFmpeg Provisioning).
-- **Exact Next Step**: Configure GitHub Actions CI workflow for Windows tests and safety check, implement FFmpeg provisioning script, commit and tag `stable-p9`.
+- **Current Milestone**: Part 9 Complete (Windows CI Matrix, Safety Gates, FFmpeg Provisioning, Quick Launcher); proceeding to commit Part 9 and tag `stable-p9`.
+- **Exact Next Step**: Commit `ci(windows): configure multi-os CI matrix, safety gate, ffmpeg provisioning script, and Windows launcher`, push, tag `stable-p9`, then proceed to Part 10 (Tray Icon & Pause Switch).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 9: Windows CI, Installer & FFmpeg Provisioning (Completed)
+- **9.1 Multi-OS GitHub Actions Matrix (`.github/workflows/ci.yml`)**:
+  - Configured CI matrix covering both `windows-latest` (native Win32/Koffi runtime, PowerShell sidecars) and `ubuntu-latest` (cross-platform verification).
+  - Hardened type-checking across all workspace packages (`@aerokin/design-system`, `aerokin-server`, `aerokin-pwa`, `aerokin-signaling`).
+  - Added test suites for signaling, server, and PWA clients.
+- **9.2 Hard Static Safety Gate**:
+  - Embedded `pnpm run safety:check` as the mandatory first gate in every CI run.
+  - Automatically fails the build if any forbidden power command (`shutdown.exe`, `powrprof.dll`, `SetSuspendState`, etc.) or real test imports exist.
+- **9.3 Automated FFmpeg Provisioning Tool (`scripts/provision-ffmpeg.ps1`)**:
+  - Automated PowerShell script that checks local `tools/ffmpeg/bin/ffmpeg.exe` and PATH.
+  - Automatically downloads and extracts official Gyan.dev FFmpeg Essentials release for Windows if not present.
+  - Automatically probes and validates hardware acceleration (`h264_nvenc` for NVIDIA, `h264_mf` for MediaFoundation, `libx264` software).
+- **9.4 Windows 1-Click Launcher (`scripts/start-aerokin.bat`)**:
+  - Added simple double-clickable batch launcher verifying pnpm, running the FFmpeg provisioning check, and starting the server on Windows.
 
 ---
 
@@ -243,7 +260,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 6** | All Existing Features over New Transport | COMPLETED | Tagged `stable-p6`. WebRTC DataChannels (input/stats/media/clipboard/control) & SignalingClient. |
 | **Part 7** | User Experience Refinement | COMPLETED | Tagged `stable-p7`. Trackpad haptics/sensitivities, sticky modifiers, desktop pinch-to-zoom. |
 | **Part 8** | Design System + "Picture Perfect" UI Pass | COMPLETED | Tagged `stable-p8`. True-black OLED tokens, typography hierarchy, anti-generic visual polish. |
-| **Part 9** | Windows CI, Installer, FFmpeg Provisioning | PENDING | |
+| **Part 9** | Windows CI, Installer, FFmpeg Provisioning | COMPLETED | Tagged `stable-p9`. Multi-OS CI, static safety gate, Gyan FFmpeg provisioning script, launcher. |
 | **Part 10** | Tray Icon + Pause Switch | PENDING | |
 | **Part 11** | Saved PCs (Multi-PC Support) | PENDING | |
 | **Part 12** | Feature Additions (Keyboard, Gestures, Tools, File Transfer) | PENDING | |
