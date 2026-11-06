@@ -33,6 +33,8 @@ import {
   ArrowUp,
   ArrowDown,
   ListChecks,
+  Pause,
+  Play,
 } from '@phosphor-icons/react';
 
 export interface FeatureFlags {
@@ -128,6 +130,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   const [recentActions, setRecentActions] = useState<RecentAction[]>([]);
   const [clipboardSharedCount, setClipboardSharedCount] = useState<number>(0);
   const [systemTelemetry, setSystemTelemetry] = useState<any>(null);
+  const [isInputPaused, setIsInputPaused] = useState<boolean>(false);
 
   // QR Code data URLs
   const [pairQrUrl, setPairQrUrl] = useState<string | null>(null);
@@ -191,7 +194,17 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
           if (typeof data.clipboardSharedCount === 'number') {
             setClipboardSharedCount(data.clipboardSharedCount);
           }
+          if (typeof data.isPaused === 'boolean') {
+            setIsInputPaused(data.isPaused);
+          }
           if (data.systemStats) setSystemTelemetry(data.systemStats);
+        } catch {}
+      });
+
+      sse.addEventListener('pause_status', (e) => {
+        try {
+          const p = JSON.parse(e.data);
+          if (p && typeof p.paused === 'boolean') setIsInputPaused(p.paused);
         } catch {}
       });
 
@@ -440,6 +453,20 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     } catch {}
   };
 
+  const handleTogglePause = async () => {
+    try {
+      const res = await fetch('/api/dashboard/pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: !isInputPaused }),
+      });
+      const data = await res.json();
+      if (typeof data.paused === 'boolean') {
+        setIsInputPaused(data.paused);
+      }
+    } catch {}
+  };
+
   const handleRespondApproval = async (approved: boolean) => {
     if (!pendingApproval) return;
     try {
@@ -611,6 +638,33 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Remote Input Pause Toggle */}
+            <button
+              onClick={handleTogglePause}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+                isInputPaused
+                  ? 'border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400'
+                  : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground'
+              }`}
+              title={
+                isInputPaused
+                  ? 'Remote input is currently paused. Click to resume.'
+                  : 'Immediately pause remote touch/mouse/keyboard input from all connected phones.'
+              }
+            >
+              {isInputPaused ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span>Input Paused (Click to Resume)</span>
+                </>
+              ) : (
+                <>
+                  <Pause size={14} />
+                  <span>Pause Input</span>
+                </>
+              )}
+            </button>
+
             {/* Live Indicator */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs font-mono">
               <span

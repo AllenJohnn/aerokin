@@ -6,10 +6,31 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 10 (Tray Icon & Pause Switch - Windows System Tray Indicator, Pause Input Toggle, and Dashboard Loopback Controls).
-- **Exact Next Step**: Implement Tray / Pause Switch service and loopback dashboard controls, commit and tag `stable-p10`.
+- **Current Milestone**: Part 11 (Saved PCs & Multi-PC Switcher UI in PWA).
+- **Exact Next Step**: Implement Multi-PC Switcher and Management UI in PWA (Header/Settings Drawer), commit and tag `stable-p11`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 10: Tray Icon & Pause Switch (Completed)
+- **10.1 Remote Input Pause Subsystem (`server.ts`)**:
+  - Implemented server-side `isInputPaused` state and `setInputPaused(paused: boolean)` switch.
+  - Added loopback-only REST endpoints `GET /api/dashboard/pause` and `POST /api/dashboard/pause` (403 Forbidden for external/LAN clients).
+  - Synchronized pause status across all connected WebSockets via initial `input_pause_status` handshake event and real-time broadcast.
+  - Hardened input message filter: when paused, all incoming remote touch, mouse, and keyboard messages (`move`, `click`, `button`, `scroll`, `abs_move`, `abs_click`, `abs_button`, `key`, `text`, `quick_action`) are immediately dropped and return `{ type: 'error', error: 'Remote input is paused by PC operator' }`.
+- **10.2 Windows System Tray Sidecar (`server/scripts/tray-sidecar.ps1`)**:
+  - Implemented Windows system notification area helper using `System.Windows.Forms.NotifyIcon`.
+  - Added 1-click context menu actions: "Open PC Dashboard", "Pause Remote Input" (with checkmark and balloon tip notifications), "Generate Pairing Code" (shows 8-digit code in balloon notification), and "Exit".
+  - Runs local loopback polling timer to synchronize the pause checkmark with server state.
+- **10.3 PC Dashboard UI Controls (`DesktopDashboard.tsx`)**:
+  - Added live pause switch indicator and action button in PC Dashboard header.
+  - Visual status changes dynamically: pulses rose red with "Input Paused (Click to Resume)" when active, and displays standard "Pause Input" control when running normally.
+  - Listens to server SSE `pause_status` events for instant multi-window sync.
+- **10.4 Test Verification**:
+  - Added unit test suite `server/test/pause-switch.test.ts` (2 tests passing) validating initial connect handshake, broadcast events, and remote input dropping.
+  - Added loopback security test suite in `server/test/dashboard-endpoints.test.ts` (10 tests passing).
+  - PWA production bundle rebuilt and validated.
 
 ---
 

@@ -257,4 +257,46 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.success).toBe('boolean');
   });
+
+  it('manages remote input pause state via GET and POST /api/dashboard/pause (loopback only)', async () => {
+    // Initial status: paused is false
+    const initRes = await mockRequest('GET', '/api/dashboard/pause', '127.0.0.1');
+    expect(initRes.status).toBe(200);
+    expect(initRes.body.paused).toBe(false);
+    expect(serverInstance.isInputPaused()).toBe(false);
+
+    // Toggle pause to true
+    const pauseRes = await mockRequest('POST', '/api/dashboard/pause', '127.0.0.1', {
+      paused: true,
+    });
+    expect(pauseRes.status).toBe(200);
+    expect(pauseRes.body.ok).toBe(true);
+    expect(pauseRes.body.paused).toBe(true);
+    expect(serverInstance.isInputPaused()).toBe(true);
+
+    // Verify GET reflects paused: true
+    const checkRes = await mockRequest('GET', '/api/dashboard/pause', '127.0.0.1');
+    expect(checkRes.status).toBe(200);
+    expect(checkRes.body.paused).toBe(true);
+
+    // Toggle pause back to false
+    const resumeRes = await mockRequest('POST', '/api/dashboard/pause', '127.0.0.1', {
+      paused: false,
+    });
+    expect(resumeRes.status).toBe(200);
+    expect(resumeRes.body.ok).toBe(true);
+    expect(resumeRes.body.paused).toBe(false);
+    expect(serverInstance.isInputPaused()).toBe(false);
+
+    // Verify remote LAN requests are rejected with 403 Forbidden
+    const lanGetRes = await mockRequest('GET', '/api/dashboard/pause', '192.168.1.100');
+    expect(lanGetRes.status).toBe(403);
+    expect(lanGetRes.body.error).toContain('Loopback only');
+
+    const lanPostRes = await mockRequest('POST', '/api/dashboard/pause', '192.168.1.100', {
+      paused: true,
+    });
+    expect(lanPostRes.status).toBe(403);
+    expect(lanPostRes.body.error).toContain('Loopback only');
+  });
 });

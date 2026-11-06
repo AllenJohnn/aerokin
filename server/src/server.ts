@@ -116,6 +116,20 @@ export function startServer(config: ServerConfig): {
 
   let lastLatency: number | null = null;
   const eventBuffer: ActivityEvent[] = [];
+  let isInputPaused = false;
+
+  function setInputPaused(paused: boolean) {
+    isInputPaused = paused;
+    recordEvent('security', `Remote input ${isInputPaused ? 'PAUSED' : 'RESUMED'} by PC operator`);
+    broadcastDashboardEvent('pause_status', { paused: isInputPaused });
+    for (const ws of activeSockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: 'input_pause_status', paused: isInputPaused }));
+        } catch {}
+      }
+    }
+  }
 
   function broadcastDashboardEvent(event: string, data: any) {
     if (sseClients.size === 0) return;
@@ -220,6 +234,7 @@ export function startServer(config: ServerConfig): {
       },
       desktop: streamService.getSessionInfo(),
       media: mediaManager.getCurrentStatus(),
+      isPaused: isInputPaused,
       pc: {
         hostname: os.hostname(),
         lanIp: config.lanIp,
@@ -703,6 +718,28 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true });
   });
 
+  // REST API: Get Remote Input Pause Status - LOOPBACK ONLY (403 for LAN)
+  app.get('/api/dashboard/pause', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    res.json({ paused: isInputPaused });
+  });
+
+  // REST API: Toggle Remote Input Pause Status - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/dashboard/pause', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    const { paused } = req.body || {};
+    setInputPaused(Boolean(paused));
+    res.json({ ok: true, paused: isInputPaused });
+  });
+
   // REST API: Stop Desktop Remote Stream - LOOPBACK ONLY (403 for LAN)
   app.post('/api/desktop/stop', async (req, res) => {
     if (!isLoopback(req)) {
@@ -1039,6 +1076,7 @@ export function startServer(config: ServerConfig): {
         })
       );
       ws.send(JSON.stringify({ type: 'hello', ok: true }));
+      ws.send(JSON.stringify({ type: 'input_pause_status', paused: isInputPaused }));
 
       // Send initial media status and sessions list
       const initialStatus = mediaManager.getCurrentStatus();
@@ -1130,6 +1168,32 @@ export function startServer(config: ServerConfig): {
             );
           }
           return;
+        }
+
+        if (isInputPaused) {
+          const inputTypes = [
+            'move',
+            'click',
+            'button',
+            'scroll',
+            'abs_move',
+            'abs_click',
+            'abs_button',
+            'key',
+            'text',
+            'quick_action',
+          ];
+          if (inputTypes.includes(msg.type)) {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'error',
+                  error: 'Remote input is paused by PC operator',
+                })
+              );
+            }
+            return;
+          }
         }
 
         switch (msg.type) {
@@ -1596,6 +1660,8 @@ export function startServer(config: ServerConfig): {
     screenshotService,
     quickActionService,
     signalingClient,
+    isInputPaused: () => isInputPaused,
+    setInputPaused,
     revokeDevice,
     revokeAll,
     broadcastDevices,
