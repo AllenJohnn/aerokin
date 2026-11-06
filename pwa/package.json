@@ -10,7 +10,8 @@
     "build": "node scripts/generate-icons.mjs && tsc && vite build",
     "build:hosted": "tsc && vite build --mode hosted --outDir dist",
     "capture-screenshots": "node scripts/capture-screenshots.mjs",
-    "test:inputs": "node scripts/test-input-visibility.mjs"
+    "test:inputs": "node scripts/test-input-visibility.mjs",
+    "test:audit": "node scripts/audit-viewports.mjs"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.1.0",

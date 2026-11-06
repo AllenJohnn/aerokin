@@ -6,17 +6,19 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: PART B1 COMPLETED (Comprehensive Documentation Suite & Automated Protocol Drift Test).
-  - **B1 Completed**:
-    - `docs/DEPLOY-VPS.md`: Complete Ubuntu 24.04 VPS guide for Hetzner/DigitalOcean/OVH, UFW firewall rules, Docker compose deployment, secret generation, certificate management, logging, rollback, and bandwidth warning (video relay over cellular).
-    - `docs/REMOTE-TEST.md`: Step-by-step instructions for Allen's iPhone mobile-data test (WiFi OFF, cellular ON, expected connection badge DIRECT P2P vs TURN RELAY, latency, video feed).
-    - `docs/architecture.md`: Architectural diagrams covering multi-path transport hierarchy (LAN Direct vs WebRTC P2P vs Coturn Relay), signaling protocol & in-band mutual authentication sequence, remote URL fragment pairing, and Windows desktop capture pipeline.
-    - `docs/protocol.md` + `server/test/protocol-drift.test.ts`: Complete protocol specification and automated CI test verifying 0 drift between protocol definitions, constants, and documentation.
-    - `docs/webrtc-decision.md`: ADR detailing node-datachannel vs WebSocket relay, Head-of-Line blocking mitigation, and NAT traversal benchmarks.
-    - `docs/ROADMAP.md`: Honest capability breakdown across Done, Partial, and Not Started milestones.
-    - `docs/security-model.md`: Updated threat model defining exactly what signaling server sees (ephemeral token hashes, candidate metadata) vs what it cannot see (raw credentials, input packets, video stream).
-    - `docs/TEST-MATRIX.md` & `docs/DEVICE-TEST-CHECKLIST.md`: Full verification coverage matrix (341 tests) and physical iPhone test protocol.
-- **Exact Next Step**: Part B2 - Multi-viewport UI audit across 7 viewports (375x667, 390x844@3x, 430x932, 360x740, 768x1024, landscape 844x390, dashboard 1440x900/1024x768) in light and dark mode, layout verifier, and `docs/UI-AUDIT.md`.
+- **Current Milestone**: PART B2 COMPLETED (Playwright Multi-Viewport UI Audit & Layout Verification).
+  - **B2 Completed**:
+    - Ran comprehensive automated layout verifier (`pwa/scripts/audit-viewports.mjs`, `pnpm --filter aerokin-pwa run test:audit`) across 7 viewports:
+      1. `375x667` (iPhone SE compact)
+      2. `390x844` (iPhone 12/13/14 baseline @3x DPR)
+      3. `430x932` (iPhone 14/15/16 Pro Max large display)
+      4. `360x740` (Android baseline)
+      5. `768x1024` (iPad vertical)
+      6. `844x390` (iPhone landscape)
+      7. `1440x900` & `1024x768` (Desktop Management Dashboard)
+    - Tested in both dark (OLED `#000000`) and light modes.
+    - Verified zero horizontal overflow (`scrollWidth <= innerWidth`), 16px iOS zoom-safe font sizes, 18.16:1 contrast ratio, safe-area navigation clearance, and generated `docs/UI-AUDIT.md`.
+- **Exact Next Step**: Part B3 - Tooling, ESLint flat config + Prettier across packages, vitest v8 coverage thresholds, and GitHub Actions CI workflow check (`.github/workflows/ci.yml`).
 - **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
