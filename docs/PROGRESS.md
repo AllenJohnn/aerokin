@@ -6,10 +6,33 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 7 (User Experience Refinement - Trackpad, Mobile Keyboard, Multi-touch Gestures, Zoom/Pan).
-- **Exact Next Step**: Implement Part 7 UX refinements, commit and tag `stable-p7`.
+- **Current Milestone**: Part 7 Complete (User Experience Refinement: Trackpad Precision, Mobile Keyboard, Modifiers, Smooth Pinch/Pan); proceeding to commit Part 7 and tag `stable-p7`.
+- **Exact Next Step**: Commit `feat(ux): refine trackpad gestures, virtual modifier bar, shortcut chips, and smooth desktop pinch zoom`, push, tag `stable-p7`, then proceed to Part 8 (Design System & Picture Perfect Pass).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 7: User Experience Refinement (Completed)
+- **7.1 Trackpad Precision & Haptics (`TrackpadTab.tsx` & `trackpadGestures.ts`)**:
+  - Precision trackpad surface with pointer capture and multi-touch state machine.
+  - Sub-pixel cursor movement with configurable speed multiplier (0.5x–3.0x).
+  - Two-finger scrolling with natural vs traditional direction toggles.
+  - One-finger tap-to-click, two-finger right click, and tap-and-slide dragging with visual optic-red indicator.
+  - Haptic feedback pulses on clicks, detents, and drag engagements.
+- **7.2 Desktop Canvas Navigation & Zoom (`DesktopViewer.tsx`)**:
+  - Smooth 1x to 4x two-finger pinch-to-zoom with real-time midpoint delta panning.
+  - One-finger view panning when zoomed in.
+  - Double-tap zoom toggle and floating "Reset Zoom" pill for quick return to fit-to-screen.
+  - Exact inverse transformation projecting touch coordinates from zoomed/letterboxed canvas to remote Windows desktop coordinates.
+- **7.3 Virtual Keyboard & Sticky Modifier Bar**:
+  - Dedicated modifier bar for mobile Safari (`CTRL`, `ALT`, `SHIFT`, `WIN`) supporting sticky chord latching.
+  - Action keys row: `Esc`, `Tab`, `Enter`, `Backspace`, `Del`, `Space`, and arrow keys.
+  - Quick shortcut chips for high-frequency actions (`Ctrl+C`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+A`, `Ctrl+S`, `Alt+Tab`, `Win+D`, `Win+Tab`, `Alt+F4` with safety confirmation modal).
+  - Native iOS keyboard integration via focused off-screen input with 16px font-size to prevent Safari auto-zoom.
+- **7.4 Verification**:
+  - Unit tests in `pwa/test/desktopGesturesAndModifiers.test.ts` (8 tests) and `pwa/test/trackpadGestures.test.ts` (27 tests) passing.
+  - PWA production bundle rebuilt and validated.
 
 ---
 
@@ -202,7 +225,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 4** | WebRTC Transport + Connection Manager | COMPLETED | Tagged `stable-p4`. RtcTransport, DataChannel chunking, ConnectionManager multi-path. |
 | **Part 5** | Remote Pairing + Security | COMPLETED | Tagged `stable-p5`. Persistent PC identity, remote payload, SavedPc store, revocation. |
 | **Part 6** | All Existing Features over New Transport | COMPLETED | Tagged `stable-p6`. WebRTC DataChannels (input/stats/media/clipboard/control) & SignalingClient. |
-| **Part 7** | User Experience Refinement | PENDING | |
+| **Part 7** | User Experience Refinement | COMPLETED | Tagged `stable-p7`. Trackpad haptics/sensitivities, sticky modifiers, desktop pinch-to-zoom. |
 | **Part 8** | Design System + "Picture Perfect" UI Pass | PENDING | |
 | **Part 9** | Windows CI, Installer, FFmpeg Provisioning | PENDING | |
 | **Part 10** | Tray Icon + Pause Switch | PENDING | |

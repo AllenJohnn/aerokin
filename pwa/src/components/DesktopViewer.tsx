@@ -957,7 +957,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-3 left-1/2 -translate-x-1/2 w-[95%] max-w-lg bg-[#121217]/95 border border-border/80 rounded-2xl p-2.5 shadow-2xl backdrop-blur-xl z-40 flex flex-col gap-2"
+            className="absolute top-3 left-1/2 -translate-x-1/2 w-[95%] max-w-lg bg-[#0A0A0A]/95 border border-border/80 rounded-2xl p-2.5 shadow-2xl backdrop-blur-xl z-40 flex flex-col gap-2"
           >
             {/* Top row: Sticky Modifiers and Virtual Keyboard trigger */}
             <div className="flex items-center justify-between gap-1.5">
@@ -1017,7 +1017,7 @@ export const DesktopViewer: React.FC<DesktopViewerProps> = ({
 
             {/* Third row: Shortcut Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-              {['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Alt+Tab', 'Win+D', 'Alt+F4'].map((chip) => (
+              {['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+A', 'Ctrl+S', 'Alt+Tab', 'Win+D', 'Win+Tab', 'Alt+F4'].map((chip) => (
                 <button
                   key={chip}
                   onClick={() => handleShortcutChip(chip)}
