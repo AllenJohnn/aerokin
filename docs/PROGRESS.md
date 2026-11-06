@@ -6,10 +6,33 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: ALL PARTS COMPLETED (Part 0 through Part 17).
-- **Exact Next Step**: Project goal fulfilled. Remote WebRTC & LAN multi-path transport, Desktop 2.0 H.264 NVENC pipeline, true-black OLED mobile PWA, security & safety guards S1-S9, and documentation fully verified.
-- **Blocked Items**: None.
-- **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+- **Current Milestone**: PART A (REMOTE AUTH REDESIGN & SIGNALING HARDENING) IN PROGRESS.
+  - **A1 Completed**: Signaling auth redesigned with random 256-bit `agentSecret` (stored in `.certs/pc-identity.json`, never logged), derived client `signalingToken = HMAC-SHA256(rawCredential, "aerokin-signaling-v1")`, and `clientTokenHashes` dynamic registration. Completely removed `sha256(pcId)` fallback.
+  - **A2 Completed**: Signaling hardened with strict `ALLOWED_ORIGINS`, authenticated `/turn-credentials`, rate limiting, temporary IP ban after 5 auth failures, max 8 sessions, 60s idle timeout, coturn template with private IP denial ranges and quotas, `deploy/.env.example`, and secret generation scripts (`generate-secrets.sh`, `generate-secrets.ps1`).
+- **Exact Next Step**: Part A3 - Author real-socket integration test suite on loopback proving end-to-end registration, phone join with derived token, offer/answer/ICE candidate exchange, revoked token rejection, wrong token rejection, and IP lockout.
+- **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
+- **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part A: Remote Auth Redesign & Infrastructure Hardening (In Progress)
+- **A1 Signaling Authentication Redesign (Completed)**:
+  - Redesigned host agent presence authentication: host generates random 256-bit `agentSecret` on first boot, stored in `.certs/pc-identity.json` with 0600 permissions, never printed or logged.
+  - Signaling server stores `sha256(agentSecret)`; first registration claims the room; subsequent reconnections verify with constant-time comparison `timingSafeEqualHex`.
+  - Client authentication token derivation: phones never receive `agentSecret`. Each paired device derives `signalingToken = HMAC-SHA256(rawCredential, "aerokin-signaling-v1")`.
+  - Dynamic token synchronization: Host agent syncs `sha256(signalingToken)` to signaling server via `add_client_token` on device approval, and removes via `remove_client_token` on revocation.
+  - Phone joins signaling with `signalingToken`; signaling server never receives raw credentials. In-band mutual authentication completes over WebRTC DataChannel.
+  - Completely eradicated default `sha256(pcId)` guessable secret fallback across all packages.
+- **A2 Signaling Hardening & Coturn Infrastructure as Code (Completed)**:
+  - Enforced strict Origin validation from `ALLOWED_ORIGINS` across HTTP and WebSocket upgrade; removed wildcard `*` CORS.
+  - Authenticated `/turn-credentials` requiring valid registered agent or client token with TTL.
+  - Implemented per-IP rate limiting (120 msg/min) and automatic 5-minute ban upon 5 consecutive authentication failures.
+  - Capped maximum active sessions to 8 per room, 64KB message payload size limit, and 60s idle timeout with proactive ping/pong termination.
+  - Refusal to start without `TURN_SECRET` in production.
+  - Removed hardcoded fallback secret from `server.ts`, `docker-compose.yml`, and `turnserver.conf`.
+  - Created `turnserver.conf.template` with private network `denied-peer-ip` ranges (RFC 1918, CGNAT, loopback), quotas (`total-quota=100`, `user-quota=12`), and bounded WebRTC relay port range 49152-65535.
+  - Added `signaling/deploy/.env.example` with clear setup documentation.
+  - Created `scripts/generate-secrets.sh` and `scripts/generate-secrets.ps1` for generating high-entropy cryptographic secrets.
 
 ---
 

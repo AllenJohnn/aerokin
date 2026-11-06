@@ -93,7 +93,7 @@ export class ConnectionManager implements Connection {
       signalingUrl: this.options.signalingUrl,
       pcId: this.options.pcId,
       clientId: this.options.deviceId,
-      authSecret: this.options.credential,
+      credential: this.options.credential,
       onModeChange: (m) => {
         this.currentMode = m;
         this.options.onModeChange?.(m);

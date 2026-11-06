@@ -4,6 +4,7 @@ import {
   ConnectionMode,
   ChannelName,
 } from './Connection';
+import { deriveSignalingToken } from './tokens';
 
 export interface RtcChunkHeader {
   messageId: number;
@@ -139,7 +140,9 @@ export interface RtcTransportOptions {
   signalingUrl: string;
   pcId: string;
   clientId: string;
-  authSecret: string;
+  credential?: string;
+  signalingToken?: string;
+  authSecret?: string; // legacy alias
   onModeChange?: (mode: ConnectionMode) => void;
   onLatencyUpdate?: (latencyMs: number) => void;
   iceServers?: RTCIceServer[];
@@ -177,9 +180,18 @@ export class RtcTransport implements Connection {
     return this.currentMode;
   }
 
-  private init(): void {
+  private async init(): Promise<void> {
     if (this.isClosed) return;
     try {
+      let token = this.options.signalingToken;
+      if (!token && (this.options.credential || this.options.authSecret)) {
+        try {
+          token = await deriveSignalingToken(this.options.credential || this.options.authSecret!);
+        } catch (err) {
+          console.error('[RtcTransport] Failed to derive signaling token:', err);
+        }
+      }
+
       this.ws = new WebSocket(this.options.signalingUrl);
       this.ws.binaryType = 'arraybuffer';
 
@@ -189,7 +201,7 @@ export class RtcTransport implements Connection {
             type: 'join',
             pcId: this.options.pcId,
             clientId: this.options.clientId,
-            authSecret: this.options.authSecret,
+            signalingToken: token,
           })
         );
       };

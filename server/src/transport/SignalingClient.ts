@@ -1,14 +1,15 @@
 import WebSocket from 'ws';
-import crypto from 'node:crypto';
 
 export interface SignalingClientOptions {
   signalingUrl: string;
   pcId: string;
-  authSecret?: string;
+  agentSecret: string;
+  clientTokenHashes?: string[];
   onRegistered?: (iceServers: any[]) => void;
   onStatusChange?: (connected: boolean) => void;
   onOffer?: (sourcePeerId: string, sdp: string) => void;
   onCandidate?: (sourcePeerId: string, candidate: any) => void;
+  onPeerJoined?: (peerId: string) => void;
   onPeerLeft?: (peerId: string) => void;
 }
 
@@ -21,7 +22,11 @@ export class SignalingClient {
   private registered = false;
 
   constructor(options: SignalingClientOptions) {
-    this.options = options;
+    if (!options.agentSecret || typeof options.agentSecret !== 'string') {
+      throw new Error('SignalingClient requires a non-empty agentSecret');
+    }
+    this.options = { ...options };
+    this.options.clientTokenHashes = [...(options.clientTokenHashes || [])];
     this.connect();
   }
 
@@ -36,11 +41,11 @@ export class SignalingClient {
       this.ws = new WebSocket(this.options.signalingUrl);
 
       this.ws.on('open', () => {
-        const authSecret = this.options.authSecret || crypto.createHash('sha256').update(this.options.pcId).digest('hex');
         this.send({
           type: 'register',
           pcId: this.options.pcId,
-          authSecret,
+          agentSecret: this.options.agentSecret,
+          clientTokenHashes: this.options.clientTokenHashes || [],
         });
 
         if (this.pingTimer) clearInterval(this.pingTimer);
@@ -61,9 +66,11 @@ export class SignalingClient {
             this.options.onRegistered?.(msg.iceServers || []);
             this.options.onStatusChange?.(true);
           } else if (msg.type === 'offer') {
-            this.options.onOffer?.(msg.sourcePeerId || msg.peerId, msg.sdp);
+            this.options.onOffer?.(msg.senderPeerId || msg.sourcePeerId || msg.peerId, msg.sdp);
           } else if (msg.type === 'candidate') {
-            this.options.onCandidate?.(msg.sourcePeerId || msg.peerId, msg.candidate);
+            this.options.onCandidate?.(msg.senderPeerId || msg.sourcePeerId || msg.peerId, msg.candidate);
+          } else if (msg.type === 'peer_joined') {
+            this.options.onPeerJoined?.(msg.peerId);
           } else if (msg.type === 'peer_left') {
             this.options.onPeerLeft?.(msg.peerId);
           }
@@ -86,10 +93,37 @@ export class SignalingClient {
     }
   }
 
+  public addClientToken(tokenHash: string): void {
+    if (!tokenHash) return;
+    if (this.options.clientTokenHashes && !this.options.clientTokenHashes.includes(tokenHash)) {
+      this.options.clientTokenHashes.push(tokenHash);
+    }
+    this.send({
+      type: 'add_client_token',
+      pcId: this.options.pcId,
+      agentSecret: this.options.agentSecret,
+      tokenHash,
+    });
+  }
+
+  public removeClientToken(tokenHash: string): void {
+    if (!tokenHash) return;
+    if (this.options.clientTokenHashes) {
+      this.options.clientTokenHashes = this.options.clientTokenHashes.filter((h) => h !== tokenHash);
+    }
+    this.send({
+      type: 'remove_client_token',
+      pcId: this.options.pcId,
+      agentSecret: this.options.agentSecret,
+      tokenHash,
+    });
+  }
+
   public sendAnswer(targetPeerId: string, sdp: string): void {
     this.send({
       type: 'answer',
       targetPeerId,
+      senderPeerId: this.options.pcId,
       sdp,
     });
   }
@@ -98,6 +132,7 @@ export class SignalingClient {
     this.send({
       type: 'candidate',
       targetPeerId,
+      senderPeerId: this.options.pcId,
       candidate,
     });
   }

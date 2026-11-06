@@ -55,6 +55,7 @@ describe('SignalingClient Suite', () => {
     const client = new SignalingClient({
       signalingUrl: `ws://127.0.0.1:${port}`,
       pcId: 'pc_test12345678',
+      agentSecret: 'mock-agent-secret-64-character-hex-string-for-pc-identity-01234567',
       onRegistered: (iceServers) => {
         clientRegistered = true;
         expect(iceServers.length).toBe(1);

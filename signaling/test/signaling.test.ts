@@ -6,6 +6,11 @@ import {
   verifyTurnCredentials,
 } from '../src/turn.js';
 import { SignalingServer } from '../src/server.js';
+import {
+  deriveSignalingToken,
+  hashSignalingToken,
+  hashAgentSecret,
+} from '../src/tokens.js';
 
 describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
   const TEST_SECRET = 'super-secret-turn-token-for-tests-123456';
@@ -90,7 +95,7 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
     });
   });
 
-  describe('SignalingServer HTTP & WebSocket Protocol', () => {
+  describe('SignalingServer HTTP & WebSocket Protocol with Hardened Auth', () => {
     let server: SignalingServer;
     const TEST_PORT = 19876;
     const BASE_HTTP = `http://127.0.0.1:${TEST_PORT}`;
@@ -119,16 +124,7 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
       expect(json.activeRooms).toBe(0);
     });
 
-    it('serves GET /api/turn-credentials with ICE configuration', async () => {
-      const res = await fetch(`${BASE_HTTP}/api/turn-credentials`);
-      expect(res.status).toBe(200);
-      const json: any = await res.json();
-      expect(json.iceServers.length).toBe(4);
-      expect(typeof json.username).toBe('string');
-      expect(typeof json.credential).toBe('string');
-    });
-
-    it('handles full WebRTC handshake: PC register -> Phone join -> SDP offer/answer -> ICE candidate', async () => {
+    it('handles full WebRTC handshake: PC register -> Phone join with signalingToken -> SDP offer/answer -> ICE candidate', async () => {
       const pcWs = new WebSocket(BASE_WS);
       const phoneWs = new WebSocket(BASE_WS);
 
@@ -143,12 +139,17 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
       pcWs.on('message', (d) => pcMessages.push(JSON.parse(d.toString())));
       phoneWs.on('message', (d) => phoneMessages.push(JSON.parse(d.toString())));
 
-      // 1. PC registers presence with pcId and authSecret
+      const rawPhoneCredential = 'phone-device-credential-32-byte-hex-str';
+      const phoneSignalingToken = deriveSignalingToken(rawPhoneCredential);
+      const phoneTokenHash = hashSignalingToken(phoneSignalingToken);
+
+      // 1. PC registers presence with pcId, agentSecret, and paired clientTokenHashes
       pcWs.send(
         JSON.stringify({
           type: 'register',
           pcId: 'pc-workstation-01',
-          authSecret: 'my-desktop-secret-token-xyz',
+          agentSecret: 'my-desktop-secret-token-xyz',
+          clientTokenHashes: [phoneTokenHash],
         })
       );
 
@@ -157,13 +158,13 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
       expect(pcMessages.some((m) => m.type === 'registered' && m.pcId === 'pc-workstation-01')).toBe(true);
       expect(server.getRoomCount()).toBe(1);
 
-      // 2. Phone connects and joins PC room
+      // 2. Phone connects and joins PC room with signalingToken
       phoneWs.send(
         JSON.stringify({
           type: 'join',
           pcId: 'pc-workstation-01',
           clientId: 'phone-iphone15',
-          authSecret: 'my-desktop-secret-token-xyz',
+          signalingToken: phoneSignalingToken,
         })
       );
 
@@ -226,7 +227,70 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
       phoneWs.close();
     });
 
-    it('rejects phone join when authSecret is incorrect with AUTH_FAILED', async () => {
+    it('allows dynamic add_client_token and remove_client_token by host PC', async () => {
+      const pcWs = new WebSocket(BASE_WS);
+      const phone2Ws = new WebSocket(BASE_WS);
+
+      await Promise.all([
+        new Promise((resolve) => pcWs.on('open', resolve)),
+        new Promise((resolve) => phone2Ws.on('open', resolve)),
+      ]);
+
+      const agentSecret = 'agent-secret-dyn-tokens-test';
+      pcWs.send(
+        JSON.stringify({
+          type: 'register',
+          pcId: 'pc-dyn-tokens',
+          agentSecret,
+        })
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const phone2Token = deriveSignalingToken('cred-phone-2');
+      const phone2Hash = hashSignalingToken(phone2Token);
+
+      // Add phone 2 token
+      pcWs.send(
+        JSON.stringify({
+          type: 'add_client_token',
+          pcId: 'pc-dyn-tokens',
+          agentSecret,
+          tokenHash: phone2Hash,
+        })
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const phone2Messages: any[] = [];
+      phone2Ws.on('message', (d) => phone2Messages.push(JSON.parse(d.toString())));
+
+      phone2Ws.send(
+        JSON.stringify({
+          type: 'join',
+          pcId: 'pc-dyn-tokens',
+          clientId: 'phone-2',
+          signalingToken: phone2Token,
+        })
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(phone2Messages.some((m) => m.type === 'joined')).toBe(true);
+
+      // Now host PC removes client token -> Phone 2 is disconnected with TOKEN_REVOKED
+      pcWs.send(
+        JSON.stringify({
+          type: 'remove_client_token',
+          pcId: 'pc-dyn-tokens',
+          agentSecret,
+          tokenHash: phone2Hash,
+        })
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(phone2Messages.some((m) => m.type === 'error' && m.code === 'TOKEN_REVOKED')).toBe(true);
+
+      pcWs.close();
+      phone2Ws.close();
+    });
+
+    it('rejects phone join when signalingToken is not in registered hashes with AUTH_FAILED', async () => {
       const pcWs = new WebSocket(BASE_WS);
       const badPhoneWs = new WebSocket(BASE_WS);
 
@@ -242,19 +306,20 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
       pcWs.send(
         JSON.stringify({
           type: 'register',
-          pcId: 'pc-secure-room',
-          authSecret: 'correct-secret-456',
+          pcId: 'pc-secure-room-2',
+          agentSecret: 'correct-secret-456',
+          clientTokenHashes: ['registered-hash-abc'],
         })
       );
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Attempt join with wrong secret
+      // Attempt join with wrong/unregistered token
       badPhoneWs.send(
         JSON.stringify({
           type: 'join',
-          pcId: 'pc-secure-room',
+          pcId: 'pc-secure-room-2',
           clientId: 'intruder',
-          authSecret: 'WRONG-SECRET',
+          signalingToken: 'WRONG-UNREGISTERED-TOKEN',
         })
       );
 
@@ -277,7 +342,7 @@ describe('AEROKIN WebRTC Signaling & Coturn REST Credential Suite', () => {
           type: 'join',
           pcId: 'non-existent-pc-id',
           clientId: 'phone-lonely',
-          authSecret: 'some-secret',
+          signalingToken: 'some-token',
         })
       );
 

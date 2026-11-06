@@ -8,11 +8,18 @@ services:
     environment:
       - PORT=8088
       - HOST=0.0.0.0
-      - COTURN_SECRET=${COTURN_SECRET:-aerokin-default-coturn-shared-secret-change-in-prod}
+      - TURN_SECRET=${TURN_SECRET:?TURN_SECRET must be set in environment}
       - COTURN_HOST=${COTURN_HOST:-turn.aerokin.local}
       - COTURN_UDP_PORT=3478
       - COTURN_TCP_PORT=3478
       - COTURN_TLS_PORT=5349
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://localhost:8080}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8088/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - aerokin-net
 
@@ -25,9 +32,11 @@ services:
       - -a
       - -v
       - -c=/etc/coturn/turnserver.conf
-      - --static-auth-secret=${COTURN_SECRET:-aerokin-default-coturn-shared-secret-change-in-prod}
-      - --realm=${COTURN_REALM:-aerokin.local}
+      - --static-auth-secret=${TURN_SECRET:?TURN_SECRET must be set in environment}
+      - --realm=${TURN_REALM:-aerokin.local}
       - --external-ip=${EXTERNAL_IP:-127.0.0.1}
+      - --min-port=49152
+      - --max-port=65535
     volumes:
       - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
     network_mode: host

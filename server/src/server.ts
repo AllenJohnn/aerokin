@@ -393,7 +393,11 @@ export function startServer(config: ServerConfig): {
   }
 
   function revokeDevice(deviceId: string) {
+    const tokenHash = deviceStore.getSignalingTokenHashForDevice(deviceId);
     deviceStore.revokeDevice(deviceId);
+    if (tokenHash && signalingClient) {
+      signalingClient.removeClientToken(tokenHash);
+    }
     closeDeviceSockets(deviceId);
     latencyHistoryByDevice.delete(deviceId);
     phoneBatteryByDevice.delete(deviceId);
@@ -403,6 +407,10 @@ export function startServer(config: ServerConfig): {
   function revokeAll(exceptDeviceId?: string) {
     const revoked = deviceStore.revokeAllDevices(exceptDeviceId);
     for (const id of revoked) {
+      const tokenHash = deviceStore.getSignalingTokenHashForDevice(id);
+      if (tokenHash && signalingClient) {
+        signalingClient.removeClientToken(tokenHash);
+      }
       closeDeviceSockets(id);
       latencyHistoryByDevice.delete(id);
       phoneBatteryByDevice.delete(id);
@@ -510,10 +518,14 @@ export function startServer(config: ServerConfig): {
 
     // On PC operator approval: issue 32-byte cryptographic credential, store SHA-256 hash on disk
     const isRemote = req.body?.remote === true || req.body?.pairedVia === 'remote';
-    const { deviceId, rawCredential } = deviceStore.addDevice(deviceName, devicePlatform, {
+    const { deviceId, rawCredential, record } = deviceStore.addDevice(deviceName, devicePlatform, {
       pairedVia: isRemote ? 'remote' : 'lan',
       remote: isRemote,
     });
+
+    if (record.signalingTokenHash && signalingClient) {
+      signalingClient.addClientToken(record.signalingTokenHash);
+    }
 
     res.json({
       ok: true,
@@ -1720,6 +1732,8 @@ export function startServer(config: ServerConfig): {
       signalingClient = new SignalingClient({
         signalingUrl,
         pcId: deviceStore.getPcId(),
+        agentSecret: deviceStore.getAgentSecret(),
+        clientTokenHashes: deviceStore.getSignalingTokenHashes(),
         onRegistered: (iceServers) => {
           console.log(`[Remote] Registered with signaling server at ${signalingUrl}. ${iceServers.length} ICE servers.`);
           broadcastDashboardEvent('webrtc_status', {

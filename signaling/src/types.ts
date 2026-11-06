@@ -22,6 +22,8 @@ export type SignalingMessageType =
   | 'candidate'
   | 'peer_joined'
   | 'peer_left'
+  | 'add_client_token'
+  | 'remove_client_token'
   | 'turn_credentials'
   | 'ping'
   | 'pong'
@@ -34,7 +36,9 @@ export interface BaseSignalingMessage {
 export interface RegisterMessage extends BaseSignalingMessage {
   type: 'register';
   pcId: string;
-  authSecret: string;
+  agentSecret?: string;
+  authSecret?: string; // legacy alias for agentSecret
+  clientTokenHashes?: string[];
 }
 
 export interface RegisteredMessage extends BaseSignalingMessage {
@@ -43,11 +47,26 @@ export interface RegisteredMessage extends BaseSignalingMessage {
   iceServers: IceServerConfig[];
 }
 
+export interface AddClientTokenMessage extends BaseSignalingMessage {
+  type: 'add_client_token';
+  pcId: string;
+  agentSecret: string;
+  tokenHash: string;
+}
+
+export interface RemoveClientTokenMessage extends BaseSignalingMessage {
+  type: 'remove_client_token';
+  pcId: string;
+  agentSecret: string;
+  tokenHash: string;
+}
+
 export interface JoinMessage extends BaseSignalingMessage {
   type: 'join';
   pcId: string;
   clientId: string;
-  authSecret: string;
+  signalingToken?: string;
+  authSecret?: string; // legacy alias for signalingToken
 }
 
 export interface JoinedMessage extends BaseSignalingMessage {
@@ -97,6 +116,8 @@ export interface ErrorMessage extends BaseSignalingMessage {
 export type SignalingMessage =
   | RegisterMessage
   | RegisteredMessage
+  | AddClientTokenMessage
+  | RemoveClientTokenMessage
   | JoinMessage
   | JoinedMessage
   | OfferMessage
