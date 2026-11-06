@@ -6,8 +6,8 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 8 Complete (Design System & Picture Perfect Pass - True-black OLED `#000000`, surface `#0A0A0A`, accent `#FF5A1F`, typography audit); proceeding to commit Part 8 and tag `stable-p8`.
-- **Exact Next Step**: Commit `feat(design): enforce true-black OLED tokens, typography hierarchy, and anti-generic visual polish`, push, tag `stable-p8`, then proceed to Part 9 (Windows CI, Installer & FFmpeg Provisioning).
+- **Current Milestone**: Part 9 (Windows CI, Installer, FFmpeg Provisioning).
+- **Exact Next Step**: Configure GitHub Actions CI workflow for Windows tests and safety check, implement FFmpeg provisioning script, commit and tag `stable-p9`.
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
