@@ -2,6 +2,7 @@ packages:
   - 'design-system'
   - 'pwa'
   - 'server'
+  - 'signaling'
 allowBuilds:
   esbuild: true
   koffi: true

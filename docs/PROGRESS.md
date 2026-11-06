@@ -6,10 +6,31 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Part 2 Complete (Transport Abstraction, WebCodecs H.264 Desktop 2.0 Pipeline, NVENC Hardware Acceleration, AER2 Packet Format, and Benchmark Suite); proceeding to commit Part 2 and tag `stable-p2`.
-- **Exact Next Step**: Commit `feat(desktop): implement transport abstraction and low-latency H.264 desktop 2.0 pipeline`, push, tag `stable-p2`, then proceed to Part 3 (Signaling Service + Infrastructure as Code for Allen's VPS).
+- **Current Milestone**: Part 3 Complete (Signaling Service, Ephemeral Coturn HMAC-SHA1 REST Tokens, Docker Compose + Caddy TLS IaC, and Deploy Guide); proceeding to commit Part 3 and tag `stable-p3`.
+- **Exact Next Step**: Commit `feat(signaling): implement standalone WebRTC signaling service and coturn IaC`, push, tag `stable-p3`, then proceed to Part 4 (WebRTC Transport + Connection Manager with DataChannel Chunking and Auto-Fallback).
 - **Blocked Items**: None.
 - **Safety Status**: S1-S6 active. Static guard `pnpm run safety:check` passing. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part 3: Signaling Service + Infrastructure as Code (Completed)
+- **3.1 Standalone Signaling Service (`signaling/`)**:
+  - Created standalone Node.js package (`signaling/`) added to pnpm workspace.
+  - Implemented `SignalingServer` with HTTP endpoints (`GET /health`, `GET /api/turn-credentials`) and WebSocket server.
+  - Implemented secure room lifecycle based on `pcId` and timing-safe SHA256 hashed authentication secrets.
+  - Supported bi-directional signaling: `register`, `registered`, `join`, `joined`, `offer`, `answer`, `candidate`, `peer_joined`, and `peer_left`.
+- **3.2 Ephemeral Coturn HMAC-SHA1 REST Authentication (`signaling/src/turn.ts`)**:
+  - Implemented standard Coturn REST API authentication: generates time-bounded usernames (`<expiry>:<prefix>`) and HMAC-SHA1 signature credentials.
+  - Configured complete ICE server topology: STUN (`stun:host:3478`), TURN UDP (`turn:host:3478?transport=udp`), TURN TCP (`turn:host:3478?transport=tcp`), and TURNS TLS (`turns:host:5349?transport=tcp`).
+  - Added unit test validation for token generation, verification, and tamper/expiry rejection.
+- **3.3 Infrastructure as Code & VPS Deployment**:
+  - `signaling/docker-compose.yml`: Coordinates `signaling` container, `coturn/coturn:latest` STUN/TURN daemon, and `caddy:2-alpine` reverse proxy with automatic Let's Encrypt TLS.
+  - `signaling/turnserver.conf`: Hardened Coturn configuration (ports 3478, 5349, bounded relay range 49152-49300, no loopback/multicast peers).
+  - `signaling/Caddyfile`: Reverse proxy routing `/`, `/health`, and `/api/*` to signaling with automatic HTTPS certificates.
+  - `signaling/deploy.sh`: Automated one-command Ubuntu VPS setup script installing Docker, configuring UFW firewall, generating secure secrets, and launching containers.
+  - `docs/DEPLOYMENT.md`: Comprehensive documentation on VPS provisioning, DNS A-records, firewall ports, and security invariants.
+- **3.4 Unit Tests**:
+  - Created `signaling/test/signaling.test.ts` covering 10 tests: HMAC-SHA1 generation, verification, tamper rejection, expiry rejection, HTTP health/turn endpoints, and full WebRTC offer/answer/candidate relay handshake with mock clients. All tests passing.
 
 ---
 
@@ -116,7 +137,7 @@ The entire codebase was scanned for power transitions and input injection APIs:
 | **Part 0** | Emergency Safety Fix & Main Branch Sync | COMPLETED | Tagged `stable-p0-safety` & `stable-p0`. Guard suite active. |
 | **Part 1** | Reported Bugs First + Cleanup (Inputs, GPU, VLC, Cleanup) | COMPLETED | Tagged `stable-p1`. Inputs, GPU 4060, VLC, Sharp, Quickstart done. |
 | **Part 2** | Transport Abstraction + Desktop 2.0 Pipeline (LAN First) | COMPLETED | Tagged `stable-p2`. H.264 NVENC/MF/x264, WebCodecs, AER2 packet format, bench. |
-| **Part 3** | Signaling Service + Infrastructure as Code | PENDING | |
+| **Part 3** | Signaling Service + Infrastructure as Code | COMPLETED | Tagged `stable-p3`. Standalone Node service, Coturn HMAC-SHA1 REST tokens, Docker Compose + Caddy TLS. |
 | **Part 4** | WebRTC Transport + Connection Manager | PENDING | |
 | **Part 5** | Remote Pairing + Security | PENDING | |
 | **Part 6** | All Existing Features over New Transport | PENDING | |

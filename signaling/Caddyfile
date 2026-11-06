@@ -1,0 +1,22 @@
+# ==============================================================================
+# AEROKIN Caddyfile - Automatic Let's Encrypt TLS Reverse Proxy
+# ==============================================================================
+
+{$AEROKIN_SIGNALING_DOMAIN:localhost} {
+    encode gzip zstd
+
+    # Health check endpoint
+    handle /health {
+        reverse_proxy signaling:8088
+    }
+
+    # REST Coturn Credentials endpoint
+    handle /api/* {
+        reverse_proxy signaling:8088
+    }
+
+    # WebSocket and root fallback
+    handle {
+        reverse_proxy signaling:8088
+    }
+}

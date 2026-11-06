@@ -1,0 +1,57 @@
+services:
+  # 1. AEROKIN Standalone Signaling Service
+  signaling:
+    build:
+      context: ..
+      dockerfile: signaling/Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=8088
+      - HOST=0.0.0.0
+      - COTURN_SECRET=${COTURN_SECRET:-aerokin-default-coturn-shared-secret-change-in-prod}
+      - COTURN_HOST=${COTURN_HOST:-turn.aerokin.local}
+      - COTURN_UDP_PORT=3478
+      - COTURN_TCP_PORT=3478
+      - COTURN_TLS_PORT=5349
+    networks:
+      - aerokin-net
+
+  # 2. Self-Hosted Coturn STUN/TURN Server
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    command:
+      - turnserver
+      - -a
+      - -v
+      - -c=/etc/coturn/turnserver.conf
+      - --static-auth-secret=${COTURN_SECRET:-aerokin-default-coturn-shared-secret-change-in-prod}
+      - --realm=${COTURN_REALM:-aerokin.local}
+      - --external-ip=${EXTERNAL_IP:-127.0.0.1}
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    network_mode: host
+
+  # 3. Caddy Reverse Proxy (Automatic HTTPS TLS via Let's Encrypt)
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - AEROKIN_SIGNALING_DOMAIN=${AEROKIN_SIGNALING_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - aerokin-net
+
+networks:
+  aerokin-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
