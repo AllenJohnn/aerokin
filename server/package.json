@@ -12,6 +12,7 @@
     "test:input": "tsx scripts/test-input.ts",
     "test:media": "tsx scripts/test-media.ts",
     "bench:desktop": "tsx scripts/desktop-bench.ts",
+    "bench:soak": "tsx scripts/soak-test.ts",
     "capture:check": "tsx scripts/capture-check.ts",
     "spike:h264": "tsx scripts/h264-spike.ts",
     "safety:check": "node ../scripts/safety-check.mjs",

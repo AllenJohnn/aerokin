@@ -72,6 +72,9 @@ flowchart TD
 
 > **Video frames never route through the Node signaling server.** All media and input traffic travel directly between the iPhone and the Windows host via encrypted WebRTC DataChannels or encrypted local WebSockets.
 
+> [!NOTE]
+> **Remote Status**: Cross-network cellular access via WebRTC is fully implemented and loopback integration-tested (Part A3 with 100% passing tests), but remains marked **UNVERIFIED** until Allen conducts the physical mobile-data test (Wi-Fi OFF, cellular LTE/5G ON) detailed in [`docs/REMOTE-TEST.md`](docs/REMOTE-TEST.md).
+
 ---
 
 ## 🚀 Quickstart
@@ -126,14 +129,9 @@ Alternatively, double-click `scripts/start-aerokin.bat` to launch the server and
 To control your PC from cellular data or remote networks without third-party services, deploy the lightweight AeroKin signaling service and Coturn daemon to any small VPS (e.g. Hetzner, DigitalOcean, Linode):
 
 1. **Deploy VPS Infrastructure**:
-   ```bash
-   cd signaling
-   # Review deployment documentation
-   cat ../docs/DEPLOYMENT.md
-   
-   # Run automated one-command VPS setup
-   bash deploy.sh
-   ```
+   - Review the complete deployment guide: [`docs/DEPLOY-VPS.md`](docs/DEPLOY-VPS.md)
+   - Follow instructions for Ubuntu 24.04 (Hetzner / DigitalOcean / OVH) with Docker, Coturn, and Caddy reverse proxy.
+   - Generate secure 256-bit credentials using `scripts/generate-secrets.sh` or `scripts/generate-secrets.ps1`.
 2. **Point Host to Signaling**:
    Set the signaling endpoint on your Windows host:
    ```powershell
@@ -141,7 +139,7 @@ To control your PC from cellular data or remote networks without third-party ser
    pnpm start
    ```
 3. **Remote Pairing**:
-   On the PC Dashboard, toggle to **Remote WebRTC Pairing**. Scan the QR code or tap **Copy Remote Link** (`aerokin://pair?pcId=...&code=...`). Your iPhone will securely pair and automatically maintain WebRTC P2P connectivity whether on LAN or mobile data.
+   On the PC Dashboard, toggle to **Remote WebRTC Pairing**. Scan the QR code or tap **Copy Remote Link** (`https://<pwa-host>/#agent=<id>&signal=<host>&code=<code>`). The PWA immediately parses and clears the fragment from history, pairs with derived tokens, and establishes an encrypted WebRTC DataChannel.
 
 ---
 
@@ -174,13 +172,17 @@ Synthetic benchmark results on an NVIDIA GeForce RTX 4060 Laptop GPU:
 
 ---
 
-## 🧪 Verification & Testing
+## 🧪 Verification & Tooling
 
-AeroKin features a comprehensive test suite across client, server, and signaling components:
+AeroKin features a rigorous verification pipeline with 347 passing automated tests and strict pre-commit safety guards:
 
 ```bash
-# Mandatory pre-commit static safety check
+# Mandatory pre-commit static safety check (Rule S1-S5)
 pnpm run safety:check
+
+# Run linter and formatting checks
+pnpm run lint
+pnpm run format:check
 
 # Run PWA client tests (84 tests)
 pnpm --filter aerokin-pwa test
@@ -188,11 +190,14 @@ pnpm --filter aerokin-pwa test
 # Run signaling server tests (10 tests)
 pnpm --filter aerokin-signaling test
 
-# Run server unit & integration tests (240 tests)
+# Run server unit & integration tests (253 tests)
 pnpm --filter aerokin-server test
 
 # Run desktop streaming synthetic benchmark
 pnpm --filter aerokin-server run bench:desktop -- --synthetic
+
+# Run 30s desktop soak test (synthetic testsrc, Rule S8 compliant)
+pnpm --filter aerokin-server run bench:soak
 ```
 
 ---

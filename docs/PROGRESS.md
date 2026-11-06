@@ -6,16 +6,30 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: PART B4 & B5 COMPLETED (Codec Auto-Fallback, Keyframe Limiter, View-Only Mode, Host Benchmarks & 30s Soak Test under Rule S8).
-  - **B4 & B5 Completed**:
-    - **Desktop Streaming Benchmarks (`server/scripts/desktop-bench.ts`)**: Executed on Windows host comparing NVENC H.264 (1080p: 32.8 fps, 3.66 Mbps, 31ms latency; 720p: 32.9 fps, 2.10 Mbps, 31ms latency) against MJPEG (720p: 34.2 fps, 13.04 Mbps, 48.7 KB/frame). NVENC reduces network bandwidth by ~84% with ultra-low latency. Gracefully handles Windows secure lock screen (`ddagrab` access denied fallback).
-    - **Soak Test (`server/scripts/soak-test.ts`)**: 30-second synthetic continuous load test conforming to Rule S8 (zero desktop locks/restarts). Verified constant 30.2 fps, 31ms p50 jitter, 76MB stable RSS memory (+3MB total delta, zero leaks).
-    - **Codec Auto-Fallback with 3s Probe (`StreamService.ts`)**: Added 3000ms probe timer when streaming with H.264. If 0 frames arrive within 3s, automatically falls back to MJPEG, restarts capture, and notifies listeners.
-    - **Keyframe Rate Limiter (`StreamService.ts`)**: Added `requestKeyframe(): boolean` enforcing maximum 1 keyframe per 2000ms to protect bandwidth and encoder queues.
-    - **Server-Enforced View-Only Mode**: Added `set_view_only` protocol message and `viewOnly` stream option. Socket layer drops all interactive inputs (`move`, `abs_move`, `click`, `abs_click`, `button`, `abs_button`, `key`, `text`, `quick_action`), returning `{ type: 'error', error: 'View-only mode is active' }`. PWA desktop viewer includes intuitive View-Only toggle button in toolbar with input suspension.
-- **Exact Next Step**: Part C - Clean workspace hygiene check, author `docs/OVERNIGHT-REPORT.md`, update `README.md`, tag `stable-r1`, and push all commits to `origin/main`.
-- **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
+- **Current Milestone**: ALL PARTS COMPLETED (Part A Remote Auth & Signaling Hardening, Part B1 Architecture & Deployment Guides, Part B2 Multi-Viewport Audit, Part B3 Tooling & Flat Config, Part B4-B5 Streaming Benchmarks, Soak Test & View-Only Mode, Part C Overnight Report & Stable-R1 Release).
+  - **Part C Completed**:
+    - **Hygiene & Secrets Verification**: Verified zero untracked certificates, keys, or hardcoded secrets. Eradicated all `sha256(pcId)` fallback paths.
+    - **Overnight Engineering Report (`docs/OVERNIGHT-REPORT.md`)**: Comprehensive report detailing executive metrics (347 tests, 0 safety violations, 31ms p50 NVENC latency, ~84% bandwidth reduction, 30.2 fps soak stability), Hard Safety Rules compliance (S1-S9), and honest status delineation.
+    - **README & Tooling Polish**: Updated `README.md` with explicit notice on UNVERIFIED cellular remote status pending Allen's mobile-data test, HTTPS URL fragment pairing documentation, and soak test commands.
+    - **Release Tagging**: Tagged release `stable-r1` on `main`.
+- **Exact Next Step**: Present overnight report to Allen and await physical mobile-data field testing.
+- **NEEDS ALLEN**:
+  1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
+  2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
+  3. Running `scripts/generate-secrets.ps1` to populate production `.env`.
+  4. Physical mobile data field test on iPhone (Wi-Fi OFF, cellular LTE/5G ON) per `docs/REMOTE-TEST.md`.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Part C: Release Packaging, Overnight Report & Verification (Completed)
+- **C1 Secrets & Repository Hygiene**:
+  - Scanned repository for untracked credentials or lingering debug artifacts. Verified zero `.key`, `.pem`, `.pfx` tracked in git.
+  - Confirmed 0 forbidden power calls via `pnpm run safety:check`.
+- **C2 Overnight Report Authoring (`docs/OVERNIGHT-REPORT.md`)**:
+  - Authored full report summarizing all 5 major phases, benchmark results, soak test telemetry, safety architecture, and clear next steps for Allen.
+- **C3 README Update**:
+  - Integrated honest status callouts, updated test counts (347 tests), and updated deployment links.
 
 ---
 
