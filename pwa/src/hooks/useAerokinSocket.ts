@@ -147,6 +147,9 @@ export interface FeatureFlags {
   screenshot: boolean;
   quickActions: boolean;
   launcher: boolean;
+  remoteAccess?: boolean;
+  remotePower?: boolean;
+  fileUpload?: boolean;
 }
 
 export interface LauncherEntry {

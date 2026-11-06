@@ -6,16 +6,20 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: PART A (REMOTE AUTH REDESIGN & SIGNALING HARDENING) IN PROGRESS.
+- **Current Milestone**: PART A COMPLETED (Remote Auth Redesign, Signaling Hardening, Real WebRTC Host & Integration Tests).
   - **A1 Completed**: Signaling auth redesigned with random 256-bit `agentSecret` (stored in `.certs/pc-identity.json`, never logged), derived client `signalingToken = HMAC-SHA256(rawCredential, "aerokin-signaling-v1")`, and `clientTokenHashes` dynamic registration. Completely removed `sha256(pcId)` fallback.
   - **A2 Completed**: Signaling hardened with strict `ALLOWED_ORIGINS`, authenticated `/turn-credentials`, rate limiting, temporary IP ban after 5 auth failures, max 8 sessions, 60s idle timeout, coturn template with private IP denial ranges and quotas, `deploy/.env.example`, and secret generation scripts (`generate-secrets.sh`, `generate-secrets.ps1`).
-- **Exact Next Step**: Part A3 - Author real-socket integration test suite on loopback proving end-to-end registration, phone join with derived token, offer/answer/ICE candidate exchange, revoked token rejection, wrong token rejection, and IP lockout.
+  - **A3 Completed**: Real-socket integration test suite (`server/test/real-remote-auth.test.ts`) on loopback proving end-to-end registration, phone join with derived token, offer/answer/ICE candidate exchange, DataChannel open, in-band auth verification, control round-trip, revoked token rejection, wrong token rejection, and IP lockout.
+  - **A4 Completed**: Remote pairing over RTC control channel with 8-digit code, PC approval, lockout throttles; replaced `aerokin://pair` link with HTTPS link to hosted PWA with URL fragment: `https://<hosted-pwa>/#agent=<id>&signal=<host>&code=<8-digit>` (PWA reads and immediately strips fragment from history). Added `remoteAccess` toggle (default OFF) and `remotePower` toggle (power actions disabled by default for remote devices).
+  - **A5 Completed**: Honest connection state derived strictly from WebRTC `getStats()` selected candidate pair (`host`/`srflx` = direct, `relay` = relay); telemetry tracks RTT/jitter/bitrate; clear error states; automatic ICE restart on network reconnect.
+  - **C2 Completed**: File transfer upload disabled by default with `fileUpload` setting toggle; verified with unit tests.
+- **Exact Next Step**: Part B1 - Author comprehensive documentation suite (`docs/DEPLOY-VPS.md`, `docs/REMOTE-TEST.md`, `docs/architecture.md`, `docs/protocol.md` + drift test, `docs/webrtc-decision.md`, `docs/ROADMAP.md`, `docs/security-model.md`, `docs/TEST-MATRIX.md`, `docs/DEVICE-TEST-CHECKLIST.md`).
 - **NEEDS ALLEN**: VPS deployment credentials and DNS records for public STUN/TURN/Signaling relay domain. Works locally out of the box with zero external dependencies. Cross-network cellular access remains marked UNVERIFIED pending Allen's iPhone mobile-data test.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
 
 ---
 
-## Part A: Remote Auth Redesign & Infrastructure Hardening (In Progress)
+## Part A: Remote Auth Redesign & Infrastructure Hardening (Completed)
 - **A1 Signaling Authentication Redesign (Completed)**:
   - Redesigned host agent presence authentication: host generates random 256-bit `agentSecret` on first boot, stored in `.certs/pc-identity.json` with 0600 permissions, never printed or logged.
   - Signaling server stores `sha256(agentSecret)`; first registration claims the room; subsequent reconnections verify with constant-time comparison `timingSafeEqualHex`.
@@ -33,6 +37,19 @@
   - Created `turnserver.conf.template` with private network `denied-peer-ip` ranges (RFC 1918, CGNAT, loopback), quotas (`total-quota=100`, `user-quota=12`), and bounded WebRTC relay port range 49152-65535.
   - Added `signaling/deploy/.env.example` with clear setup documentation.
   - Created `scripts/generate-secrets.sh` and `scripts/generate-secrets.ps1` for generating high-entropy cryptographic secrets.
+- **A3 Real-Socket WebRTC Integration Suite (Completed)**:
+  - Created `server/src/transport/RtcHostManager.ts` bridging `SignalingClient` and `node-datachannel.PeerConnection`.
+  - Created `server/test/real-remote-auth.test.ts` running real loopback signaling server, host agent, and client peer connection.
+  - Proved end-to-end registration, phone join with `signalingToken`, offer/answer exchange, DataChannel open, in-band auth handshake, ping/pong roundtrip.
+  - Verified negative security paths: wrong signaling token rejection, in-band credential mismatch termination, revoked device token rejection, and IP lockout ban.
+- **A4 URL Fragment Remote Pairing & Remote Safety Policy (Completed)**:
+  - Replaced legacy `aerokin://pair` link with HTTPS link with URL fragment: `https://<hosted-pwa>/#agent=<id>&signal=<host>&code=<8-digit>`.
+  - PWA immediately parses and purges URL fragment via `window.history.replaceState` so pairing codes are never retained in browser history.
+  - Added `remoteAccess` toggle (default OFF) and `remotePower` toggle in `FeatureManager` and `DesktopDashboard.tsx`. Power actions blocked for remote sessions by default.
+- **A5 Honest Connection State & Telemetry (Completed)**:
+  - Derived connection mode strictly from WebRTC `getStats()` candidate pair: `host`/`srflx` = direct, `relay` = relay; never guessed.
+  - Implemented real-time telemetry extraction for RTT, jitter, and bitrate.
+  - Added automatic ICE restart on network change or ICE connection failure for seamless session recovery.
 
 ---
 

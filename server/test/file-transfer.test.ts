@@ -159,7 +159,26 @@ describe('AeroKin Secure File Transfer & Drop (/api/transfer/upload)', () => {
     expect(res.body.error).toContain('Unauthorized');
   });
 
-  it('accepts file upload from authenticated device and writes safely', async () => {
+  it('rejects upload with 403 Forbidden when fileUpload feature flag is disabled by default', async () => {
+    const res = await mockUploadRequest(
+      'POST',
+      '/api/transfer/upload',
+      '192.168.1.105',
+      {
+        'content-type': 'text/plain',
+        'x-aerokin-device-id': testDeviceId,
+        'x-aerokin-credential': testCredential,
+        'x-aerokin-filename': 'notes.txt',
+      },
+      'test file content'
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('disabled');
+  });
+
+  it('accepts file upload when fileUpload feature flag is enabled and writes safely', async () => {
+    serverInstance.featureManager.updateFlags({ fileUpload: true });
+
     const payload = 'Hello from iPhone via AeroKin Drop!';
     const res = await mockUploadRequest(
       'POST',
@@ -186,6 +205,8 @@ describe('AeroKin Secure File Transfer & Drop (/api/transfer/upload)', () => {
   });
 
   it('sanitizes path traversal attempts in filename header', async () => {
+    serverInstance.featureManager.updateFlags({ fileUpload: true });
+
     const payload = 'Attempting path traversal...';
     const res = await mockUploadRequest(
       'POST',

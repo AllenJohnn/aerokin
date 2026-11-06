@@ -11,6 +11,9 @@ export interface FeatureFlags {
   screenshot: boolean;
   quickActions: boolean;
   launcher: boolean;
+  remoteAccess: boolean;
+  remotePower: boolean;
+  fileUpload: boolean;
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
@@ -18,6 +21,9 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   screenshot: true,
   quickActions: true,
   launcher: true,
+  remoteAccess: false,
+  remotePower: false,
+  fileUpload: false,
 };
 
 export class FeatureManager {

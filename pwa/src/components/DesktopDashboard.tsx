@@ -43,6 +43,9 @@ export interface FeatureFlags {
   screenshot: boolean;
   quickActions: boolean;
   launcher: boolean;
+  remoteAccess: boolean;
+  remotePower: boolean;
+  fileUpload: boolean;
 }
 
 export interface CountdownState {
@@ -130,6 +133,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     screenshot: true,
     quickActions: true,
     launcher: true,
+    remoteAccess: false,
+    remotePower: false,
+    fileUpload: false,
   });
   const [countdownState, setCountdownState] = useState<CountdownState>({
     active: false,
@@ -466,9 +472,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
 
     const pcId = webrtcStatus?.pcId || 'pc_host';
     const signaling = webrtcStatus?.signalingUrl;
+    const hostedBase = (window.location.origin.includes('localhost') ? 'https://app.aerokin.com' : window.location.origin).replace(/\/+$/, '');
     const remotePayload = activeCode
-      ? `aerokin://pair?pcId=${pcId}&code=${activeCode}${signaling ? `&signaling=${encodeURIComponent(signaling)}` : ''}`
-      : `aerokin://pair?pcId=${pcId}`;
+      ? `${hostedBase}/#agent=${pcId}${signaling ? `&signal=${encodeURIComponent(signaling)}` : ''}&code=${activeCode}`
+      : `${hostedBase}/#agent=${pcId}`;
 
     QRCode.toDataURL(remotePayload, {
       margin: 1,
@@ -1030,13 +1037,13 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                       {/* Remote Payload URI */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <span className="font-mono text-muted-foreground truncate max-w-[260px]">
-                          {`aerokin://pair?pcId=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}`}
+                          {`https://app.aerokin.com/#agent=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}`}
                         </span>
                         <button
                           onClick={() =>
                             handleCopy(
                               webrtcStatus?.remotePairPayload ||
-                                `aerokin://pair?pcId=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}${webrtcStatus?.signalingUrl ? `&signaling=${encodeURIComponent(webrtcStatus.signalingUrl)}` : ''}`,
+                                `https://app.aerokin.com/#agent=${webrtcStatus?.pcId || 'pc_host'}${webrtcStatus?.signalingUrl ? `&signal=${encodeURIComponent(webrtcStatus.signalingUrl)}` : ''}&code=${activeCode}`,
                               'remote_uri'
                             )
                           }

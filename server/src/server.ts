@@ -123,6 +123,7 @@ export function startServer(config: ServerConfig): {
   const eventBuffer: ActivityEvent[] = [];
   let isInputPaused = false;
   let signalingClient: SignalingClient | null = null;
+  const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
 
   function setInputPaused(paused: boolean) {
     isInputPaused = paused;
@@ -222,8 +223,9 @@ export function startServer(config: ServerConfig): {
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
+    const hostedBase = (rawHosted || 'https://app.aerokin.com').trim().replace(/\/+$/, '');
     const remotePairPayload = currentCode
-      ? `aerokin://pair?pcId=${pcId}&code=${currentCode}${signalingUrl ? `&signaling=${encodeURIComponent(signalingUrl)}` : ''}`
+      ? `${hostedBase}/#agent=${pcId}${signalingUrl ? `&signal=${encodeURIComponent(signalingUrl)}` : ''}&code=${currentCode}`
       : '';
 
     return {
@@ -549,15 +551,15 @@ export function startServer(config: ServerConfig): {
     const pairUrl = currentCode ? `https://${config.lanIp}:${config.port}/#code=${currentCode}` : '';
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
 
-    const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
     const hostedPairUrl = (rawHosted && currentCode)
       ? `${rawHosted}/#host=${config.lanIp}:${config.port}&code=${currentCode}`
       : undefined;
 
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
+    const hostedBase = (rawHosted || 'https://app.aerokin.com').trim().replace(/\/+$/, '');
     const remotePairPayload = currentCode
-      ? `aerokin://pair?pcId=${pcId}&code=${currentCode}${signalingUrl ? `&signaling=${encodeURIComponent(signalingUrl)}` : ''}`
+      ? `${hostedBase}/#agent=${pcId}${signalingUrl ? `&signal=${encodeURIComponent(signalingUrl)}` : ''}&code=${currentCode}`
       : '';
 
     res.json({
@@ -783,6 +785,12 @@ export function startServer(config: ServerConfig): {
 
       if (!isAuthed) {
         res.status(401).json({ error: 'Unauthorized: Valid device credentials required' });
+        return;
+      }
+
+      // 1.5 Enforce file upload feature flag (disabled by default in server settings)
+      if (!featureManager.isEnabled('fileUpload')) {
+        res.status(403).json({ error: 'File transfer upload is disabled in server settings by PC operator.' });
         return;
       }
 

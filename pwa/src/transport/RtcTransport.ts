@@ -145,6 +145,7 @@ export interface RtcTransportOptions {
   authSecret?: string; // legacy alias
   onModeChange?: (mode: ConnectionMode) => void;
   onLatencyUpdate?: (latencyMs: number) => void;
+  onDetailedStats?: (stats: { rttMs: number; jitterMs: number; bitrateKbps: number; candidateType: string }) => void;
   iceServers?: RTCIceServer[];
 }
 
@@ -163,8 +164,20 @@ export class RtcTransport implements Connection {
   private pingInterval: any = null;
   private isClosed = false;
 
+  private lastBytesReceived = 0;
+  private lastStatsTimestamp = 0;
+  private onlineListener: (() => void) | null = null;
+
   constructor(options: RtcTransportOptions) {
     this.options = options;
+    if (typeof window !== 'undefined') {
+      this.onlineListener = () => {
+        if (this.currentState === 'reconnecting' || this.currentState === 'failed') {
+          this.restartIce().catch(() => {});
+        }
+      };
+      window.addEventListener('online', this.onlineListener);
+    }
     this.init();
   }
 
@@ -354,21 +367,79 @@ export class RtcTransport implements Connection {
   }
 
   private checkCandidateType(): void {
+    this.updateStatsTelemetry().catch(() => {});
+  }
+
+  private async updateStatsTelemetry(): Promise<void> {
     if (!this.pc?.getStats) return;
-    this.pc.getStats().then((stats) => {
+    try {
+      const stats = await this.pc.getStats();
+      let selectedPair: any = null;
       stats.forEach((report) => {
-        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-          const remoteCand = stats.get(report.remoteCandidateId);
-          const localCand = stats.get(report.localCandidateId);
-          const isRelay = remoteCand?.candidateType === 'relay' || localCand?.candidateType === 'relay';
-          const newMode: ConnectionMode = isRelay ? 'webrtc_turn' : 'webrtc_direct';
-          if (this.currentMode !== newMode) {
-            this.currentMode = newMode;
-            this.options.onModeChange?.(newMode);
-          }
+        if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+          selectedPair = report;
         }
       });
-    }).catch(() => {});
+
+      if (selectedPair) {
+        const remoteCand = stats.get(selectedPair.remoteCandidateId);
+        const localCand = stats.get(selectedPair.localCandidateId);
+
+        const isRelay = remoteCand?.candidateType === 'relay' || localCand?.candidateType === 'relay';
+        const newMode: ConnectionMode = isRelay ? 'webrtc_turn' : 'webrtc_direct';
+        if (this.currentMode !== newMode) {
+          this.currentMode = newMode;
+          this.options.onModeChange?.(newMode);
+        }
+
+        const rttSeconds = selectedPair.currentRoundTripTime ?? selectedPair.roundTripTime ?? 0;
+        const rttMs = Math.round(rttSeconds * 1000);
+        if (rttMs > 0) {
+          this.currentLatency = rttMs;
+          this.options.onLatencyUpdate?.(rttMs);
+        }
+
+        const now = Date.now();
+        const bytesNow = selectedPair.bytesReceived || 0;
+        if (this.lastStatsTimestamp > 0 && now > this.lastStatsTimestamp) {
+          const timeDeltaSec = (now - this.lastStatsTimestamp) / 1000;
+          const bytesDelta = Math.max(0, bytesNow - this.lastBytesReceived);
+          const bitrateKbps = Math.round((bytesDelta * 8) / (timeDeltaSec * 1000));
+          const jitterMs = Math.round((selectedPair.jitter || 0) * 1000);
+
+          this.options.onDetailedStats?.({
+            rttMs: this.currentLatency,
+            jitterMs,
+            bitrateKbps,
+            candidateType: isRelay ? 'relay' : (remoteCand?.candidateType || 'host'),
+          });
+        }
+        this.lastBytesReceived = bytesNow;
+        this.lastStatsTimestamp = now;
+      }
+    } catch {}
+  }
+
+  public async restartIce(): Promise<void> {
+    if (this.isClosed || !this.pc) return;
+    try {
+      console.log('[RtcTransport] Executing ICE restart for session recovery...');
+      this.notifyState('reconnecting');
+      const offer = await this.pc.createOffer({ iceRestart: true });
+      await this.pc.setLocalDescription(offer);
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(
+          JSON.stringify({
+            type: 'offer',
+            targetPeerId: this.options.pcId,
+            sdp: offer.sdp,
+          })
+        );
+      }
+    } catch (err) {
+      console.warn('[RtcTransport] ICE restart failed:', err);
+      this.notifyState('failed');
+    }
   }
 
   private startPing(): void {
@@ -376,6 +447,7 @@ export class RtcTransport implements Connection {
     this.pingInterval = setInterval(() => {
       if (this.currentState === 'connected') {
         this.send('control', JSON.stringify({ type: 'ping', t: Date.now() }));
+        this.updateStatsTelemetry().catch(() => {});
       }
     }, 2000);
   }
@@ -433,6 +505,10 @@ export class RtcTransport implements Connection {
 
   public close(): void {
     this.isClosed = true;
+    if (typeof window !== 'undefined' && this.onlineListener) {
+      window.removeEventListener('online', this.onlineListener);
+      this.onlineListener = null;
+    }
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
