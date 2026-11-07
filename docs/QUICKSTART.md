@@ -58,14 +58,31 @@ To allow secure WebSockets and camera permissions without untrusted HTTPS warnin
 3. Open iOS **Settings** -> **Profile Downloaded** -> Tap **Install**.
 4. Go to **Settings** -> **General** -> **About** -> **Certificate Trust Settings** (bottom) -> Enable full trust for **AEROKIN Local Root CA**.
 
-### 4. Pair Your Phone
-1. Open the pairing URL displayed in your terminal (or scan the QR code):
-   ```
-   https://<pc-ip>:8443/#code=XXXXXXXX
-   ```
-2. Enter your device name (e.g. *"Allen's iPhone"*).
-3. Look at your PC terminal or open the PC Dashboard (`https://localhost:8443/dashboard`) and press **"y"** to approve the device.
-4. Your device is permanently authenticated via cryptographically secure ED25519/HMAC credentials stored in local storage!
+### 4. Pair Your Phone (Frictionless Personal Setup)
+
+AeroKin is designed for seamless personal use—**pair once, and work on every network**:
+
+1. **Remote Pairing (Everywhere)**:
+   - In the PC Dashboard, view the Remote WebRTC pairing link or QR code:
+     `https://<AEROKIN_HOSTED_URL>/#agent=<id>&signal=<host>&code=<8-digit>`
+   - Scan or open this link on your iPhone.
+   - AeroKin automatically strips the fragment from your browser history, joins the signaling room, and completes mutual authentication over the WebRTC RTC control channel.
+   - **PC Approval is OFF by default** in personal mode—no need to switch to your laptop or click approve!
+2. **Local LAN Pairing**:
+   - Alternatively, open the local QR code or URL: `https://<pc-ip>:8443/#code=XXXXXXXX`.
+   - Enter your device name. The device is instantly authenticated.
+
+---
+
+## Pair Once, Work on Every Network
+
+- **Stable Origin**: The mobile PWA is served from ONE stable origin (e.g. `https://aerokin.vercel.app`), storing paired PCs in local storage keyed by `agentId` (not by temporary IP addresses).
+- **Smart Connection Ladder**: AeroKin finds your PC by its `agentId`:
+  1. Probes the last-known LAN address first with a fast `<= 1.5s` timeout.
+  2. If the LAN probe does not respond within 1.5s, it falls back seamlessly to remote WebRTC signaling over P2P/TURN.
+- **Dynamic LAN Updating**: Whenever the PC is reached on a new network, AeroKin automatically updates the stored LAN address.
+- **Never Re-Prompts for Pairing**: If a valid credential exists, AeroKin **never re-prompts for pairing**. If your PC is temporarily shut down or asleep, the app displays **"PC Offline or Asleep"** with a single-tap retry button.
+- **Wake-on-LAN Limitation**: Wake-on-LAN (WoL) relies on Layer 2 broadcast "magic packets" (`FF:FF:FF:FF:FF:FF` + 16x MAC) sent over raw UDP sockets. Standard web browsers (including iOS Safari PWAs) do not expose raw UDP sockets to web pages, and Internet transit routers drop directed subnet broadcast packets by default (RFC 2644) to prevent amplification attacks. Therefore, WoL cannot work from a web PWA over the public internet; keep your PC awake or set Windows sleep timers accordingly.
 
 ---
 

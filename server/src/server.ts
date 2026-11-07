@@ -238,10 +238,14 @@ export function startServer(config: ServerConfig): {
     const mdnsUrl = currentCode ? `https://aerokin.local:${config.port}/#code=${currentCode}` : '';
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
-    const hostedBase = (rawHosted || 'https://app.aerokin.com').trim().replace(/\/+$/, '');
-    const remotePairPayload = currentCode
-      ? `${hostedBase}/#agent=${pcId}${signalingUrl ? `&signal=${encodeURIComponent(signalingUrl)}` : ''}&code=${currentCode}`
+    const hostedBase = rawHosted ? rawHosted.trim().replace(/\/+$/, '') : '';
+    const signalHost = signalingUrl
+      ? signalingUrl.replace(/^wss?:\/\//i, '').replace(/^https?:\/\//i, '')
       : '';
+    const remotePairPayload =
+      hostedBase && currentCode
+        ? `${hostedBase}/#agent=${pcId}${signalHost ? `&signal=${encodeURIComponent(signalHost)}` : ''}&code=${currentCode}`
+        : undefined;
 
     return {
       devices: getEnrichedDeviceList(),
@@ -577,10 +581,14 @@ export function startServer(config: ServerConfig): {
 
     const pcId = deviceStore.getPcId();
     const signalingUrl = (process.env.AEROKIN_SIGNALING_URL || '').trim();
-    const hostedBase = (rawHosted || 'https://app.aerokin.com').trim().replace(/\/+$/, '');
-    const remotePairPayload = currentCode
-      ? `${hostedBase}/#agent=${pcId}${signalingUrl ? `&signal=${encodeURIComponent(signalingUrl)}` : ''}&code=${currentCode}`
+    const hostedBase = rawHosted ? rawHosted.trim().replace(/\/+$/, '') : '';
+    const signalHost = signalingUrl
+      ? signalingUrl.replace(/^wss?:\/\//i, '').replace(/^https?:\/\//i, '')
       : '';
+    const remotePairPayload =
+      hostedBase && currentCode
+        ? `${hostedBase}/#agent=${pcId}${signalHost ? `&signal=${encodeURIComponent(signalHost)}` : ''}&code=${currentCode}`
+        : undefined;
 
     res.json({
       url: pairUrl,

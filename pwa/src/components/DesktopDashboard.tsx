@@ -46,6 +46,7 @@ export interface FeatureFlags {
   remoteAccess: boolean;
   remotePower: boolean;
   fileUpload: boolean;
+  requirePcApproval?: boolean;
 }
 
 export interface CountdownState {
@@ -136,6 +137,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     remoteAccess: false,
     remotePower: false,
     fileUpload: false,
+    requirePcApproval: false,
   });
   const [countdownState, setCountdownState] = useState<CountdownState>({
     active: false,
@@ -470,24 +472,18 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
       .then(setTrustQrUrl)
       .catch(() => {});
 
-    const pcId = webrtcStatus?.pcId || 'pc_host';
-    const signaling = webrtcStatus?.signalingUrl;
-    const hostedBase = (
-      window.location.origin.includes('localhost')
-        ? 'https://app.aerokin.com'
-        : window.location.origin
-    ).replace(/\/+$/, '');
-    const remotePayload = activeCode
-      ? `${hostedBase}/#agent=${pcId}${signaling ? `&signal=${encodeURIComponent(signaling)}` : ''}&code=${activeCode}`
-      : `${hostedBase}/#agent=${pcId}`;
-
-    QRCode.toDataURL(remotePayload, {
-      margin: 1,
-      scale: 6,
-      color: { dark: '#000000', light: '#FFFFFF' },
-    })
-      .then(setRemoteQrUrl)
-      .catch(() => {});
+    const remotePayload = webrtcStatus?.remotePairPayload || null;
+    if (remotePayload) {
+      QRCode.toDataURL(remotePayload, {
+        margin: 1,
+        scale: 6,
+        color: { dark: '#000000', light: '#FFFFFF' },
+      })
+        .then(setRemoteQrUrl)
+        .catch(() => setRemoteQrUrl(null));
+    } else {
+      setRemoteQrUrl(null);
+    }
   }, [activeCode, pcStats, webrtcStatus]);
 
   // 4. Auto-scroll logs
@@ -953,7 +949,12 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
               <div className="flex flex-col sm:flex-row items-center gap-8 py-2">
                 {/* Big QR Code */}
                 <div className="p-3 bg-white rounded-2xl border border-border shadow-md flex-shrink-0 flex flex-col items-center">
-                  {(pairMode === 'lan' ? pairQrUrl : remoteQrUrl) ? (
+                  {pairMode === 'remote' && !webrtcStatus?.remotePairPayload ? (
+                    <div className="w-44 h-44 flex flex-col items-center justify-center p-3 text-center bg-zinc-900 text-muted-foreground text-xs rounded-xl border border-border">
+                      <span className="font-semibold text-foreground mb-1">Remote Link Disabled</span>
+                      <span className="text-[11px] text-muted-foreground">Set AEROKIN_HOSTED_URL to enable the remote link</span>
+                    </div>
+                  ) : (pairMode === 'lan' ? pairQrUrl : remoteQrUrl) ? (
                     <img
                       src={pairMode === 'lan' ? pairQrUrl! : remoteQrUrl!}
                       alt={
@@ -1064,28 +1065,30 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   {pairMode === 'remote' && (
                     <div className="flex flex-col gap-2 pt-2 border-t border-border">
                       {/* Remote Payload URI */}
-                      <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
-                        <span className="font-mono text-muted-foreground truncate max-w-[260px]">
-                          {`https://app.aerokin.com/#agent=${webrtcStatus?.pcId || 'pc_host'}&code=${activeCode}`}
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleCopy(
-                              webrtcStatus?.remotePairPayload ||
-                                `https://app.aerokin.com/#agent=${webrtcStatus?.pcId || 'pc_host'}${webrtcStatus?.signalingUrl ? `&signal=${encodeURIComponent(webrtcStatus.signalingUrl)}` : ''}&code=${activeCode}`,
-                              'remote_uri'
-                            )
-                          }
-                          className="p-1 hover:text-[#FF5A1F] transition-colors"
-                          title="Copy Remote Pairing URI"
-                        >
-                          {copiedKey === 'remote_uri' ? (
-                            <Check size={14} className="text-emerald-400" />
-                          ) : (
-                            <Copy size={14} />
-                          )}
-                        </button>
-                      </div>
+                      {webrtcStatus?.remotePairPayload ? (
+                        <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
+                          <span className="font-mono text-muted-foreground truncate max-w-[260px]">
+                            {webrtcStatus.remotePairPayload}
+                          </span>
+                          <button
+                            onClick={() =>
+                              handleCopy(webrtcStatus.remotePairPayload!, 'remote_uri')
+                            }
+                            className="p-1 hover:text-[#FF5A1F] transition-colors"
+                            title="Copy Remote Pairing URI"
+                          >
+                            {copiedKey === 'remote_uri' ? (
+                              <Check size={14} className="text-emerald-400" />
+                            ) : (
+                              <Copy size={14} />
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg font-mono">
+                          Set AEROKIN_HOSTED_URL to enable the remote link
+                        </div>
+                      )}
 
                       {/* Host PC ID */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">

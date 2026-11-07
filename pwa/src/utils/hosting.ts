@@ -127,6 +127,30 @@ export function getActivePc(): SavedPc | null {
 }
 
 /**
+ * Updates the stored LAN address for a saved PC whenever reached on a new network.
+ */
+export function updateSavedPcLanHost(pcId: string, newLanHost: string): boolean {
+  if (typeof window === 'undefined' || !pcId || !newLanHost) return false;
+  const pc = getSavedPc(pcId);
+  if (!pc) return false;
+  if (pc.lanHost === newLanHost) return false;
+  pc.lanHost = newLanHost;
+  pc.lastSeen = Date.now();
+  savePc(pc);
+  return true;
+}
+
+/**
+ * Checks if a valid cryptographic credential exists for the active PC or in storage.
+ */
+export function hasStoredCredentialForActivePc(): boolean {
+  const active = getActivePc();
+  if (active && active.credential && active.deviceId) return true;
+  const direct = getStoredDeviceCredentials();
+  return Boolean(direct.credential && direct.deviceId);
+}
+
+/**
  * Returns stored cryptographic device credentials from localStorage.
  */
 export function getStoredDeviceCredentials(): {
@@ -331,12 +355,7 @@ export function consumeConnectionFragment(): UrlConnectionParams {
       localStorage.setItem(STORAGE_TOKEN_KEY, code);
     }
 
-    if (
-      rawPcId &&
-      (rawPcId.trim().startsWith('pc_') ||
-        rawPcId.trim().startsWith('pc-') ||
-        rawPcId.trim().startsWith('agent_'))
-    ) {
+    if (rawPcId && rawPcId.trim().length > 0) {
       pcId = rawPcId.trim();
       localStorage.setItem(STORAGE_PC_ID_KEY, pcId);
     }

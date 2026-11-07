@@ -41,6 +41,7 @@ export class PairingManager extends EventEmitter {
 
   private customApprover: ApprovalHandler | null = null;
   private isPromptingApproval = false;
+  private requirePcApproval = false;
 
   private currentPendingApproval: {
     requestId: string;
@@ -73,6 +74,18 @@ export class PairingManager extends EventEmitter {
       expiresAt: this.codeExpiresAt,
       validForSeconds: Math.round((this.codeExpiresAt - Date.now()) / 1000),
     };
+  }
+
+  /**
+   * Enables or disables the PC operator approval gate.
+   * Personal mode default: false (no approval prompt required).
+   */
+  public setRequirePcApproval(required: boolean): void {
+    this.requirePcApproval = Boolean(required);
+  }
+
+  public getRequirePcApproval(): boolean {
+    return this.requirePcApproval;
   }
 
   public getActiveCode(): ActivePairingCode | null {
@@ -140,26 +153,22 @@ export class PairingManager extends EventEmitter {
     ipHistory.push(now);
     this.failedAttemptsByIp.set(ip, ipHistory);
 
-    // After 5 total failures against the active code, invalidate it immediately
-    if (this.failedAttemptsGlobal >= 5) {
+    // Invalidate code after repeated failed attempts against active code
+    if (this.failedAttemptsGlobal >= 20) {
       this.invalidateCode();
-      console.warn('[Security] Pairing code invalidated after 5 failed attempts.');
+      console.warn('[Security] Pairing code invalidated after repeated failed attempts.');
     }
 
-    // Lockout check: 5 wrong attempts per minute globally or for this IP
-    if (ipHistory.length >= 5) {
-      const mult = this.backoffMultiplierByIp.get(ip) || 1;
-      const lockoutDurationMs = 60_000 * mult;
+    // Sanity limit only (never lock Allen out with long bans)
+    if (ipHistory.length >= 50) {
+      const lockoutDurationMs = 5_000;
       this.lockoutUntilByIp.set(ip, now + lockoutDurationMs);
-      this.backoffMultiplierByIp.set(ip, Math.min(mult * 2, 8)); // exponential backoff up to 8x
-      console.warn(`[Security] IP ${ip} locked out from pairing for ${lockoutDurationMs / 1000}s.`);
+      console.warn(`[Security] Sanity rate pause: IP ${ip} paused for 5s.`);
     }
 
-    if (this.failedAttemptsWindow.length >= 5) {
-      this.lockoutUntilGlobal = now + 60_000;
-      console.warn(
-        '[Security] Global pairing lockout engaged for 60s due to repeated wrong attempts.'
-      );
+    if (this.failedAttemptsWindow.length >= 50) {
+      this.lockoutUntilGlobal = now + 5_000;
+      console.warn('[Security] Sanity rate pause: Global pairing paused for 5s.');
     }
   }
 
@@ -344,11 +353,18 @@ export class PairingManager extends EventEmitter {
       };
     }
 
-    // Step 2: PC operator approval gate (30s timeout, default deny)
-    console.log(
-      `[Pairing] Valid 8-digit code received from ${clientIp}. Awaiting PC operator approval...`
-    );
-    const approved = await this.promptTerminalApproval(name, platform, clientIp);
+    // Step 2: PC operator approval gate (default OFF: auto-approves)
+    let approved = true;
+    if (this.requirePcApproval) {
+      console.log(
+        `[Pairing] Valid 8-digit code received from ${clientIp}. Awaiting PC operator approval...`
+      );
+      approved = await this.promptTerminalApproval(name, platform, clientIp);
+    } else {
+      console.log(
+        `[Pairing] Valid 8-digit code received from ${clientIp}. Auto-approved (PC approval is default OFF).`
+      );
+    }
 
     // Consume single-use code immediately regardless of outcome
     this.invalidateCode();
@@ -362,4 +378,6 @@ export class PairingManager extends EventEmitter {
 
     return { ok: true };
   }
+
+  public validatePairingSubmission = this.submitPairing.bind(this);
 }

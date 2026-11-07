@@ -14,6 +14,7 @@ export interface FeatureFlags {
   remoteAccess: boolean;
   remotePower: boolean;
   fileUpload: boolean;
+  requirePcApproval: boolean;
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
@@ -24,6 +25,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   remoteAccess: false,
   remotePower: false,
   fileUpload: false,
+  requirePcApproval: false,
 };
 
 export class FeatureManager {
@@ -31,8 +33,10 @@ export class FeatureManager {
   private changeListeners: Array<(flags: FeatureFlags) => void> = [];
 
   constructor(initialFlags: Partial<FeatureFlags> = {}) {
+    const defaultRemoteAccess = Boolean(process.env.AEROKIN_SIGNALING_URL);
     this.flags = {
       ...DEFAULT_FEATURE_FLAGS,
+      remoteAccess: defaultRemoteAccess,
       ...initialFlags,
     };
   }

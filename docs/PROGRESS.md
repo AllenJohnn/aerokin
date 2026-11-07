@@ -11,7 +11,8 @@
   - **Completed so far**:
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
-- **Exact Next Step**: Implement Pair Once & Work on Every Network + Remote Pairing + Personal mode friction removal (Tasks 3 & 4 / Items 1 & 2).
+    - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
+- **Exact Next Step**: Configure and verify Vercel deployment for hosted PWA and update deployment documentation (Task 5 / Item 5).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
   2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
@@ -31,6 +32,19 @@
   - Deleted legacy `signaling/.env.example` to establish `signaling/deploy/.env.example` as single source of truth.
   - Updated `signaling/deploy.sh` and `docs/DEPLOYMENT.md` to point directly to `deploy/.env.example` and use `TURN_SECRET`.
   - Authored automated tests in `signaling/test/turn-secret-config.test.ts` verifying refusal to start without secret, coturn template variable matching, and HMAC-SHA1 credential parity.
+- **R2.3 Pair Once, Remote Pairing from Scratch, Friction Removal & Always Available PC**:
+  - Implemented single stable hosted origin architecture storing paired PCs in local storage keyed strictly by `agentId` (not by temporary IP).
+  - Implemented smart connection ladder with `<= 1.5s` LAN WebSocket probe timing out directly into WebRTC signaling fallback.
+  - Automatic dynamic LAN address updates whenever the PC is reached on a new network.
+  - Added dedicated OLED "PC Offline or Asleep" view when paired PC cannot be reached; never re-prompts for pairing codes or drops credentials.
+  - Implemented remote pairing over RTC control channel with URL fragment `#agent=<id>&signal=<host>&code=<8-digit>` and instant history stripping.
+  - Removed PC approval gate by default (`requirePcApproval: false`) for personal mode frictionless pairing.
+  - Removed IP bans across signaling and server; elevated message sanity limits to 2000 msg/min.
+  - Removed fake `https://app.aerokin.com` fallback in dashboard and server status; renders honest link/QR only when `AEROKIN_HOSTED_URL` is configured, otherwise displaying "Set AEROKIN_HOSTED_URL to enable the remote link".
+  - Created `WindowsAutostartManager` managing user Startup folder shortcut without admin privileges (isolated to temp dirs in tests per S7).
+  - Created `WindowsKeepAwakeAdapter` and `FakeKeepAwakeAdapter` utilizing Win32 `SetThreadExecutionState` (`0x80000001`) keeping PC awake during AeroKin execution without altering Windows power plan.
+  - Documented Wake-on-LAN web limitations in `docs/QUICKSTART.md`.
+  - Authored automated test suites in `pwa/test/networkSwitchAndPairing.test.ts` (6 tests) and `server/test/remote-pairing-frictionless.test.ts` (9 tests). All 91 PWA tests passing.
 
 ---
 

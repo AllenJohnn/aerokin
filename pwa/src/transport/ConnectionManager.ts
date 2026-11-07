@@ -10,11 +10,13 @@ export interface ConnectionManagerOptions {
   pcId?: string;
   onModeChange?: (mode: ConnectionMode) => void;
   onLatencyUpdate?: (latencyMs: number) => void;
+  onLanHostDiscovered?: (lanHost: string) => void;
 }
 
 export class ConnectionManager implements Connection {
   private options: ConnectionManagerOptions;
   private activeTransport: Connection | null = null;
+  private lanProbeTimer: any = null;
   private stateChangeHandlers = new Set<(state: ConnectionState) => void>();
   private messageHandlers = new Map<
     ChannelName,
@@ -45,18 +47,49 @@ export class ConnectionManager implements Connection {
     this.currentState = 'connecting';
     this.notifyState('connecting');
 
-    // 1. Probe LAN WebSocket first (fastest local path)
+    // 1. Probe LAN WebSocket first (fastest local path, <= 1.5s probe per S1)
     const lan = new WsTransport(this.options.lanUrl);
     this.activeTransport = lan;
 
+    const LAN_PROBE_TIMEOUT_MS = 1500;
+    if (this.lanProbeTimer) {
+      clearTimeout(this.lanProbeTimer);
+      this.lanProbeTimer = null;
+    }
+
+    if (this.options.signalingUrl && this.options.pcId) {
+      this.lanProbeTimer = setTimeout(() => {
+        if (this.currentState === 'connecting' && this.activeTransport === lan) {
+          console.log(
+            `[ConnectionManager] LAN probe timed out (<= 1.5s); switching to remote WebRTC signaling...`
+          );
+          lan.close();
+          this.switchToWebRtc();
+        }
+      }, LAN_PROBE_TIMEOUT_MS);
+    }
+
     lan.onStateChange((st) => {
       if (st === 'connected') {
+        if (this.lanProbeTimer) {
+          clearTimeout(this.lanProbeTimer);
+          this.lanProbeTimer = null;
+        }
         this.currentState = 'connected';
         this.currentMode = 'lan_direct';
         this.options.onModeChange?.(this.currentMode);
         this.notifyState('connected');
+
+        try {
+          const u = new URL(this.options.lanUrl);
+          this.options.onLanHostDiscovered?.(u.host);
+        } catch {}
       } else if (st === 'failed' || st === 'closed') {
-        if (this.options.signalingUrl) {
+        if (this.lanProbeTimer) {
+          clearTimeout(this.lanProbeTimer);
+          this.lanProbeTimer = null;
+        }
+        if (this.options.signalingUrl && this.options.pcId) {
           // Fall back to WebRTC
           this.switchToWebRtc();
         } else {
@@ -78,6 +111,11 @@ export class ConnectionManager implements Connection {
   }
 
   private switchToWebRtc(): void {
+    if (this.lanProbeTimer) {
+      clearTimeout(this.lanProbeTimer);
+      this.lanProbeTimer = null;
+    }
+
     if (!this.options.signalingUrl || !this.options.pcId) {
       this.currentState = 'failed';
       this.notifyState('failed');
@@ -110,6 +148,20 @@ export class ConnectionManager implements Connection {
 
     for (const ch of ['input', 'stats', 'media', 'clipboard', 'control'] as ChannelName[]) {
       rtc.onMessage(ch, (data) => {
+        if (ch === 'control') {
+          try {
+            const text =
+              typeof data === 'string'
+                ? data
+                : new TextDecoder().decode(
+                    data instanceof Uint8Array ? data : new Uint8Array(data)
+                  );
+            const parsed = JSON.parse(text);
+            if (parsed.lanIp && parsed.port) {
+              this.options.onLanHostDiscovered?.(`${parsed.lanIp}:${parsed.port}`);
+            }
+          } catch {}
+        }
         this.dispatchMessage(ch, data);
       });
     }
@@ -162,6 +214,10 @@ export class ConnectionManager implements Connection {
   }
 
   public close(): void {
+    if (this.lanProbeTimer) {
+      clearTimeout(this.lanProbeTimer);
+      this.lanProbeTimer = null;
+    }
     this.currentState = 'closed';
     this.activeTransport?.close();
     this.activeTransport = null;

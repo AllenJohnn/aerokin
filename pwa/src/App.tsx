@@ -7,7 +7,7 @@ import { ConnectionModeBadge } from './components/ConnectionModeBadge';
 import { TrackpadTab } from './components/TrackpadTab';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { triggerHaptic } from './utils/haptics';
-import { isHostedMode, buildTrustUrl } from './utils/hosting';
+import { isHostedMode, buildTrustUrl, hasStoredCredentialForActivePc } from './utils/hosting';
 import {
   TrackpadConfig,
   loadTrackpadConfig,
@@ -284,7 +284,111 @@ export const App: React.FC = () => {
     );
   }
 
-  // Render Hosted Mode Connection Screen when disconnected in hosted mode
+  const hasCredential =
+    hasStoredCredentialForActivePc() || Boolean(credential || activePc?.credential);
+
+  // Render "PC Offline or Asleep" screen when disconnected but already paired
+  if (status !== 'connected' && hasCredential && !isDesktopMode && !isDashboardRoute) {
+    return (
+      <div className="relative flex flex-col h-[100dvh] w-full bg-bg text-foreground overflow-y-auto pt-safe pb-safe select-none p-6 justify-between max-w-md mx-auto">
+        <header className="flex items-center justify-between h-13 min-h-[52px]">
+          <div className="flex items-center">
+            <AerokinLogo size={28} withWordmark />
+          </div>
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              setShowSettingsDrawer(true);
+            }}
+            className="w-10 h-10 min-w-[48px] min-h-[48px] rounded-xl text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Gear size={20} />
+          </button>
+        </header>
+
+        <div className="flex flex-col items-center text-center my-auto py-6">
+          <div className="relative w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center text-muted-foreground mb-4 shadow-sm">
+            <Monitor size={36} className="text-zinc-500" />
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-500/80 border-2 border-bg animate-pulse" />
+          </div>
+
+          <h1 className="text-xl font-bold tracking-tight mb-1 text-foreground">PC Offline or Asleep</h1>
+          <p className="text-xs text-muted-foreground max-w-xs mb-6">
+            <span className="font-semibold text-foreground">{activePc?.name || 'Your PC'}</span> is not reachable right now. AeroKin stays paired and will reconnect automatically.
+          </p>
+
+          <div className="w-full bg-surface border border-border rounded-2xl p-4 text-left mb-6 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Host Agent ID</span>
+              <span className="font-mono text-foreground font-medium">{activePc?.pcId || 'agent'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
+              <span className="text-muted-foreground">Last Known LAN</span>
+              <span className="font-mono text-foreground">{activePc?.lanHost || host || 'Scanning local network...'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
+              <span className="text-muted-foreground">Remote WebRTC</span>
+              <span className="font-mono text-zinc-400">{activePc?.signalingUrl ? 'Configured' : 'Local Only'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
+              <span className="text-muted-foreground">Pairing Status</span>
+              <span className="text-emerald-400 font-medium">Paired (Token Stored)</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              connectManually();
+            }}
+            disabled={status === 'reconnecting'}
+            className="w-full h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-sm font-semibold transition-transform active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm disabled:opacity-70"
+          >
+            {status === 'reconnecting' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-black animate-ping" />
+                <span>Searching for PC...</span>
+              </>
+            ) : (
+              <span>Retry Connection</span>
+            )}
+          </button>
+        </div>
+
+        <footer className="text-center text-[11px] text-muted-foreground/60 py-2">
+          Wake your PC or ensure the AeroKin service is running
+        </footer>
+
+        {showSettingsDrawer && (
+          <SettingsDrawer
+            isOpen={showSettingsDrawer}
+            onOpenChange={setShowSettingsDrawer}
+            navConfig={navConfig}
+            onNavConfigChange={handleNavConfigChange}
+            trackpadConfig={trackpadConfig}
+            onTrackpadConfigChange={handleTrackpadConfigChange}
+            onResetTrackpadConfig={handleResetTrackpadConfig}
+            seekMethod={seekMethod}
+            onSeekMethodChange={handleSeekMethodChange}
+            token={pairingCode || token}
+            deviceId={deviceId}
+            deviceName={deviceName}
+            devices={devices}
+            onRenameDevice={renameDevice}
+            onRevokeDevice={revokeDevice}
+            onRevokeAllDevices={revokeAllDevices}
+            onLogout={logout}
+            onUnpairThisDevice={unpairThisDevice}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Render Hosted Mode Connection Screen when disconnected in hosted mode (unpaired)
   if (isHosted && status !== 'connected') {
     return (
       <div className="relative flex flex-col h-[100dvh] w-full bg-bg text-foreground overflow-y-auto pt-safe pb-safe select-none p-6 justify-between max-w-md mx-auto">

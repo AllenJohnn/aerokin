@@ -173,7 +173,7 @@ export class RtcTransport implements Connection {
 
   constructor(options: RtcTransportOptions) {
     this.options = options;
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       this.onlineListener = () => {
         if (this.currentState === 'reconnecting' || this.currentState === 'failed') {
           this.restartIce().catch(() => {});

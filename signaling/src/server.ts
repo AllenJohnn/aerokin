@@ -173,35 +173,18 @@ export class SignalingServer {
   }
 
   private isIpBanned(ip: string): boolean {
-    const record = this.ipFailures.get(ip);
-    if (!record) return false;
-    if (record.bannedUntil > Date.now()) {
-      return true;
-    }
-    if (record.bannedUntil > 0) {
-      // Ban has expired, reset
-      this.ipFailures.delete(ip);
-    }
+    // Allen personal project: No IP bans locking Allen out. Generous sanity limits only.
     return false;
   }
 
   private recordAuthFailure(ip: string): void {
     const record = this.ipFailures.get(ip) || { count: 0, bannedUntil: 0 };
     record.count++;
-    if (record.count >= 5) {
-      record.bannedUntil = Date.now() + 5 * 60 * 1000; // 5 minute lockout
-      console.warn(
-        `[SignalingServer] Rate limiter: Temporary ban on IP ${ip} after 5 failed authentication attempts`
-      );
-    }
     this.ipFailures.set(ip, record);
   }
 
   private recordAuthSuccess(ip: string): void {
-    const record = this.ipFailures.get(ip);
-    if (record && record.bannedUntil <= Date.now()) {
-      this.ipFailures.delete(ip);
-    }
+    this.ipFailures.delete(ip);
   }
 
   private checkMessageRateLimit(ip: string): boolean {
@@ -213,8 +196,8 @@ export class SignalingServer {
       return true;
     }
     record.count++;
-    if (record.count > 120) {
-      // Exceeded 120 messages per minute
+    if (record.count > 2000) {
+      // Generous sanity limit: 2000 messages per minute
       return false;
     }
     return true;

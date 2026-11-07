@@ -3,20 +3,33 @@ import { Connection, ConnectionState, ConnectionMode, ChannelName } from './Conn
 import { chunkDataChannelMessage, RtcMessageReassembler } from './RtcTransport.js';
 import { DeviceStore } from '../device-store.js';
 import { SignalingClient } from './SignalingClient.js';
+import { PairingManager } from '../pairing-manager.js';
 
 export interface RtcHostManagerOptions {
   signalingClient: SignalingClient;
   deviceStore: DeviceStore;
+  pairingManager?: PairingManager;
+  lanIp?: string;
+  port?: number;
   iceServers?: any[];
   onClientConnected?: (session: RtcHostSession) => void;
   onClientDisconnected?: (deviceId: string) => void;
   onClientAuthenticated?: (session: RtcHostSession) => void;
 }
 
+export interface RtcHostSessionOptions {
+  pairingManager?: PairingManager;
+  signalingClient?: SignalingClient;
+  lanIp?: string;
+  port?: number;
+  onAuthSuccess?: (session: RtcHostSession) => void;
+}
+
 export class RtcHostSession implements Connection {
   public pc: PeerConnection;
   public peerId: string;
   private deviceStore: DeviceStore;
+  private sessionOptions?: RtcHostSessionOptions;
   private channels = new Map<ChannelName, DataChannel>();
   private reassembler = new RtcMessageReassembler();
   private messageHandlers = new Map<
@@ -37,11 +50,16 @@ export class RtcHostSession implements Connection {
     peerId: string,
     pc: PeerConnection,
     deviceStore: DeviceStore,
-    private onAuthSuccess?: (session: RtcHostSession) => void
+    sessionOptions?: RtcHostSessionOptions | ((session: RtcHostSession) => void)
   ) {
     this.peerId = peerId;
     this.pc = pc;
     this.deviceStore = deviceStore;
+    if (typeof sessionOptions === 'function') {
+      this.sessionOptions = { onAuthSuccess: sessionOptions };
+    } else {
+      this.sessionOptions = sessionOptions;
+    }
 
     this.pc.onStateChange((st) => {
       if (st === 'connected') {
@@ -90,11 +108,13 @@ export class RtcHostSession implements Connection {
       const full = this.reassembler.processChunk(packet);
       if (!full) return;
 
-      this.handleIncomingMessage(label, full);
+      this.handleIncomingMessage(label, full).catch((err) => {
+        console.warn(`[RtcHostSession] Error handling DataChannel message:`, err);
+      });
     });
   }
 
-  private handleIncomingMessage(channel: ChannelName, data: Uint8Array): void {
+  private async handleIncomingMessage(channel: ChannelName, data: Uint8Array): Promise<void> {
     if (channel === 'control') {
       try {
         const text = new TextDecoder().decode(data);
@@ -118,10 +138,12 @@ export class RtcHostSession implements Connection {
                   name: dev?.name || 'Device',
                   pcId: this.deviceStore.getPcId(),
                   pcName: this.deviceStore.getPcIdentity().name,
+                  lanIp: this.sessionOptions?.lanIp,
+                  port: this.sessionOptions?.port,
                 })
               );
 
-              this.onAuthSuccess?.(this);
+              this.sessionOptions?.onAuthSuccess?.(this);
               return;
             } else {
               this.send(
@@ -129,6 +151,67 @@ export class RtcHostSession implements Connection {
                 JSON.stringify({
                   type: 'auth_failed',
                   error: 'Unauthorized: Invalid or revoked device credential',
+                })
+              );
+              this.close();
+              return;
+            }
+          } else if (msg.type === 'pair') {
+            const { code, name, platform } = msg;
+            if (this.sessionOptions?.pairingManager && typeof code === 'string') {
+              const result = await this.sessionOptions.pairingManager.validatePairingSubmission(
+                code,
+                name || 'Remote Device',
+                platform || 'WebRTC',
+                `webrtc:${this.peerId}`
+              );
+
+              if (result.ok) {
+                const { deviceId: newDevId, rawCredential, record } = this.deviceStore.addDevice(
+                  name || 'Remote Device',
+                  platform || 'WebRTC',
+                  { pairedVia: 'remote', remote: true }
+                );
+
+                this.authenticated = true;
+                this.deviceId = newDevId;
+
+                // Sync new token with signaling server
+                this.sessionOptions.signalingClient?.addClientToken(record.signalingTokenHash!);
+
+                this.send(
+                  'control',
+                  JSON.stringify({
+                    type: 'pair_ok',
+                    deviceId: newDevId,
+                    credential: rawCredential,
+                    name: record.name,
+                    pcId: this.deviceStore.getPcId(),
+                    pcName: this.deviceStore.getPcIdentity().name,
+                    lanIp: this.sessionOptions?.lanIp,
+                    port: this.sessionOptions?.port,
+                  })
+                );
+
+                this.sessionOptions?.onAuthSuccess?.(this);
+                return;
+              } else {
+                this.send(
+                  'control',
+                  JSON.stringify({
+                    type: 'pair_failed',
+                    error: result.error || 'Pairing rejected',
+                  })
+                );
+                this.close();
+                return;
+              }
+            } else {
+              this.send(
+                'control',
+                JSON.stringify({
+                  type: 'pair_failed',
+                  error: 'Pairing manager not configured on host',
                 })
               );
               this.close();
@@ -303,8 +386,14 @@ export class RtcHostManager {
         iceServers: formattedIceServers,
       });
 
-      const session = new RtcHostSession(peerId, pc, this.options.deviceStore, (authedSession) => {
-        this.options.onClientAuthenticated?.(authedSession);
+      const session = new RtcHostSession(peerId, pc, this.options.deviceStore, {
+        pairingManager: this.options.pairingManager,
+        signalingClient: this.options.signalingClient,
+        lanIp: this.options.lanIp,
+        port: this.options.port,
+        onAuthSuccess: (authedSession) => {
+          this.options.onClientAuthenticated?.(authedSession);
+        },
       });
 
       this.sessions.set(peerId, session);
