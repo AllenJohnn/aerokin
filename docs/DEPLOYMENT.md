@@ -42,15 +42,15 @@ git clone https://github.com/AllenJohnn/aerokin.git
 cd aerokin/signaling
 
 # 2. Configure .env
-cp .env.example .env
+cp deploy/.env.example .env
 nano .env
 
 # Set:
 # EXTERNAL_IP=<Your VPS IP>
 # AEROKIN_SIGNALING_DOMAIN=signaling.yourdomain.com
 # COTURN_HOST=turn.yourdomain.com
-# COTURN_SECRET=<Generate with: openssl rand -hex 32>
-# COTURN_REALM=yourdomain.com
+# TURN_SECRET=<Generate with: openssl rand -hex 32>
+# TURN_REALM=turn.yourdomain.com
 
 # 3. Run deploy script
 sudo bash deploy.sh

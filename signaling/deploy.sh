@@ -44,12 +44,12 @@ fi
 
 # 3. Environment check
 if [ ! -f .env ]; then
-  echo "[!] .env not found. Generating default .env from .env.example..."
-  cp .env.example .env
+  echo "[!] .env not found. Generating default .env from deploy/.env.example..."
+  cp deploy/.env.example .env
   PUBLIC_IP=$(curl -s https://api.ipify.org || echo "127.0.0.1")
   sed -i "s/EXTERNAL_IP=.*/EXTERNAL_IP=${PUBLIC_IP}/" .env
-  RAND_SECRET=$(openssl rand -hex 24)
-  sed -i "s/COTURN_SECRET=.*/COTURN_SECRET=${RAND_SECRET}/" .env
+  RAND_SECRET=$(openssl rand -hex 32)
+  sed -i "s/TURN_SECRET=.*/TURN_SECRET=${RAND_SECRET}/" .env
   echo "[+] Configured .env with Public IP: ${PUBLIC_IP}"
 fi
 

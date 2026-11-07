@@ -10,7 +10,8 @@
   - **In Progress**: Executing tasks toward stable-r2.
   - **Completed so far**:
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
-- **Exact Next Step**: Fix TURN secret bug in signaling and coturn configs (Task 2 / Item 3).
+    - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
+- **Exact Next Step**: Implement Pair Once & Work on Every Network + Remote Pairing + Personal mode friction removal (Tasks 3 & 4 / Items 1 & 2).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
   2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
@@ -25,6 +26,11 @@
   - Updated `pwa/test/desktopGesturesAndModifiers.test.ts` to assert `viewOnly: false` in custom settings persistence.
   - Added test for migration of legacy stored settings lacking `viewOnly` defaulting to `false`.
   - Verified 10/10 test files and 85/85 tests pass in PWA, and all 4 packages pass `tsc --noEmit`.
+- **R2.2 TURN Secret Bug Fix & Canonical Config Parity**:
+  - Resolved `TURN_SECRET` mismatch: `signaling/src/index.ts` now enforces `TURN_SECRET` as canonical and treats `COTURN_SECRET` as a deprecated alias, completely eliminating hardcoded defaults and throwing a clean exit on startup if unset.
+  - Deleted legacy `signaling/.env.example` to establish `signaling/deploy/.env.example` as single source of truth.
+  - Updated `signaling/deploy.sh` and `docs/DEPLOYMENT.md` to point directly to `deploy/.env.example` and use `TURN_SECRET`.
+  - Authored automated tests in `signaling/test/turn-secret-config.test.ts` verifying refusal to start without secret, coturn template variable matching, and HMAC-SHA1 credential parity.
 
 ---
 
