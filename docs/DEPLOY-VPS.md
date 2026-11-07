@@ -106,13 +106,17 @@ Populate the fields:
 EXTERNAL_IP=198.51.100.25
 COTURN_HOST=turn.yourdomain.com
 COTURN_REALM=yourdomain.com
-COTURN_SECRET=your_generated_turn_secret_here
-ALLOWED_ORIGINS=https://app.aerokin.com,https://yourdomain.com
+TURN_SECRET=your_generated_turn_secret_here
+ALLOWED_ORIGINS=https://your-aerokin-app.vercel.app,https://yourdomain.com
 COTURN_MIN_PORT=49152
 COTURN_MAX_PORT=65535
 NODE_ENV=production
 PORT=3000
 ```
+
+> [!TIP]
+> **Vercel Hosted PWA Integration**:
+> If you host the AeroKin PWA on Vercel (see [docs/DEPLOY-VERCEL.md](file:///D:/Personal%20Project/aerokin/docs/DEPLOY-VERCEL.md)), include your exact Vercel deployment URL (e.g. `https://aerokin.vercel.app`) in `ALLOWED_ORIGINS`. This allows the hosted PWA on your phone to establish secure WebSocket signaling connections with your VPS.
 
 ### D. Render Coturn Configuration Template
 Generate the final `turnserver.conf` from `turnserver.conf.template`:
@@ -122,7 +126,7 @@ export $(grep -v '^#' deploy/.env | xargs)
 envsubst < turnserver.conf.template > turnserver.conf
 ```
 
-Verify that `turnserver.conf` contains your actual `EXTERNAL_IP`, `COTURN_REALM`, `COTURN_SECRET`, and port ranges without any unexpanded `$VARIABLES`.
+Verify that `turnserver.conf` contains your actual `EXTERNAL_IP`, `COTURN_REALM`, `TURN_SECRET`, and port ranges without any unexpanded `$VARIABLES`.
 
 ---
 

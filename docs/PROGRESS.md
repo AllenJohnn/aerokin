@@ -12,7 +12,8 @@
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
-- **Exact Next Step**: Configure and verify Vercel deployment for hosted PWA and update deployment documentation (Task 5 / Item 5).
+    - Configured and verified static Vercel deployment (`pwa/vercel.json`, root `vercel.json` SPA rewrites, immutable assets, no-cache HTML/manifest), authored `docs/DEPLOY-VERCEL.md` step-by-step guide with minimal path architecture (Vercel static PWA + 1 Linux VPS for signaling & Coturn), updated `ALLOWED_ORIGINS` in `docs/DEPLOY-VPS.md`, and documented iPhone LAN CA trust vs cellular WebRTC fallback.
+- **Exact Next Step**: Reset root README to standard Vite template and correct overstated benchmark and soak claims (Tasks 7 & 8 / Items 7 & 8).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
   2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
