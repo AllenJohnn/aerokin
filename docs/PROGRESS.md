@@ -6,19 +6,25 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: ALL PARTS COMPLETED (Part A Remote Auth & Signaling Hardening, Part B1 Architecture & Deployment Guides, Part B2 Multi-Viewport Audit, Part B3 Tooling & Flat Config, Part B4-B5 Streaming Benchmarks, Soak Test & View-Only Mode, Part C Overnight Report & Stable-R1 Release).
-  - **Part C Completed**:
-    - **Hygiene & Secrets Verification**: Verified zero untracked certificates, keys, or hardcoded secrets. Eradicated all `sha256(pcId)` fallback paths.
-    - **Overnight Engineering Report (`docs/OVERNIGHT-REPORT.md`)**: Comprehensive report detailing executive metrics (347 tests, 0 safety violations, 31ms p50 NVENC latency, ~84% bandwidth reduction, 30.2 fps soak stability), Hard Safety Rules compliance (S1-S9), and honest status delineation.
-    - **README & Tooling Polish**: Updated `README.md` with explicit notice on UNVERIFIED cellular remote status pending Allen's mobile-data test, HTTPS URL fragment pairing documentation, and soak test commands.
-    - **Release Tagging**: Tagged release `stable-r1` on `main`.
-- **Exact Next Step**: Present overnight report to Allen and await physical mobile-data field testing.
+- **Current Milestone**: Stable-R2 Release Work (Allen Personal Mode, Remote Pairing, TURN Secrets Hardening, Autostart & Keep Awake, Playwright UI Audit, 10-Min Soak).
+  - **In Progress**: Executing tasks toward stable-r2.
+  - **Completed so far**:
+    - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
+- **Exact Next Step**: Fix TURN secret bug in signaling and coturn configs (Task 2 / Item 3).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
   2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
   3. Running `scripts/generate-secrets.ps1` to populate production `.env`.
   4. Physical mobile data field test on iPhone (Wi-Fi OFF, cellular LTE/5G ON) per `docs/REMOTE-TEST.md`.
 - **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+
+---
+
+## Stable-R2 Execution (In Progress)
+- **R2.1 PWA Desktop Settings Test Fix**:
+  - Updated `pwa/test/desktopGesturesAndModifiers.test.ts` to assert `viewOnly: false` in custom settings persistence.
+  - Added test for migration of legacy stored settings lacking `viewOnly` defaulting to `false`.
+  - Verified 10/10 test files and 85/85 tests pass in PWA, and all 4 packages pass `tsc --noEmit`.
 
 ---
 

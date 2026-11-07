@@ -36,6 +36,7 @@ describe('AEROKIN Desktop Settings & Key Modifier Latching', () => {
         inputMode: 'trackpad',
         showStats: true,
         autoHideToolbar: false,
+        viewOnly: false,
       };
       saveDesktopSettings(custom);
 
@@ -71,6 +72,25 @@ describe('AEROKIN Desktop Settings & Key Modifier Latching', () => {
 
       const loaded = loadDesktopSettings();
       expect(loaded.defaultPreset).toBe('tiny');
+    });
+
+    it('defaults viewOnly to false when migrating legacy storage missing viewOnly', () => {
+      storage.set(
+        STORAGE_DESKTOP_SETTINGS_KEY,
+        JSON.stringify({
+          defaultPreset: 'high',
+          fpsCap: 45,
+          preferredCodec: 'h264',
+          inputMode: 'direct',
+          showStats: true,
+          autoHideToolbar: false,
+        })
+      );
+
+      const loaded = loadDesktopSettings();
+      expect(loaded.viewOnly).toBe(false);
+      expect(loaded.defaultPreset).toBe('high');
+      expect(loaded.fpsCap).toBe(45);
     });
   });
 
