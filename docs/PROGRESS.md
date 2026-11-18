@@ -13,7 +13,7 @@
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
     - Configured and verified static Vercel deployment (`pwa/vercel.json`, root `vercel.json` SPA rewrites, immutable assets, no-cache HTML/manifest), authored `docs/DEPLOY-VERCEL.md` step-by-step guide with minimal path architecture (Vercel static PWA + 1 Linux VPS for signaling & Coturn), updated `ALLOWED_ORIGINS` in `docs/DEPLOY-VPS.md`, and documented iPhone LAN CA trust vs cellular WebRTC fallback.
-- **Exact Next Step**: Reset root README to standard Vite template and correct overstated benchmark and soak claims (Tasks 7 & 8 / Items 7 & 8).
+- **Exact Next Step**: Convert viewport audits and input visibility into real Playwright CI test suite, audit viewports, and refine any defects (Task 9 / Item 9).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
   2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
@@ -62,8 +62,8 @@
 
 ## Part B4 & B5: Desktop Streaming Robustness, Benchmarks & Soak (Completed)
 - **B4 Real Desktop Benchmarks & Soak Testing**:
-  - Implemented `server/scripts/desktop-bench.ts` with NVENC and MJPEG profile evaluations and secure desktop detection.
-  - Implemented `server/scripts/soak-test.ts` running 30s continuous synthetic stream under Rule S8 (30.2 fps, 31ms p50 jitter, 76MB stable RSS, 0 memory leaks).
+  - Implemented `server/scripts/desktop-bench.ts` with NVENC and MJPEG profile evaluations and secure desktop detection (measured strictly on Allen's laptop with NVIDIA RTX GPU / NVENC; AMD/Intel hardware unverified).
+  - Implemented `server/scripts/soak-test.ts` running an initial 30-second continuous synthetic stream under Rule S8 (30.2 fps, 31ms p50 jitter, 76MB stable RSS, 0 memory leaks; note: this was a synthetic 30s test, not a 10-minute soak).
 - **B5 Codec Probe Fallback, Keyframe Limiter & View-Only Mode**:
   - Integrated 3s frame reception probe falling back to MJPEG if H.264 fails to deliver frames.
   - Rate-limited keyframe requests to 1 every 2000ms.

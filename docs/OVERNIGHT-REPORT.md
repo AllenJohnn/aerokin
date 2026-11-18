@@ -18,10 +18,10 @@ Every subsystem has been verified through automated test suites, linting, format
   - `aerokin-signaling`: 10 passed tests
 - **Static Safety Compliance**: **0 violations** (S1–S5 isolation verified via `pnpm run safety:check`)
 - **Codebase Quality**: 100% Prettier formatting across 92+ files, 0 ESLint errors (Flat Config)
-- **Desktop Streaming Latency**: **31 ms p50** (NVENC H.264 1080p/720p)
-- **Bandwidth Efficiency**: **~84% reduction in network bitrate** vs MJPEG (2.1 Mbps vs 13.04 Mbps)
-- **Soak Test (30s continuous)**: **30.2 fps constant**, 76 MB stable RSS memory delta (+3 MB total, zero leaks)
-- **Mobile UI Ergonomics**: 7 viewport audits passed, 100% 16px iOS zoom-safe font sizes, 18.16:1 OLED contrast ratio
+- **Desktop Streaming Latency**: **31 ms p50** (measured on Allen's laptop NVENC hardware only; AMD AMF and Intel QuickSync unmeasured)
+- **Bandwidth Efficiency**: **~84% reduction in network bitrate** vs MJPEG (2.1 Mbps vs 13.04 Mbps measured on Allen's laptop NVENC)
+- **Initial Soak Test**: **Synthetic 30-second soak only** (not a 10-minute soak; 30.2 fps constant, 76 MB stable RSS)
+- **Viewport Layout Audit**: Executed via standalone Node.js script `pwa/scripts/audit-viewports.mjs` (a script run locally, not a CI test suite)
 
 ---
 
@@ -77,7 +77,7 @@ In accordance with strict safety mandates established to protect Allen's Windows
 ---
 
 ### Part B2: Multi-Viewport UI & Accessibility Audit
-- **Auditor Script**: Implemented `pwa/scripts/audit-viewports.mjs`.
+- **Auditor Script**: Implemented `pwa/scripts/audit-viewports.mjs` (executed as a standalone Node.js script, not as an automated CI test).
 - **Viewports Audited**:
   - iPhone SE (375x667)
   - iPhone 14/15/16 Pro (390x844 @ 3x Retina)
@@ -104,14 +104,14 @@ In accordance with strict safety mandates established to protect Allen's Windows
 
 ### Part B4 & B5: Desktop Streaming Robustness, Benchmarks & Soak
 - **Desktop Streaming Benchmarks (`server/scripts/desktop-bench.ts`)**:
-  - Evaluated DXGI Desktop Duplication (`ddagrab`) with NVIDIA NVENC (`h264_nvenc`) on host:
+  - Evaluated DXGI Desktop Duplication (`ddagrab`) with NVIDIA NVENC (`h264_nvenc`) on host (measured strictly on Allen's laptop with NVIDIA GeForce RTX GPU; AMD AMF and Intel QuickSync were not tested):
     - **1080p H.264 (NVENC)**: 32.8 fps, 3.66 Mbps, 14.3 KB avg frame size, 31 ms p50 latency, 7.1% FFmpeg CPU.
     - **720p H.264 (NVENC)**: 32.9 fps, 2.10 Mbps, 8.2 KB avg frame size, 31 ms p50 latency, 5.0% FFmpeg CPU.
     - **720p MJPEG (Software)**: 34.2 fps, 13.04 Mbps, 48.7 KB avg frame size.
-    - **Result**: H.264 NVENC delivers an **~84% reduction in bandwidth** with pristine image clarity and sub-35 ms latency.
+    - **Result**: H.264 NVENC delivers an **~84% reduction in bandwidth** with pristine image clarity and sub-35 ms latency on Allen's laptop.
     - **Lock Screen Handling**: When Windows session is locked, `ddagrab` returns Win32 access denied; `StreamService` detects this and gracefully transitions to `secure_screen` without crashing.
 - **Synthetic 30-Second Soak Test (`server/scripts/soak-test.ts`)**:
-  - Executed under Rule S8 (synthetic testsrc, isolated PIDs, zero desktop locks):
+  - Executed under Rule S8 (synthetic testsrc, isolated PIDs, zero desktop locks; Note: this initial test was synthetic and 30 seconds long, not a 10-minute soak):
     - Duration: 30.1 seconds
     - Total frames generated: 910 frames
     - Average frame rate: **30.2 fps**
@@ -133,12 +133,12 @@ In accordance with strict safety mandates established to protect Allen's Windows
 
 | Capability | Status | Evidence / Notes |
 |---|---|---|
-| **Local Direct LAN (Wi-Fi)** | **VERIFIED** | Sub-10 ms round-trip latency verified across unit and browser tests. Full root CA trust, WebSockets, and NVENC streaming operational. |
+| **Local Direct LAN (Wi-Fi)** | **VERIFIED** | Sub-10 ms round-trip latency verified across unit and browser tests. Full root CA trust, WebSockets, and NVENC streaming operational on Allen's laptop. |
 | **P2P WebRTC Loopback Integration** | **VERIFIED** | Real signaling service, host agent, and client peer connection verified in `server/test/real-remote-auth.test.ts` (100% pass). |
 | **Cross-Network Cellular (LTE/5G)** | **UNVERIFIED** | Requires Allen to perform the physical mobile-data test on iPhone (Wi-Fi OFF, cellular ON) as detailed in `docs/REMOTE-TEST.md`. |
 | **Power Actions Isolation** | **VERIFIED** | Confirmed by `pnpm run safety:check` and throw-under-test assertions. Zero real power actions executed. |
 | **Input Injection Safety** | **VERIFIED** | `RecordingInputBackend` captured all test inputs. Zero unauthorized input injection on host. |
-| **Desktop Stream Stability** | **VERIFIED** | 30s soak test passed with 30.2 fps, 76 MB stable memory, zero leaks. |
+| **Desktop Stream Stability** | **PARTIALLY VERIFIED** | Initial soak test was synthetic and 30 seconds long (not 10 minutes). Real 10-minute sequential soak running under stable-r2. |
 
 ---
 
