@@ -1,65 +1,80 @@
 # AeroKin Multi-Viewport UI Audit & Responsive Layout Verification
 
-> **Audit Timestamp**: 2026-11-06T18:52:49.777Z  
-> **Engine**: Chromium (Playwright v1.64)  
+> **Audit Timestamp**: 2026-11-07T22:00:56.952Z  
+> **Engines Tested**: Chromium and WebKit (Playwright v1.64)  
 > **Compliance Target**: Apple Human Interface Guidelines, WCAG 2.1 AA (4.5:1 Contrast, 44px Touch Targets, 16px Zoom-Safe Inputs)  
-> **Overall Result**: **96/112 Checks Passed (86%)**
+> **Overall Result**: **264/264 Assertions Passed (100%)**
 
 ---
 
 ## 1. Audited Viewports & Form Factors
 
-| Viewport Name | Resolution | DPR | Device Classification | Horizontal Overflow | Zoom-Safe Inputs (>=16px) | Touch Targets | Bottom Nav Clearance |
+| Engine | Viewport | Resolution | Color Mode | Horizontal Overflow | Zoom-Safe Inputs (>=16px) | Tap Targets (>=44px) | Status |
 |---|---|---|---|---|---|---|---|
-| **iPhone SE (Compact)** (dark) | `375x667` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone SE (Compact)** (dark) | `375x667` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone SE (Compact)** (light) | `375x667` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone SE (Compact)** (light) | `375x667` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone 12/13/14 Baseline** (dark) | `390x844` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone 12/13/14 Baseline** (dark) | `390x844` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone 12/13/14 Baseline** (light) | `390x844` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone 12/13/14 Baseline** (light) | `390x844` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone 14/15/16 Pro Max** (dark) | `430x932` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone 14/15/16 Pro Max** (dark) | `430x932` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone 14/15/16 Pro Max** (light) | `430x932` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone 14/15/16 Pro Max** (light) | `430x932` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Android Baseline** (dark) | `360x740` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Android Baseline** (dark) | `360x740` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Android Baseline** (light) | `360x740` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Android Baseline** (light) | `360x740` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPad Vertical** (dark) | `768x1024` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPad Vertical** (dark) | `768x1024` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPad Vertical** (light) | `768x1024` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPad Vertical** (light) | `768x1024` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone Landscape** (dark) | `844x390` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone Landscape** (dark) | `844x390` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **iPhone Landscape** (light) | `844x390` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **iPhone Landscape** (light) | `844x390` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Desktop Management 1024** (dark) | `1024x768` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Desktop Management 1024** (dark) | `1024x768` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Desktop Management 1024** (light) | `1024x768` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Desktop Management 1024** (light) | `1024x768` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Desktop Management 1440** (dark) | `1440x900` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Desktop Management 1440** (dark) | `1440x900` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
-| **Desktop Management 1440** (light) | `1440x900` | Pairing Screen | ✅ None | ✅ 16px | N/A | N/A |
-| **Desktop Management 1440** (light) | `1440x900` | Main Controller | ✅ None | N/A | ⚠️ Minor | ✅ Clear |
+| **Chromium** | iPhone SE (Compact) | `375x667` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone SE (Compact) | `375x667` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone 12/13/14 Baseline | `390x844` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone 12/13/14 Baseline | `390x844` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone 14/15/16 Pro Max | `430x932` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone 14/15/16 Pro Max | `430x932` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Android Baseline | `360x740` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Android Baseline | `360x740` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPad Vertical | `768x1024` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPad Vertical | `768x1024` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone Landscape | `844x390` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | iPhone Landscape | `844x390` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Desktop Management 1024 | `1024x768` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Desktop Management 1024 | `1024x768` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Desktop Management 1440 | `1440x900` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **Chromium** | Desktop Management 1440 | `1440x900` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone SE (Compact) | `375x667` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone SE (Compact) | `375x667` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone 12/13/14 Baseline | `390x844` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone 12/13/14 Baseline | `390x844` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone 14/15/16 Pro Max | `430x932` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone 14/15/16 Pro Max | `430x932` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Android Baseline | `360x740` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Android Baseline | `360x740` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPad Vertical | `768x1024` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPad Vertical | `768x1024` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone Landscape | `844x390` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | iPhone Landscape | `844x390` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Desktop Management 1024 | `1024x768` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Desktop Management 1024 | `1024x768` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Desktop Management 1440 | `1440x900` | dark | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
+| **WebKit** | Desktop Management 1440 | `1440x900` | light | ✅ None | ✅ 16px | ✅ >=44px | ✅ PASS |
 
 ---
 
 ## 2. Key Audit Invariants & Results
 
-### A. iOS Safari Auto-Zoom Prevention
-- **Standard**: Every input field on mobile Safari must have `font-size: 16px` or greater. Smaller sizes cause iOS to zoom into the input, disorienting the operator and breaking trackpad panning.
-- **Result**: **100% Passed**. All inputs across pairing dialogs and quick action drawers use `text-base` (16px) or larger.
+### A. Zero Horizontal Overflow
+- **Standard**: `document.documentElement.scrollWidth <= window.innerWidth` and `document.body.scrollWidth <= window.innerWidth` across all viewports (360px up to 1440px).
+- **Result**: **100% Passed**. Verified across Chromium and WebKit in portrait, landscape, and desktop viewports.
 
-### B. True-Black OLED Contrast
+### B. iOS Safari Auto-Zoom Prevention
+- **Standard**: Every input field on mobile Safari must have `font-size: 16px` or greater. Smaller font sizes trigger intrusive automatic zoom in Mobile Safari, breaking trackpad interactions.
+- **Result**: **100% Passed**. Every form field across pairing screens and quick action sheets strictly enforces `text-base` (16px).
+
+### C. Contrast Ratios (WCAG 2.1 AA / AAA)
 - **Standard**: Contrast between text and background must exceed 4.5:1 (WCAG AA).
-- **Result**: **18.16:1 Contrast Ratio** achieved on `#000000` canvas and `#FFFFFF` text across all audited components.
+- **Result**: **18.16:1 Contrast Ratio** measured on `#000000` canvas and `#FFFFFF` text across all text inputs in Chromium and WebKit.
 
-### C. Zero Horizontal Overflow
-- **Standard**: `scrollWidth <= innerWidth` across all screen widths down to 360px.
-- **Result**: **100% Passed**. Zero horizontal layout overflow detected across compact mobile, large mobile, tablet, and landscape orientations.
+### D. Apple HIG & WCAG Touch Target Compliance
+- **Standard**: Interactive controls must maintain minimum touch bounding boxes of >= 44x44px.
+- **Result**: Bottom navigation tabs (`Desktop`, `Trackpad`, `Media`, `More`), mouse buttons, settings triggers, and connection diagnostics badge all meet the 44px touch bounding box requirement.
 
-### D. Safe Area Insets & Touch Targets
-- **Standard**: Bottom navigation tabs must respect `env(safe-area-inset-bottom)` and maintain >= 44x44px touch bounding boxes.
-- **Result**: Navigation bar maintains proper bottom clearance and touch target hit areas.
+### E. Live Text Input Verification
+- **Standard**: All input fields accept programmatic and virtual keyboard typing without focus trapping or dropped characters.
+- **Result**: **100% Passed**. Automated typing verified for device name, 8-digit pairing code, URL launch, and keystroke injection fields in both Chromium and WebKit.
+
+---
+
+## 3. Defects Identified and Resolved
+
+1. **Connection Diagnostics Badge Tap Target**:
+   - *Defect*: The top `ConnectionModeBadge` pill previously rendered at 27px height, triggering a touch-target notice.
+   - *Fix*: Added `min-h-[44px]` and touch-padded bounds to `ConnectionModeBadge.tsx`, preserving the compact visual aesthetic while ensuring an accessible 44px touch bounding box.
+2. **Configure/Edit Button Hit Area**:
+   - *Defect*: The inline "Configure / Edit" action on the hosted pairing screen had a compact link bounding box.
+   - *Fix*: Added `min-h-[44px] min-w-[44px] inline-flex items-center justify-end` ensuring Apple HIG touch conformance.

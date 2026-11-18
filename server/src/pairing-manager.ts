@@ -42,6 +42,8 @@ export class PairingManager extends EventEmitter {
   private customApprover: ApprovalHandler | null = null;
   private isPromptingApproval = false;
   private requirePcApproval = false;
+  private maxAttemptsBeforeInvalidate = 20;
+  private maxAttemptsBeforeLockout = 50;
 
   private currentPendingApproval: {
     requestId: string;
@@ -82,6 +84,18 @@ export class PairingManager extends EventEmitter {
    */
   public setRequirePcApproval(required: boolean): void {
     this.requirePcApproval = Boolean(required);
+  }
+
+  public configureRateLimits(options: {
+    maxAttemptsBeforeInvalidate?: number;
+    maxAttemptsBeforeLockout?: number;
+  }): void {
+    if (options.maxAttemptsBeforeInvalidate !== undefined) {
+      this.maxAttemptsBeforeInvalidate = options.maxAttemptsBeforeInvalidate;
+    }
+    if (options.maxAttemptsBeforeLockout !== undefined) {
+      this.maxAttemptsBeforeLockout = options.maxAttemptsBeforeLockout;
+    }
   }
 
   public getRequirePcApproval(): boolean {
@@ -154,19 +168,19 @@ export class PairingManager extends EventEmitter {
     this.failedAttemptsByIp.set(ip, ipHistory);
 
     // Invalidate code after repeated failed attempts against active code
-    if (this.failedAttemptsGlobal >= 20) {
+    if (this.failedAttemptsGlobal >= this.maxAttemptsBeforeInvalidate) {
       this.invalidateCode();
       console.warn('[Security] Pairing code invalidated after repeated failed attempts.');
     }
 
     // Sanity limit only (never lock Allen out with long bans)
-    if (ipHistory.length >= 50) {
+    if (ipHistory.length >= this.maxAttemptsBeforeLockout) {
       const lockoutDurationMs = 5_000;
       this.lockoutUntilByIp.set(ip, now + lockoutDurationMs);
       console.warn(`[Security] Sanity rate pause: IP ${ip} paused for 5s.`);
     }
 
-    if (this.failedAttemptsWindow.length >= 50) {
+    if (this.failedAttemptsWindow.length >= this.maxAttemptsBeforeLockout) {
       this.lockoutUntilGlobal = now + 5_000;
       console.warn('[Security] Sanity rate pause: Global pairing paused for 5s.');
     }

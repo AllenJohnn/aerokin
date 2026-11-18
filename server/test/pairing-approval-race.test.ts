@@ -6,6 +6,7 @@ describe('Pairing Approval Race (Terminal vs Dashboard)', () => {
 
   beforeEach(() => {
     manager = new PairingManager();
+    manager.setRequirePcApproval(true);
   });
 
   it('allows dashboard to approve before terminal responds', async () => {

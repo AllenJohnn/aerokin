@@ -16,6 +16,7 @@ export interface SignalingServerConfig {
   allowedOrigins?: string[];
   maxClientsPerRoom?: number;
   idleTimeoutMs?: number;
+  enforceIpBans?: boolean;
 }
 
 interface Room {
@@ -42,6 +43,7 @@ export class SignalingServer {
   private allowedOrigins: string[];
   private maxClientsPerRoom: number;
   private idleTimeoutMs: number;
+  private enforceIpBans: boolean;
 
   private rooms = new Map<string, Room>();
   private pingInterval: NodeJS.Timeout | null = null;
@@ -92,6 +94,7 @@ export class SignalingServer {
 
     this.maxClientsPerRoom = config.maxClientsPerRoom ?? 8;
     this.idleTimeoutMs = config.idleTimeoutMs ?? 60000;
+    this.enforceIpBans = config.enforceIpBans ?? false;
 
     this.server = http.createServer((req, res) => {
       this.handleHttpRequest(req, res);
@@ -173,13 +176,29 @@ export class SignalingServer {
   }
 
   private isIpBanned(ip: string): boolean {
-    // Allen personal project: No IP bans locking Allen out. Generous sanity limits only.
+    if (!this.enforceIpBans) {
+      return false;
+    }
+    const record = this.ipFailures.get(ip);
+    if (!record) return false;
+    if (record.bannedUntil > Date.now()) {
+      return true;
+    }
+    if (record.bannedUntil > 0) {
+      this.ipFailures.delete(ip);
+    }
     return false;
   }
 
   private recordAuthFailure(ip: string): void {
     const record = this.ipFailures.get(ip) || { count: 0, bannedUntil: 0 };
     record.count++;
+    if (this.enforceIpBans && record.count >= 5) {
+      record.bannedUntil = Date.now() + 5 * 60 * 1000;
+      console.warn(
+        `[SignalingServer] Rate limiter: Temporary ban on IP ${ip} after 5 failed authentication attempts`
+      );
+    }
     this.ipFailures.set(ip, record);
   }
 

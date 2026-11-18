@@ -35,6 +35,7 @@ describe('Real-Socket End-to-End Remote WebRTC Authentication Suite', () => {
       host: '127.0.0.1',
       turnSecret: TEST_TURN_SECRET,
       turnHost: '127.0.0.1',
+      enforceIpBans: true,
     });
     await signalingServer.start();
 

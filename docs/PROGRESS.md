@@ -6,13 +6,14 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Stable-R2 Release Work (Allen Personal Mode, Remote Pairing, TURN Secrets Hardening, Autostart & Keep Awake, Playwright UI Audit, 10-Min Soak).
-  - **In Progress**: Executing tasks toward stable-r2.
+- **Current Milestone**: Stable-R3 Milestone: One-Click Launcher, Hidden Autostart, Windows Tray Sidecar, Auto-Restart Supervision, and Frictionless Setup.
+  - **In Progress**: Implementing one-click single launcher and hidden background operation.
   - **Completed so far**:
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
     - Configured and verified static Vercel deployment (`pwa/vercel.json`, root `vercel.json` SPA rewrites, immutable assets, no-cache HTML/manifest), authored `docs/DEPLOY-VERCEL.md` step-by-step guide with minimal path architecture (Vercel static PWA + 1 Linux VPS for signaling & Coturn), updated `ALLOWED_ORIGINS` in `docs/DEPLOY-VPS.md`, and documented iPhone LAN CA trust vs cellular WebRTC fallback.
+    - Aligned unit test suite with frictionless personal mode: updated `PairingManager` rate-limiting configuration for test control, configured `SignalingServer` `enforceIpBans` flag for testing, verified 262/262 server tests and 91/91 PWA tests passing.
 - **Exact Next Step**: Convert viewport audits and input visibility into real Playwright CI test suite, audit viewports, and refine any defects (Task 9 / Item 9).
 - **NEEDS ALLEN**:
   1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.

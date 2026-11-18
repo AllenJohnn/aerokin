@@ -87,7 +87,7 @@ export const ConnectionModeBadge: React.FC<ConnectionModeBadgeProps> = ({
           triggerHaptic('light');
           setShowDetails((prev) => !prev);
         }}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-mono font-medium transition-all active:scale-[0.97] cursor-pointer ${info.badgeBg}`}
+        className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full border text-[11px] font-mono font-medium transition-all active:scale-[0.97] cursor-pointer ${info.badgeBg}`}
         title={`${info.title} - Tap for network diagnostics`}
         aria-label="Connection diagnostics"
       >

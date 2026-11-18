@@ -41,6 +41,7 @@ describe('PairingManager', () => {
   });
 
   it('rejects pairing when PC operator denies approval', async () => {
+    manager.setRequirePcApproval(true);
     const active = manager.getActiveCode()!;
     // Operator clicks/types "n" (deny)
     manager.setApprover(async () => false);
@@ -51,6 +52,7 @@ describe('PairingManager', () => {
   });
 
   it('locks out IP and globally after 5 wrong attempts per minute', async () => {
+    manager.configureRateLimits({ maxAttemptsBeforeInvalidate: 5, maxAttemptsBeforeLockout: 5 });
     const active = manager.getActiveCode()!;
     manager.setApprover(async () => true);
 
@@ -80,6 +82,7 @@ describe('PairingManager', () => {
   });
 
   it('invalidates active code after 5 total failed attempts', async () => {
+    manager.configureRateLimits({ maxAttemptsBeforeInvalidate: 5, maxAttemptsBeforeLockout: 5 });
     manager.getActiveCode();
 
     // 5 failed attempts from any IP

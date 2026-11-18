@@ -429,7 +429,7 @@ export const App: React.FC = () => {
               </span>
               <button
                 onClick={() => setShowAuthModal(true)}
-                className="text-xs text-accent hover:underline font-medium"
+                className="text-xs text-accent hover:underline font-medium min-h-[44px] min-w-[44px] inline-flex items-center justify-end"
               >
                 {host ? 'Edit' : 'Configure'}
               </button>
