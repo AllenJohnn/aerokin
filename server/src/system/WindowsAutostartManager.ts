@@ -18,6 +18,7 @@ export interface AutostartStatus {
 export class WindowsAutostartManager {
   private startupDir: string;
   private scriptPath: string;
+  private shortcutPath: string;
 
   constructor(customStartupDir?: string) {
     if (customStartupDir) {
@@ -40,13 +41,15 @@ export class WindowsAutostartManager {
       );
     }
     this.scriptPath = path.join(this.startupDir, 'AeroKin.cmd');
+    this.shortcutPath = path.join(this.startupDir, 'AeroKin.lnk');
   }
 
   public getStatus(): AutostartStatus {
-    const exists = fs.existsSync(this.scriptPath);
+    const lnkExists = fs.existsSync(this.shortcutPath);
+    const cmdExists = fs.existsSync(this.scriptPath);
     return {
-      enabled: exists,
-      path: this.scriptPath,
+      enabled: lnkExists || cmdExists,
+      path: lnkExists ? this.shortcutPath : this.scriptPath,
     };
   }
 
@@ -65,6 +68,11 @@ export class WindowsAutostartManager {
   }
 
   public disable(): AutostartStatus {
+    if (fs.existsSync(this.shortcutPath)) {
+      try {
+        fs.unlinkSync(this.shortcutPath);
+      } catch {}
+    }
     if (fs.existsSync(this.scriptPath)) {
       try {
         fs.unlinkSync(this.scriptPath);
@@ -72,7 +80,7 @@ export class WindowsAutostartManager {
     }
     return {
       enabled: false,
-      path: this.scriptPath,
+      path: this.shortcutPath,
     };
   }
 }

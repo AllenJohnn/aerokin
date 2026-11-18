@@ -4,12 +4,28 @@ This checklist provides a structured protocol for manual verification on physica
 
 ---
 
+## 0. One-Click Setup & Background Auto-Launch (Allen Physical Test)
+
+| # | Step / Action | Expected Result | Pass / Fail |
+|---|---|---|---|
+| 0.1 | Run `install-aerokin.cmd` on Windows PC. | Creates Desktop "AeroKin", Start Menu "AeroKin", and Startup folder shortcuts with custom icon. No admin prompt. | [ ] |
+| 0.2 | Restart PC or sign out and sign in. | AeroKin starts automatically in background without terminal or console popups. | [ ] |
+| 0.3 | Observe Windows System Notification Area (Tray). | AeroKin tray icon appears with startup balloon displaying: `Phone: https://<PC-hostname>.local:8443` and LAN IP fallback. | [ ] |
+| 0.4 | Open Safari on iPhone and visit phone URL. | PWA loads cleanly and connects without opening any terminal or folder on PC. | [ ] |
+| 0.5 | Right-click tray icon -> Click **Show Pairing Code**. | Windows notification displays active 8-digit OTP. | [ ] |
+| 0.6 | Right-click tray icon -> Click **Open Logs Folder**. | Windows Explorer opens `%LOCALAPPDATA%\AeroKin\logs` showing `aerokin.log`. | [ ] |
+| 0.7 | Right-click tray icon -> Click **Restart AeroKin**. | Server restarts seamlessly; tray icon reloads. | [ ] |
+| 0.8 | Right-click tray icon -> Click **Quit**. | Server and tray terminate cleanly; port 8443 closes. | [ ] |
+| 0.9 | Double-click Desktop shortcut "AeroKin". | Starts server hidden again; tray icon appears. Clicking shortcut when running opens Dashboard. | [ ] |
+
+---
+
 ## 1. Initial Setup & Pairing
 
 | # | Step / Action | Expected Result | Pass / Fail |
 |---|---|---|---|
-| 1.1 | Start AeroKin on Windows PC (`pnpm --filter aerokin-server run start`). | Server boots on port `4443` (TLS) with local CA. Terminal displays status. | [ ] |
-| 1.2 | Open PC Dashboard (`https://localhost:4443`). | Management dashboard loads cleanly; shows system metrics, QR code, and 8-digit OTP. | [ ] |
+| 1.1 | Start AeroKin on Windows PC (Desktop shortcut or `pnpm --filter aerokin-server run start`). | Server boots on port `8443` (TLS) with local CA. | [ ] |
+| 1.2 | Open PC Dashboard (`https://localhost:8443/dashboard`). | Management dashboard loads cleanly; shows system metrics, QR code, and 8-digit OTP. | [ ] |
 | 1.3 | On iPhone, scan QR code with Camera app (or open URL in Safari). | Safari prompts to trust local certificate or opens PWA. | [ ] |
 | 1.4 | Tap "Add to Home Screen" in Safari share sheet. | AeroKin icon appears on iOS home screen with black background and kinetic glyph. | [ ] |
 | 1.5 | Launch PWA from Home Screen. | Opens in standalone mode (no Safari URL bar, full OLED black `#000000`). | [ ] |

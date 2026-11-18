@@ -7,20 +7,64 @@
 
 ## Current Status & Next Action
 - **Current Milestone**: Stable-R3 Milestone: One-Click Launcher, Hidden Autostart, Windows Tray Sidecar, Auto-Restart Supervision, and Frictionless Setup.
-  - **In Progress**: Implementing one-click single launcher and hidden background operation.
+  - **In Progress**: Completed implementation and automated verification. Ready to tag `stable-r3`.
   - **Completed so far**:
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
     - Configured and verified static Vercel deployment (`pwa/vercel.json`, root `vercel.json` SPA rewrites, immutable assets, no-cache HTML/manifest), authored `docs/DEPLOY-VERCEL.md` step-by-step guide with minimal path architecture (Vercel static PWA + 1 Linux VPS for signaling & Coturn), updated `ALLOWED_ORIGINS` in `docs/DEPLOY-VPS.md`, and documented iPhone LAN CA trust vs cellular WebRTC fallback.
     - Aligned unit test suite with frictionless personal mode: updated `PairingManager` rate-limiting configuration for test control, configured `SignalingServer` `enforceIpBans` flag for testing, verified 262/262 server tests and 91/91 PWA tests passing.
-- **Exact Next Step**: Convert viewport audits and input visibility into real Playwright CI test suite, audit viewports, and refine any defects (Task 9 / Item 9).
+    - Implemented Single Invisible Background Launcher (`start-aerokin-hidden.vbs` + `scripts/aerokin-launcher.ps1`) with dynamic path resolution, named mutex single-instance guard, Node/FFmpeg GUI check, first-run compilation splash, and size-capped log rotation to `%LOCALAPPDATA%\AeroKin\logs\aerokin.log`.
+    - Implemented Auto-Restart & Crash Supervision with exponential backoff (1s, 2s, 4s, 8s...) and threshold safety exit (> 5 crashes/minute), cleanly separating crash restarts from user Quit/Restart actions.
+    - Implemented Windows System Tray Sidecar upgrade with Open Dashboard, Show Pairing Code balloon notification, Pause Remote Input killswitch, Open Logs Folder, Restart AeroKin, and Quit controls. Startup balloon displays `https://<PC-hostname>.local:8443` and LAN IP fallback. Server continues running if tray exits.
+    - Implemented Zero-Admin Installer (`install-aerokin.cmd` / `scripts/install-aerokin.ps1`) and Uninstaller (`uninstall-aerokin.cmd` / `scripts/uninstall-aerokin.ps1`) with Desktop, Start Menu, and Startup folder shortcuts with custom AeroKin brand icon.
+    - Implemented Unified AeroKin CLI (`aerokin.cmd` / `scripts/aerokin-cli.ps1`) with `autostart on|off|status`, `start`, `stop`, `restart`, `status`, `logs`, and `update`.
+    - Implemented In-Place Safe Update Helper (`update-aerokin.cmd` / `scripts/update-aerokin.ps1`) with server shutdown, git pull without discarding local changes, pnpm frozen install, build, and hidden restart.
+    - Authored 13 automated tests in `server/test/launcher-lifecycle.test.ts` verifying shortcut creation, uninstall, single-instance mutex, backoff progression, log rotation, autostart CLI, and missing-Node error handling under Rule S7 temp directory isolation.
+    - Updated `docs/QUICKSTART.md` (one-click setup, hidden launcher, session 0 service explanation, logs, sleep/lid-close, update helper) and `docs/DEVICE-TEST-CHECKLIST.md` (Section 0: Allen physical verification protocol).
+- **Exact Next Step**: Allen physical device verification per `docs/DEVICE-TEST-CHECKLIST.md` (run `install-aerokin.cmd`, reboot, test tray and connection with no terminal).
 - **NEEDS ALLEN**:
-  1. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
-  2. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
-  3. Running `scripts/generate-secrets.ps1` to populate production `.env`.
-  4. Physical mobile data field test on iPhone (Wi-Fi OFF, cellular LTE/5G ON) per `docs/REMOTE-TEST.md`.
-- **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default.
+  1. Run `install-aerokin.cmd` once on PC, reboot or re-login, and verify tray icon and mobile connectivity without opening a terminal (per `docs/DEVICE-TEST-CHECKLIST.md` section 0).
+  2. Linux VPS setup ($3.50-$5/mo on Hetzner, DigitalOcean, or OVH) running Ubuntu 24.04 per `docs/DEPLOY-VPS.md`.
+  3. DNS A records for `signal.yourdomain.com` and `turn.yourdomain.com`.
+  4. Running `scripts/generate-secrets.ps1` to populate production `.env`.
+  5. Physical mobile data field test on iPhone (Wi-Fi OFF, cellular LTE/5G ON) per `docs/REMOTE-TEST.md`.
+- **Safety Status**: S1-S9 active. Static guard `pnpm run safety:check` passing with 0 violations. Real power executor and real input backend strictly forbidden under test/CI and dry-run by default. Installer tested exclusively against temp directories.
+
+---
+
+## Stable-R3 Execution (Completed)
+- **R3.1 Single Invisible Launcher (`start-aerokin-hidden.vbs` + `scripts/aerokin-launcher.ps1`)**:
+  - Starts background server process without any terminal or console windows (WindowStyle 0).
+  - Dynamic path resolution: locates repo root from script path with zero hardcoded drive letters.
+  - Named mutex `Global\AeroKin_Server_Launcher_Mutex` + port 8443 check ensures single instance; second launch opens PC Dashboard.
+  - Node.js & FFmpeg check with non-blocking GUI message box dialogs (and `-Silent` mode for automated testing).
+  - First-run check: builds only if `dist/` or `server/public` is missing, showing a visible progress notice.
+  - First-run onboarding: automatically opens PC Dashboard once on initial launch via background job, setting `.first-run-completed` flag in `%LOCALAPPDATA%\AeroKin` to keep future autostarts completely silent.
+  - Size-capped log rotation to `%LOCALAPPDATA%\AeroKin\logs\aerokin.log` (5MB limit, 3-generation backup shift).
+- **R3.2 Crash Supervision & Exponential Backoff**:
+  - Background supervisor loop monitors server process exit codes.
+  - Distinguishes clean exit (exit code 0), user Quit (signal file + `/api/dashboard/quit`), and user Restart (signal file + `/api/dashboard/restart`).
+  - Automatically restarts after unexpected crashes with exponential backoff delays (1s, 2s, 4s, 8s...).
+  - Terminates safely with error dialog and log entry if crash limit (> 5 crashes/minute) is reached, preventing infinite restart thrashing.
+- **R3.3 Windows System Tray Sidecar (`server/scripts/tray-sidecar.ps1`)**:
+  - Upgraded menu: Open Dashboard, Show Pairing Code, Pause Remote Input, Open Logs Folder, Restart AeroKin, and Quit.
+  - Startup balloon notification displays `Phone: https://<PC-hostname>.local:8443` and LAN IP fallback.
+  - Server process runs independently; if tray process exits or fails, server continues uninterrupted.
+- **R3.4 Zero-Admin Installer & Uninstaller (`install-aerokin.cmd` / `uninstall-aerokin.cmd`)**:
+  - Creates Desktop "AeroKin", Start Menu "AeroKin", and Startup folder shortcuts targeting hidden launcher with AeroKin brand icon (`favicon.ico`).
+  - Supports `-NoAutostart`, `-DryRun`, and `-TargetDir` (tested under Rule S7 temp directory isolation).
+  - Uninstaller cleanly removes exactly those shortcuts.
+  - Documented in `docs/QUICKSTART.md` why a Windows service is not used (Session 0 Isolation prevents screen capture and input injection).
+- **R3.5 AeroKin CLI (`aerokin.cmd` / `scripts/aerokin-cli.ps1`)**:
+  - Supports `aerokin autostart on|off|status` maintaining `.lnk` shortcut compatibility with `WindowsAutostartManager`.
+  - Supports `start`, `stop`, `restart`, `status`, `logs`, and `update`.
+- **R3.6 In-Place Safe Update Helper (`update-aerokin.cmd` / `scripts/update-aerokin.ps1`)**:
+  - Stops server gracefully, runs `git pull` without discarding uncommitted changes, installs dependencies with `pnpm install --frozen-lockfile`, recompiles packages, and restarts server hidden.
+- **R3.7 Automated Lifecycle Test Suite (`server/test/launcher-lifecycle.test.ts`)**:
+  - 13 automated tests covering installer, uninstaller, dry-run, single-instance mutex, backoff progression, crash pruning, log rotation, autostart CLI, WindowsAutostartManager `.lnk` compatibility, environment check, and missing-Node detection.
+
+---
 
 ---
 

@@ -799,6 +799,32 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true, paused: isInputPaused });
   });
 
+  // REST API: Graceful Server Exit - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/dashboard/quit', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    res.json({ ok: true, shuttingDown: true });
+    setTimeout(() => {
+      process.exit(0);
+    }, 200);
+  });
+
+  // REST API: Server Restart Signal - LOOPBACK ONLY (403 for LAN)
+  app.post('/api/dashboard/restart', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+
+    res.json({ ok: true, restarting: true });
+    setTimeout(() => {
+      process.exit(42);
+    }, 200);
+  });
+
   // REST API: Secure File Transfer / Drop to PC (Downloads/AeroKin/)
   app.post(
     '/api/transfer/upload',

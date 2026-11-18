@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -298,5 +298,28 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
     });
     expect(lanPostRes.status).toBe(403);
     expect(lanPostRes.body.error).toContain('Loopback only');
+  });
+
+  it('manages server quit and restart via loopback-only POST endpoints', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    // Verify LAN gets 403 Forbidden
+    const lanQuit = await mockRequest('POST', '/api/dashboard/quit', '192.168.1.100');
+    expect(lanQuit.status).toBe(403);
+    const lanRestart = await mockRequest('POST', '/api/dashboard/restart', '192.168.1.100');
+    expect(lanRestart.status).toBe(403);
+
+    // Verify loopback succeeds
+    const loopQuit = await mockRequest('POST', '/api/dashboard/quit', '127.0.0.1');
+    expect(loopQuit.status).toBe(200);
+    expect(loopQuit.body.ok).toBe(true);
+    expect(loopQuit.body.shuttingDown).toBe(true);
+
+    const loopRestart = await mockRequest('POST', '/api/dashboard/restart', '127.0.0.1');
+    expect(loopRestart.status).toBe(200);
+    expect(loopRestart.body.ok).toBe(true);
+    expect(loopRestart.body.restarting).toBe(true);
+
+    exitSpy.mockRestore();
   });
 });

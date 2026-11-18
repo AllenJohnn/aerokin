@@ -16,7 +16,55 @@
 
 ---
 
-## Prerequisites
+## One-Click Setup & Automatic Startup (Recommended)
+
+You do **not** need to open a terminal or run manual commands to start AeroKin.
+
+### 1. Install Once (`install-aerokin.cmd`)
+Double-click `install-aerokin.cmd` in the repository root (or run from a terminal without admin rights):
+```cmd
+install-aerokin.cmd
+```
+This performs a clean user-level setup:
+- **Desktop Shortcut ("AeroKin")**: Starts AeroKin hidden with a single click.
+- **Start Menu Shortcut ("AeroKin")**: Searchable from Windows Start menu.
+- **Startup Folder Shortcut**: Starts AeroKin automatically in the background whenever you sign in to Windows (can be skipped with `-NoAutostart`).
+- **Icon**: Configures the high-resolution AeroKin brand icon (`favicon.ico`) on all shortcuts.
+
+### 2. How the Hidden Launcher Works
+All shortcuts point to `start-aerokin-hidden.vbs`, which bootstraps `scripts/aerokin-launcher.ps1` using `wscript.exe` with `WindowStyle 0` (100% hidden, zero black console flashes):
+- **Dynamic Localization**: Resolves repo root from its own location—no hardcoded drive paths.
+- **Single Instance**: Enforces a single instance using a named Win32 mutex and port checks. Clicking the desktop shortcut when AeroKin is already running simply opens your PC Dashboard.
+- **Auto-Restart & Crash Supervision**: Supervises the background server process. If a crash occurs, it automatically restarts with exponential backoff (up to 5 restarts/minute before stopping safely). Clean exits or user Quit from the tray do not restart.
+- **First-Run Onboarding**: On initial launch, compiles missing builds if needed and automatically opens the PC Dashboard once so you see your pairing QR and phone URL. Subsequent autostarts run completely silently.
+- **Size-Capped Log Rotation**: Logs are written to `%LOCALAPPDATA%\AeroKin\logs\aerokin.log` with automatic 5MB rotation and multi-generation backups (`.1`, `.2`, `.3`).
+
+### 3. System Tray Controls
+When AeroKin is running, a branded notification icon appears in your Windows system tray:
+- **Open Dashboard**: Opens `https://localhost:8443/dashboard` in your default browser.
+- **Show Pairing Code**: Displays a balloon notification with the active 8-digit OTP.
+- **Pause Remote Input**: One-click kill switch that disables remote mouse/keyboard input.
+- **Open Logs Folder**: Opens `%LOCALAPPDATA%\AeroKin\logs` in Windows File Explorer.
+- **Restart AeroKin**: Gracefully restarts the server and tray sidecar.
+- **Quit**: Gracefully shuts down AeroKin and exits the tray.
+
+### 4. Why Login Autostart (Not a Windows Service)?
+AeroKin runs in the interactive user session at login rather than as a background Windows Service:
+- **Session 0 Isolation**: Since Windows Vista, Windows Services are strictly isolated into non-interactive **Session 0**. Session 0 has no access to graphical displays (the DXGI Desktop Duplication API and GDI screen capture immediately fail), cannot inject mouse/keyboard input into active user desktop sessions, and has no access to user-session SMTC audio/media controllers.
+- Running at login in Session 1+ provides full access to hardware encoders, screen capture, and input automation with **zero administrator rights required**.
+
+### 5. Sleep, Lid-Close & Keep-Awake Behavior
+- **Active Keep-Awake**: While AeroKin is running, it uses Win32 `SetThreadExecutionState` (`ES_SYSTEM_REQUIRED | ES_CONTINUOUS`) to prevent Windows from idling to sleep during active use without modifying your Windows power plans.
+- **Lid-Close & Manual Sleep**: If you manually close a laptop lid or put Windows to sleep, hardware network adapters suspend. AeroKin gracefully resumes when the laptop is opened; your mobile PWA displays **"PC Offline or Asleep"** with single-tap auto-reconnect.
+
+### 6. Updating AeroKin (`update-aerokin.cmd`)
+To update AeroKin without losing local changes:
+```cmd
+update-aerokin.cmd
+```
+This safely stops running AeroKin processes, runs `git pull` (refusing to discard uncommitted changes), updates dependencies with `pnpm install --frozen-lockfile`, recompiles packages, and restarts the server hidden in the background.
+
+---
 
 1. **Windows PC**: Windows 10 (Build 19041+) or Windows 11.
 2. **Node.js**: v20+ or v22+ (LTS).
