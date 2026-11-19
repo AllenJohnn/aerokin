@@ -19,7 +19,11 @@ export type TrackpadIntent =
   | { type: 'button'; button: 'left'; state: 'down' | 'up' }
   | { type: 'scroll'; dy: number; dx: number }
   | { type: 'haptic'; style: 'light' | 'medium' | 'heavy' | 'detent' }
-  | { type: 'drag_status'; isDragging: boolean };
+  | { type: 'drag_status'; isDragging: boolean }
+  | {
+      type: 'shortcut';
+      action: 'task_view' | 'show_desktop' | 'app_switch_next' | 'app_switch_prev';
+    };
 
 export interface TrackpadConfig {
   configVersion?: number; // schema version (v2 introduced default 0.25 sensitivity)
@@ -180,6 +184,7 @@ export type TrackpadState =
   | 'ONE_FINGER_DRAGGING'
   | 'TWO_FINGER_TRACKING'
   | 'TWO_FINGER_RELEASING'
+  | 'THREE_FINGER_TRACKING'
   | 'MULTI_FINGER_LOCKOUT';
 
 interface PointerRecord {
@@ -236,6 +241,11 @@ export class TrackpadGestureEngine {
   private momentumActive = false;
   private momentumVx = 0;
   private momentumVy = 0;
+
+  // Three-finger swipe state
+  private threeFingerStartX = 0;
+  private threeFingerStartY = 0;
+  private threeFingerTriggered = false;
 
   constructor(config: Partial<TrackpadConfig> = {}) {
     this.config = validateTrackpadConfig({ ...DEFAULT_TRACKPAD_CONFIG, ...config });
@@ -379,13 +389,22 @@ export class TrackpadGestureEngine {
           this.detentAccumulator = 0;
           this.lastScrollHapticTime = 0;
           this.firstFingerLiftTime = 0;
-        } else if (count > 2) {
+        } else if (count === 3) {
+          if (this.state === 'ONE_FINGER_DRAGGING') {
+            intents.push({ type: 'button', button: 'left', state: 'up' });
+            intents.push({ type: 'drag_status', isDragging: false });
+          }
+          this.state = 'THREE_FINGER_TRACKING';
+          const pts = Array.from(this.pointers.values());
+          this.threeFingerStartX = (pts[0].lastX + pts[1].lastX + pts[2].lastX) / 3;
+          this.threeFingerStartY = (pts[0].lastY + pts[1].lastY + pts[2].lastY) / 3;
+          this.threeFingerTriggered = false;
+        } else if (count > 3) {
           if (this.state === 'ONE_FINGER_DRAGGING') {
             intents.push({ type: 'button', button: 'left', state: 'up' });
             intents.push({ type: 'drag_status', isDragging: false });
           }
           this.state = 'MULTI_FINGER_LOCKOUT';
-          // TODO: 3-finger swipe hooks for future stage
         }
         break;
       }
@@ -507,6 +526,42 @@ export class TrackpadGestureEngine {
           this.lastCentroidX = cx;
           this.lastCentroidY = cy;
           this.lastCentroidTime = event.time;
+        } else if (this.state === 'THREE_FINGER_TRACKING') {
+          if (!this.threeFingerTriggered && this.pointers.size === 3) {
+            const pts = Array.from(this.pointers.values());
+            const curX = (pts[0].lastX + pts[1].lastX + pts[2].lastX) / 3;
+            const curY = (pts[0].lastY + pts[1].lastY + pts[2].lastY) / 3;
+            const deltaX = curX - this.threeFingerStartX;
+            const deltaY = curY - this.threeFingerStartY;
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
+            const SWIPE_THRESHOLD = 30; // px threshold for 3-finger swipe
+
+            if (absX >= SWIPE_THRESHOLD || absY >= SWIPE_THRESHOLD) {
+              this.threeFingerTriggered = true;
+              if (absY > absX) {
+                if (deltaY < 0) {
+                  // Swipe Up -> Task View (Win+Tab)
+                  intents.push({ type: 'shortcut', action: 'task_view' });
+                  intents.push({ type: 'haptic', style: 'medium' });
+                } else {
+                  // Swipe Down -> Show Desktop (Win+D)
+                  intents.push({ type: 'shortcut', action: 'show_desktop' });
+                  intents.push({ type: 'haptic', style: 'medium' });
+                }
+              } else {
+                if (deltaX > 0) {
+                  // Swipe Right -> App Switch Next (Alt+Tab)
+                  intents.push({ type: 'shortcut', action: 'app_switch_next' });
+                  intents.push({ type: 'haptic', style: 'light' });
+                } else {
+                  // Swipe Left -> App Switch Prev (Alt+Shift+Tab)
+                  intents.push({ type: 'shortcut', action: 'app_switch_prev' });
+                  intents.push({ type: 'haptic', style: 'light' });
+                }
+              }
+            }
+          }
         }
         break;
       }
@@ -588,6 +643,12 @@ export class TrackpadGestureEngine {
               }
             }
             this.state = 'IDLE';
+          }
+        } else if (this.state === 'THREE_FINGER_TRACKING') {
+          if (remainingCount === 0) {
+            this.state = 'IDLE';
+          } else {
+            this.state = 'MULTI_FINGER_LOCKOUT';
           }
         } else if (this.state === 'MULTI_FINGER_LOCKOUT') {
           if (remainingCount === 0) {

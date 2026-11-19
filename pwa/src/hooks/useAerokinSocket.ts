@@ -617,15 +617,49 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
           moveRafRef.current = window.requestAnimationFrame(() => {
             moveRafRef.current = null;
             const { dx: totalDx, dy: totalDy } = pendingMoveRef.current;
-            pendingMoveRef.current = { dx: 0, dy: 0 };
-            if (totalDx !== 0 || totalDy !== 0) {
-              sendRaw({ type: 'move', dx: Math.round(totalDx), dy: Math.round(totalDy) });
+            const sendX = Math.round(totalDx);
+            const sendY = Math.round(totalDy);
+            pendingMoveRef.current = { dx: totalDx - sendX, dy: totalDy - sendY };
+
+            if (sendX !== 0 || sendY !== 0) {
+              if (
+                socketRef.current &&
+                socketRef.current.readyState === WebSocket.OPEN &&
+                isAuthenticatedRef.current
+              ) {
+                const buf = new ArrayBuffer(5);
+                const view = new DataView(buf);
+                view.setUint8(0, 0x01); // 0x01 = MOVE
+                view.setInt16(1, Math.max(-32768, Math.min(32767, sendX)), true);
+                view.setInt16(3, Math.max(-32768, Math.min(32767, sendY)), true);
+                socketRef.current.send(buf);
+              } else {
+                sendRaw({ type: 'move', dx: sendX, dy: sendY });
+              }
             }
           });
         } else {
           const { dx: totalDx, dy: totalDy } = pendingMoveRef.current;
-          pendingMoveRef.current = { dx: 0, dy: 0 };
-          sendRaw({ type: 'move', dx: Math.round(totalDx), dy: Math.round(totalDy) });
+          const sendX = Math.round(totalDx);
+          const sendY = Math.round(totalDy);
+          pendingMoveRef.current = { dx: totalDx - sendX, dy: totalDy - sendY };
+
+          if (sendX !== 0 || sendY !== 0) {
+            if (
+              socketRef.current &&
+              socketRef.current.readyState === WebSocket.OPEN &&
+              isAuthenticatedRef.current
+            ) {
+              const buf = new ArrayBuffer(5);
+              const view = new DataView(buf);
+              view.setUint8(0, 0x01);
+              view.setInt16(1, Math.max(-32768, Math.min(32767, sendX)), true);
+              view.setInt16(3, Math.max(-32768, Math.min(32767, sendY)), true);
+              socketRef.current.send(buf);
+            } else {
+              sendRaw({ type: 'move', dx: sendX, dy: sendY });
+            }
+          }
         }
       }
     },
@@ -634,21 +668,55 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
   const sendClick = useCallback(
     (button: 'left' | 'right' | 'middle' = 'left') => {
-      sendRaw({ type: 'click', button });
+      const code = button === 'right' ? 1 : button === 'middle' ? 2 : 0;
+      if (
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN &&
+        isAuthenticatedRef.current
+      ) {
+        socketRef.current.send(new Uint8Array([0x03, code]));
+      } else {
+        sendRaw({ type: 'click', button });
+      }
     },
     [sendRaw]
   );
 
   const sendButton = useCallback(
     (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => {
-      sendRaw({ type: 'button', button, state });
+      const btnCode = button === 'right' ? 1 : button === 'middle' ? 2 : 0;
+      const stateCode = state === 'down' ? 1 : 0;
+      if (
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN &&
+        isAuthenticatedRef.current
+      ) {
+        socketRef.current.send(new Uint8Array([0x04, btnCode, stateCode]));
+      } else {
+        sendRaw({ type: 'button', button, state });
+      }
     },
     [sendRaw]
   );
 
   const sendScroll = useCallback(
     (dy: number, dx?: number) => {
-      sendRaw({ type: 'scroll', dy, dx });
+      const sDx = Math.round(dx || 0);
+      const sDy = Math.round(dy);
+      if (
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN &&
+        isAuthenticatedRef.current
+      ) {
+        const buf = new ArrayBuffer(5);
+        const view = new DataView(buf);
+        view.setUint8(0, 0x02); // 0x02 = SCROLL
+        view.setInt16(1, Math.max(-32768, Math.min(32767, sDy)), true);
+        view.setInt16(3, Math.max(-32768, Math.min(32767, sDx)), true);
+        socketRef.current.send(buf);
+      } else {
+        sendRaw({ type: 'scroll', dy: sDy, dx: sDx });
+      }
     },
     [sendRaw]
   );

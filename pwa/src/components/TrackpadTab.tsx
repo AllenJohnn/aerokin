@@ -12,6 +12,7 @@ interface TrackpadTabProps {
   sendClick: (button: 'left' | 'right' | 'middle') => void;
   sendButton: (button: 'left' | 'right' | 'middle', state: 'down' | 'up') => void;
   sendScroll: (dy: number, dx?: number) => void;
+  sendKey?: (key: string, action?: 'down' | 'up' | 'tap', modifiers?: string[]) => void;
   isConnected: boolean;
   onOpenSettings: () => void;
   trackpadConfig?: TrackpadConfig;
@@ -24,6 +25,7 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   sendClick,
   sendButton,
   sendScroll,
+  sendKey,
   isConnected,
   trackpadConfig,
 }) => {
@@ -80,10 +82,23 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
           case 'drag_status':
             setIsDragging(intent.isDragging);
             break;
+          case 'shortcut':
+            if (isConnected && sendKey) {
+              if (intent.action === 'task_view') {
+                sendKey('Tab', 'tap', ['win']);
+              } else if (intent.action === 'show_desktop') {
+                sendKey('d', 'tap', ['win']);
+              } else if (intent.action === 'app_switch_next') {
+                sendKey('Tab', 'tap', ['alt']);
+              } else if (intent.action === 'app_switch_prev') {
+                sendKey('Tab', 'tap', ['alt', 'shift']);
+              }
+            }
+            break;
         }
       }
     },
-    [isConnected, sendMove, sendClick, sendButton, sendScroll]
+    [isConnected, sendMove, sendClick, sendButton, sendScroll, sendKey]
   );
 
   // Momentum animation loop (only active if momentum is enabled in config)
@@ -144,6 +159,26 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    const coalesced =
+      typeof (e.nativeEvent as any)?.getCoalescedEvents === 'function'
+        ? (e.nativeEvent as any).getCoalescedEvents()
+        : null;
+
+    if (coalesced && coalesced.length > 1) {
+      for (const ce of coalesced) {
+        const intents =
+          engineRef.current?.processEvent({
+            type: 'move',
+            id: ce.pointerId,
+            x: ce.clientX,
+            y: ce.clientY,
+            time: performance.now(),
+          }) || [];
+        dispatchIntents(intents);
+      }
+      return;
+    }
+
     const intents =
       engineRef.current?.processEvent({
         type: 'move',
@@ -254,7 +289,7 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
         >
           <p className="text-sm font-medium text-foreground">Precision trackpad</p>
           <p className="text-xs text-muted-foreground mt-1">
-            1-finger move · 2-finger scroll · Tap to click
+            1-finger move · 2-finger scroll · 3-finger swipe
           </p>
         </div>
       </div>

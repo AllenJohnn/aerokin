@@ -8,6 +8,7 @@ import { TrackpadTab } from './components/TrackpadTab';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { triggerHaptic } from './utils/haptics';
 import { isHostedMode, buildTrustUrl, hasStoredCredentialForActivePc } from './utils/hosting';
+import { setupHardwareVolumeListener } from './utils/hardwareVolume';
 import {
   TrackpadConfig,
   loadTrackpadConfig,
@@ -297,6 +298,24 @@ export const App: React.FC = () => {
     }, 2500);
     return () => clearTimeout(timer);
   }, []);
+
+  // Hardware physical volume button listener on iPhone
+  useEffect(() => {
+    if (status !== 'connected') return;
+
+    const cleanup = setupHardwareVolumeListener({
+      onVolumeUp: () => {
+        triggerHaptic('detent');
+        sendMedia('volup');
+      },
+      onVolumeDown: () => {
+        triggerHaptic('detent');
+        sendMedia('voldown');
+      },
+    });
+
+    return cleanup;
+  }, [status, sendMedia]);
 
   const [showSafariTabHint, setShowSafariTabHint] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -724,8 +743,30 @@ export const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right side: Settings icon + optional simulator toggle */}
-        <div className="flex items-center gap-1">
+        {/* Right side: Paste to PC + Settings icon + optional simulator toggle */}
+        <div className="flex items-center gap-1.5">
+          {status === 'connected' && (
+            <button
+              onClick={async () => {
+                try {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+                    const text = await navigator.clipboard.readText();
+                    if (text && text.trim()) {
+                      triggerHaptic('medium');
+                      sendText(text);
+                    }
+                  }
+                } catch {}
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border/50 bg-card hover:bg-raised text-[11px] font-medium text-foreground active:scale-95 transition-all cursor-pointer"
+              title="Paste iPhone clipboard directly into active PC window"
+              aria-label="Paste to PC"
+            >
+              <ClipboardText size={13} className="text-[#FF5A1F]" />
+              <span className="hidden min-[360px]:inline">Paste to PC</span>
+            </button>
+          )}
+
           {!isHosted &&
             typeof window !== 'undefined' &&
             window.matchMedia('(min-width: 768px)').matches && (
@@ -744,7 +785,7 @@ export const App: React.FC = () => {
               triggerHaptic('light');
               setShowSettingsDrawer(true);
             }}
-            className="w-10 h-10 min-w-[48px] min-h-[48px] rounded-xl text-muted-foreground hover:text-foreground active:scale-[0.97] flex items-center justify-center transition-transform"
+            className="w-10 h-10 min-w-[48px] min-h-[48px] rounded-xl text-muted-foreground hover:text-foreground active:scale-[0.97] flex items-center justify-center transition-transform cursor-pointer"
             title="Settings"
             aria-label="Settings"
           >
@@ -770,6 +811,7 @@ export const App: React.FC = () => {
                 sendClick={sendClick}
                 sendButton={sendButton}
                 sendScroll={sendScroll}
+                sendKey={sendKey}
                 isConnected={status === 'connected'}
                 onOpenSettings={() => setShowSettingsDrawer(true)}
                 trackpadConfig={trackpadConfig}

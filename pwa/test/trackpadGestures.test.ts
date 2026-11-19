@@ -598,4 +598,66 @@ describe('AEROKIN TrackpadGestureEngine', () => {
       expect(intents.some((i) => i.type === 'haptic')).toBe(false);
     });
   });
+
+  describe('Three-finger swipe gestures', () => {
+    it('recognizes 3-finger swipe UP as task_view', () => {
+      engine.processEvent({ type: 'down', id: 1, x: 100, y: 200, time: 1000 });
+      engine.processEvent({ type: 'down', id: 2, x: 150, y: 200, time: 1000 });
+      engine.processEvent({ type: 'down', id: 3, x: 200, y: 200, time: 1000 });
+      expect(engine.getState()).toBe('THREE_FINGER_TRACKING');
+
+      // Swipe UP by 40px
+      engine.processEvent({ type: 'move', id: 1, x: 100, y: 160, time: 1050 });
+      engine.processEvent({ type: 'move', id: 2, x: 150, y: 160, time: 1050 });
+      const intents = engine.processEvent({ type: 'move', id: 3, x: 200, y: 160, time: 1050 });
+
+      expect(intents).toContainEqual({ type: 'shortcut', action: 'task_view' });
+      expect(intents).toContainEqual({ type: 'haptic', style: 'medium' });
+
+      // Clean release to IDLE
+      engine.processEvent({ type: 'up', id: 1, x: 100, y: 160, time: 1100 });
+      engine.processEvent({ type: 'up', id: 2, x: 150, y: 160, time: 1100 });
+      engine.processEvent({ type: 'up', id: 3, x: 200, y: 160, time: 1100 });
+      expect(engine.getState()).toBe('IDLE');
+    });
+
+    it('recognizes 3-finger swipe DOWN as show_desktop', () => {
+      engine.processEvent({ type: 'down', id: 1, x: 100, y: 100, time: 1000 });
+      engine.processEvent({ type: 'down', id: 2, x: 150, y: 100, time: 1000 });
+      engine.processEvent({ type: 'down', id: 3, x: 200, y: 100, time: 1000 });
+
+      // Swipe DOWN by 40px
+      engine.processEvent({ type: 'move', id: 1, x: 100, y: 140, time: 1050 });
+      engine.processEvent({ type: 'move', id: 2, x: 150, y: 140, time: 1050 });
+      const intents = engine.processEvent({ type: 'move', id: 3, x: 200, y: 140, time: 1050 });
+
+      expect(intents).toContainEqual({ type: 'shortcut', action: 'show_desktop' });
+    });
+
+    it('recognizes 3-finger swipe RIGHT as app_switch_next and LEFT as app_switch_prev', () => {
+      // Right swipe
+      engine.processEvent({ type: 'down', id: 1, x: 100, y: 100, time: 1000 });
+      engine.processEvent({ type: 'down', id: 2, x: 150, y: 100, time: 1000 });
+      engine.processEvent({ type: 'down', id: 3, x: 200, y: 100, time: 1000 });
+
+      engine.processEvent({ type: 'move', id: 1, x: 140, y: 100, time: 1050 });
+      engine.processEvent({ type: 'move', id: 2, x: 190, y: 100, time: 1050 });
+      const intentsRight = engine.processEvent({ type: 'move', id: 3, x: 240, y: 100, time: 1050 });
+      expect(intentsRight).toContainEqual({ type: 'shortcut', action: 'app_switch_next' });
+
+      engine.processEvent({ type: 'up', id: 1, x: 140, y: 100, time: 1100 });
+      engine.processEvent({ type: 'up', id: 2, x: 190, y: 100, time: 1100 });
+      engine.processEvent({ type: 'up', id: 3, x: 240, y: 100, time: 1100 });
+
+      // Left swipe
+      engine.processEvent({ type: 'down', id: 1, x: 200, y: 100, time: 1200 });
+      engine.processEvent({ type: 'down', id: 2, x: 250, y: 100, time: 1200 });
+      engine.processEvent({ type: 'down', id: 3, x: 300, y: 100, time: 1200 });
+
+      engine.processEvent({ type: 'move', id: 1, x: 160, y: 100, time: 1250 });
+      engine.processEvent({ type: 'move', id: 2, x: 210, y: 100, time: 1250 });
+      const intentsLeft = engine.processEvent({ type: 'move', id: 3, x: 260, y: 100, time: 1250 });
+      expect(intentsLeft).toContainEqual({ type: 'shortcut', action: 'app_switch_prev' });
+    });
+  });
 });
