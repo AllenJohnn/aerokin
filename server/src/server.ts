@@ -491,7 +491,17 @@ export function startServer(config: ServerConfig): {
   app.use(express.json({ limit: '16kb' }));
 
   // Serve static PWA files from public folder
-  app.use(express.static(config.publicDir));
+  app.use(
+    express.static(config.publicDir, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('manifest.json')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.includes(path.sep + 'assets' + path.sep) || filePath.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    })
+  );
 
   // Health check endpoint (accessible to all; CORS enabled ONLY for allow-listed origins)
   app.options('/health', (req, res) => {
