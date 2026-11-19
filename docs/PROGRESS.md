@@ -15,6 +15,7 @@
     - 5-Byte Binary WebSocket Datagrams: Added binary decoding in `server/src/server.ts` for MOVE (0x01, 5 bytes), SCROLL (0x02, 5 bytes), CLICK (0x03, 2 bytes), and BUTTON (0x04, 3 bytes). High-frequency input serialized directly as `ArrayBuffer` in `pwa/src/hooks/useAerokinSocket.ts`. Tested in `server/test/binary-protocol.test.ts`.
     - Hardware Volume Rocker: Added `pwa/src/utils/hardwareVolume.ts` with silent audio loop listening for iOS physical button clicks and adjusting Windows master volume (`volup`/`voldown`) with haptic detents.
     - iPhone 14 OLED & Notch Polish: Safe area padding tuned for TrueDepth notch (47px) and Home indicator (34px), true `#000000` black background, and Quick "Paste to PC" chip in header.
+    - Floating Virtual Keyboard & Shortcut Overlay: Added quick keyboard toggle in bottom click bar of `TrackpadTab.tsx`. Tapping focuses a hidden input to reveal the native iOS keyboard and slides down a top bar with latched modifiers (`Ctrl`, `Alt`, `Shift`, `Win`), navigation keys (`Esc`, `Tab`, `Enter`, `Backspace`, `Del`, `Space`, arrow keys), and shortcuts (`Ctrl+C`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+A`, `Alt+Tab`, `Win+D`).
     - Test & Quality Pass: 49 test files passed (406/406 tests: 16 signaling, 101 PWA, 289 server). Clean `tsc --noEmit` across all 4 packages, `eslint .` passed, `safety:check` passed with 0 violations.
 - **Exact Next Step**: Commit and push to `origin/main`, restart the live server process to run the new binary protocol, and deliver the user test guide.
 - **NEEDS ALLEN**:
@@ -22,6 +23,7 @@
   2. Try 3-finger swipe UP (Task View), DOWN (Desktop), and LEFT/RIGHT (Alt+Tab).
   3. Click iPhone physical volume buttons while on trackpad and verify PC volume adjusts.
   4. Test one-tap "Paste to PC" chip in top bar.
+  5. Tap the keyboard icon between Left and Right click on the trackpad to test the floating keyboard and shortcuts.
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
