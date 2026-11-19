@@ -6,31 +6,22 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Stable-R5 Milestone: Instant Automatic Multi-Network Connectivity, Trusted Network Auto-Registration, Hot-Swapped SAN TLS, Instant Open PWA, and Hardened Local Endpoints.
-  - **In Progress**: Final full verification (`safety:check`, `tsc`, `test`, `build`), tagging `stable-r5`, and pushing to origin.
+- **Current Milestone**: Stable-R6 Milestone: iPhone 14 Optimization, 5-Byte Binary Datagrams, 3-Finger Windows Gestures, Subpixel Math & Physical Volume Rocker.
+  - **In Progress**: Verification complete (safety, tsc, 406 tests, lint, build), ready to commit and push to remote.
   - **Completed so far**:
-    - CI Cross-Platform Fix: Updated `server/test/launcher-lifecycle.test.ts` to use `describe.skipIf(process.platform !== 'win32')` so Ubuntu CI runs green without PowerShell, and extended timeout for Node detection on Windows.
-    - Server Network-Independent Addressing: Leaf certificate dynamically generated with SANs containing `os.hostname()`, `<hostname>.local`, `aerokin.local`, `localhost`, `127.0.0.1`, and all non-internal private IPv4s (Wi-Fi, Ethernet, iPhone Personal Hotspot 172.20.10.x). Hot-swaps leaf certificate via `httpsServer.setSecureContext()` on network changes with zero server downtime, signed by the same 10-year root CA.
-    - mDNS Advertising: Best-effort local domain advertising with custom hostname and error containment that never crashes the server.
-    - Trusted-Network Mode: Auto-registers connecting clients on private subnets (RFC 1918, 172.20.10.0/28 hotspot, loopback, link-local, ULA) with no pairing codes or PC approval needed; public IPs strictly rejected. Replaces same-name device records cleanly without duplicates. Persisted toggle in `settings.json` (default: ON).
-    - Hardened Local Control Endpoints: Enforced loopback-only binding, Host validation, foreign Origin rejection, and mandatory `X-AeroKin-Local: 1` header on `/api/dashboard/*`, `/pause`, `/quit`, `/restart`, `/api/devices/*`, and `/api/pair/*` to prevent cross-site browser requests and DNS rebinding attacks.
-    - Tray Sidecar & Launcher Hardening: Added `X-AeroKin-Local: 1` header to tray sidecar, added Trusted-Network Mode toggle and New Pairing Code menu items; added port conflict detection with process name display and stale build detection to `scripts/aerokin-launcher.ps1`.
-    - Server Test Coverage: 34 test files passing (287/287 tests), including new suites `test/trusted-network.test.ts` and `test/san-hotswap.test.ts`.
-    - PWA Resilient Dual Storage: Dual-layer persistence across `localStorage` and `IndexedDB` with `navigator.storage.persist()` and automatic mutual repair (`repairAndSyncStorage`) to survive aggressive iOS 7-day Safari cache evictions.
-    - PWA Instant Auto-Connect: Eliminates pairing screens and splashes when trusted mode is enabled and PC is reachable; UI shell renders instantly with subtle connection badge; fast-path background reconnection.
-    - Parallel Host Probing: Probes candidate host endpoints (`<hostname>.local`, LAN IPs, hotspot IPs up to 6 known hosts) concurrently with <= 1.5s timeout; first responding endpoint connects and refreshes known host list from server.
-    - Input Coalescing & Latency Tracking: Pointer events coalesced to 1 per animation frame (`requestAnimationFrame`); continuous rolling ring buffer tracking p50/p95 round-trip latency in Settings > Diagnostics and Desktop HUD.
-    - PWA Test Coverage: 12 test files passing (98/98 tests), including new suite `test/parallelProbeAndStorage.test.ts`.
-    - Production Build & Prune: Full compilation across all packages verified; added `scripts/prune-build-assets.mjs` and `pnpm run prune`.
-    - Documentation & Verification Protocols: Authored `docs/LATENCY.md` (architecture, frame coalescing, H.264 auto path, real iPhone testing steps), updated `docs/QUICKSTART.md` (Home Screen storage persistence, trusted mode, hotspot), updated `docs/DEVICE-TEST-CHECKLIST.md` (Section 8 for multi-network testing), and updated `docs/CHANGELOG.md` with `[Stable-R5]`.
-- **Exact Next Step**: Run full verification suite (`safety:check`, `tsc -r`, `test -r`, `build`), tag `stable-r5`, rebase on `origin/main`, and push.
+    - Fractional Remainder Sub-Pixel Pointer Math: `pwa/src/hooks/useAerokinSocket.ts` preserves sub-pixel carryover across RAF frames (`pendingMoveRef.current = { dx: totalDx - sendX, dy: totalDy - sendY }`), ending micro-stutters when making slow precision adjustments.
+    - 120Hz Coalesced Touch Sampling: `pwa/src/components/TrackpadTab.tsx` reads `event.getCoalescedEvents?.()` to sample iPhone 14 120Hz touch digitizer between 60Hz display frames.
+    - 3-Finger Windows Gestures: Added `THREE_FINGER_TRACKING` state in `pwa/src/engine/trackpadGestures.ts`, tested across 30 unit tests in `pwa/test/trackpadGestures.test.ts`. Swipe UP -> `Win+Tab` (Task View), Swipe DOWN -> `Win+D` (Show Desktop), Swipe RIGHT -> `Alt+Tab` (Next App), Swipe LEFT -> `Alt+Shift+Tab` (Previous App).
+    - 5-Byte Binary WebSocket Datagrams: Added binary decoding in `server/src/server.ts` for MOVE (0x01, 5 bytes), SCROLL (0x02, 5 bytes), CLICK (0x03, 2 bytes), and BUTTON (0x04, 3 bytes). High-frequency input serialized directly as `ArrayBuffer` in `pwa/src/hooks/useAerokinSocket.ts`. Tested in `server/test/binary-protocol.test.ts`.
+    - Hardware Volume Rocker: Added `pwa/src/utils/hardwareVolume.ts` with silent audio loop listening for iOS physical button clicks and adjusting Windows master volume (`volup`/`voldown`) with haptic detents.
+    - iPhone 14 OLED & Notch Polish: Safe area padding tuned for TrueDepth notch (47px) and Home indicator (34px), true `#000000` black background, and Quick "Paste to PC" chip in header.
+    - Test & Quality Pass: 49 test files passed (406/406 tests: 16 signaling, 101 PWA, 289 server). Clean `tsc --noEmit` across all 4 packages, `eslint .` passed, `safety:check` passed with 0 violations.
+- **Exact Next Step**: Commit and push to `origin/main`, restart the live server process to run the new binary protocol, and deliver the user test guide.
 - **NEEDS ALLEN**:
-  1. Open Home Screen icon on home Wi-Fi and verify instant auto-connect with no pairing code per `docs/DEVICE-TEST-CHECKLIST.md` Section 8.1.
-  2. Switch laptop to iPhone Personal Hotspot (`172.20.10.x`) and verify instant auto-connect per Section 8.2.
-  3. Restart iPhone and verify storage resilience and auto-reconnect per Section 8.3.
-  4. Rename device in Settings and verify single replaced record in PC Dashboard per Section 8.4.
-  5. Measure and record real latency numbers (p50/p95 RTT, time-to-connected) per `docs/LATENCY.md`.
-  6. Run `install-aerokin.cmd` once on PC, reboot or re-login, and verify tray icon and mobile connectivity without opening a terminal (per `docs/DEVICE-TEST-CHECKLIST.md` section 0).
+  1. Open AeroKin on iPhone 14 and verify 1-finger micro-movements are butter-smooth with no dead zones.
+  2. Try 3-finger swipe UP (Task View), DOWN (Desktop), and LEFT/RIGHT (Alt+Tab).
+  3. Click iPhone physical volume buttons while on trackpad and verify PC volume adjusts.
+  4. Test one-tap "Paste to PC" chip in top bar.
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.

@@ -1,5 +1,25 @@
 # AeroKin Changelog
 
+## [Stable-R6] - 2026-11-19 - iPhone 14 Optimization, 5-Byte Binary Datagrams, 3-Finger Windows Gestures & Hardware Volume Rocker
+
+### Added
+- **Fractional Remainder Sub-Pixel Pointer Math**: Eliminated slow micro-movement targeting dead-zones by preserving fractional remainders across animation frames (`pendingMoveRef.current = { dx: totalDx - sendX, dy: totalDy - sendY }`), ensuring subtle finger shifts (< 0.5px) are never dropped.
+- **120Hz Coalesced Touch Sampling**: Wired `event.getCoalescedEvents?.()` on iPhone 14 touch interactions, capturing high-frequency touch positions between 60Hz display frames for ultra-smooth pointer gliding.
+- **3-Finger Windows Gestures**: Implemented 3-finger trackpad swipe gesture detection in `trackpadGestures.ts` and `TrackpadTab.tsx`:
+  - 3-finger swipe UP: Task View (`Win+Tab`)
+  - 3-finger swipe DOWN: Show Desktop (`Win+D`)
+  - 3-finger swipe RIGHT: Next App (`Alt+Tab`)
+  - 3-finger swipe LEFT: Previous App (`Alt+Shift+Tab`)
+  - Accompanied by haptic ticks and directional visual hint updates.
+- **5-Byte Binary WebSocket Protocol**: High-frequency trackpad datagrams serialized directly into compact binary buffers over WebSocket (`ArrayBuffer` / `Uint8Array`), bypassing JSON stringification/parsing:
+  - `0x01` (MOVE, 5 bytes): `[0x01, dx: int16, dy: int16]`
+  - `0x02` (SCROLL, 5 bytes): `[0x02, dy: int16, dx: int16]`
+  - `0x03` (CLICK, 2 bytes): `[0x03, button: uint8]`
+  - `0x04` (BUTTON, 3 bytes): `[0x04, button: uint8, state: uint8]`
+- **Physical iPhone Volume Rocker Control**: Added silent inaudible background audio loop listener (`setupHardwareVolumeListener`) tracking iOS physical volume button clicks and transmitting `volup` / `voldown` commands to Windows master volume with haptic detents.
+- **iPhone 14 Notch & OLED Black Polish**: Tuned top padding (`pt-safe` 47px) and bottom padding (`pb-safe` 34px) for the iPhone 14 TrueDepth notch and Home indicator with true `#000000` background.
+- **Quick "Paste to PC" Clipboard Chip**: Added one-tap clipboard paste button in the header bar reading phone clipboard text and injecting it directly into Windows.
+
 ## [Stable-R5] - 2026-11-19 - Instant Multi-Network Connectivity, Trusted-Network Mode, Hot-Swapped SAN TLS, Instant Open PWA & Hardened Local Control
 
 ### Added
