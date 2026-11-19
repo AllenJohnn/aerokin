@@ -1381,6 +1381,42 @@ export function startServer(config: ServerConfig): {
 
     ws.on('message', async (data: Buffer | string) => {
       try {
+        // High-frequency binary datagrams (after authentication)
+        if (Buffer.isBuffer(data) && data.length > 0 && isAuthenticated) {
+          const opcode = data[0];
+          // 0x01: MOVE [opcode(1), dx(int16LE), dy(int16LE)] (5 bytes)
+          if (opcode === 0x01 && data.length >= 5) {
+            const dx = data.readInt16LE(1);
+            const dy = data.readInt16LE(3);
+            coalescer?.addMove(dx, dy);
+            return;
+          }
+          // 0x02: SCROLL [opcode(1), dy(int16LE), dx(int16LE)] (5 bytes)
+          if (opcode === 0x02 && data.length >= 5) {
+            const sDy = data.readInt16LE(1);
+            const sDx = data.readInt16LE(3);
+            await scroller?.scroll(sDy, sDx);
+            return;
+          }
+          // 0x03: CLICK [opcode(1), button(uint8)] (2 bytes)
+          if (opcode === 0x03 && data.length >= 2) {
+            const btnCode = data[1];
+            const btn = btnCode === 1 ? 'right' : btnCode === 2 ? 'middle' : 'left';
+            await handleClick(btn);
+            recordEvent('click', `button: ${btn}`);
+            return;
+          }
+          // 0x04: BUTTON [opcode(1), button(uint8), state(uint8)] (3 bytes)
+          if (opcode === 0x04 && data.length >= 3) {
+            const btnCode = data[1];
+            const state = data[2] === 1 ? 'down' : 'up';
+            const btn = btnCode === 1 ? 'right' : btnCode === 2 ? 'middle' : 'left';
+            await handleButton(btn, state);
+            recordEvent('button', `${btn} ${state}`);
+            return;
+          }
+        }
+
         const raw = typeof data === 'string' ? data : data.toString('utf8');
 
         // Tiny maxPayload until auth (512 bytes)
