@@ -37,6 +37,7 @@ const ALLOWED_EXECUTOR_FILE = path.normalize(
 const IGNORED_DIRS = new Set([
   'node_modules',
   'dist',
+  'coverage',
   '.git',
   '.gemini',
   '.system_generated',

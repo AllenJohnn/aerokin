@@ -819,6 +819,7 @@ export const App: React.FC = () => {
                 sendButton={sendButton}
                 sendScroll={sendScroll}
                 sendKey={sendKey}
+                sendText={sendText}
                 isConnected={status === 'connected'}
                 onOpenSettings={() => setShowSettingsDrawer(true)}
                 trackpadConfig={trackpadConfig}
