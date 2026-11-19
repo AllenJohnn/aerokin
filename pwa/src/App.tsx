@@ -368,13 +368,16 @@ export const App: React.FC = () => {
             PC offline / asleep / not on this network
           </h1>
           <p className="text-xs text-muted-foreground max-w-xs mb-6">
-            <span className="font-semibold text-foreground">{activePc?.name || 'Your PC'}</span> is not answering on this network. AeroKin stays paired and reconnects automatically.
+            <span className="font-semibold text-foreground">{activePc?.name || 'Your PC'}</span> is
+            not answering on this network. AeroKin stays paired and reconnects automatically.
           </p>
 
           <div className="w-full bg-surface border border-border rounded-2xl p-4 text-left mb-6 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Host Agent ID</span>
-              <span className="font-mono text-foreground font-medium">{activePc?.pcId || 'agent'}</span>
+              <span className="font-mono text-foreground font-medium">
+                {activePc?.pcId || 'agent'}
+              </span>
             </div>
             <div className="flex flex-col gap-1 text-xs pt-2 border-t border-border/50">
               <span className="text-muted-foreground">Reachable Hosts Tried:</span>
@@ -383,7 +386,9 @@ export const App: React.FC = () => {
                   ? knownHosts
                   : [activePc?.lanHost || host || 'aerokin.local:8443']
                 ).map((h) => (
-                  <div key={h} className="truncate">• {h}</div>
+                  <div key={h} className="truncate">
+                    • {h}
+                  </div>
                 ))}
               </div>
             </div>
@@ -673,7 +678,9 @@ export const App: React.FC = () => {
         <div className="flex items-center justify-between px-3 py-2 bg-raised border-b border-border text-xs text-muted-foreground z-40">
           <div className="flex items-center gap-2 truncate">
             <span className="text-[#FF5A1F] font-semibold">Tip:</span>
-            <span className="truncate">Add to Home Screen for instant connection that iOS won't evict.</span>
+            <span className="truncate">
+              Add to Home Screen for instant connection that iOS won't evict.
+            </span>
           </div>
           <button
             onClick={dismissSafariTabHint}

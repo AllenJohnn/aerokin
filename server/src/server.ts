@@ -496,7 +496,10 @@ export function startServer(config: ServerConfig): {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('.html') || filePath.endsWith('manifest.json')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        } else if (filePath.includes(path.sep + 'assets' + path.sep) || filePath.includes('/assets/')) {
+        } else if (
+          filePath.includes(path.sep + 'assets' + path.sep) ||
+          filePath.includes('/assets/')
+        ) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         }
       },
@@ -1104,11 +1107,16 @@ export function startServer(config: ServerConfig): {
   // Watch network interface changes and hot-swap certificate with updated SANs
   const networkWatcher = watchNetworkChanges(() => {
     try {
-      console.log('[Network] Network change detected. Regenerating leaf certificate and hot-swapping TLS context...');
+      console.log(
+        '[Network] Network change detected. Regenerating leaf certificate and hot-swapping TLS context...'
+      );
       const updatedCerts = getOrCreateLocalCaAndCert(config.certsDir, undefined, undefined, true);
       hotSwapCertificate(updatedCerts);
     } catch (err: any) {
-      console.warn('[Network] Failed to hot-swap certificate on network change:', err?.message || err);
+      console.warn(
+        '[Network] Failed to hot-swap certificate on network change:',
+        err?.message || err
+      );
     }
   });
 

@@ -22,7 +22,9 @@ const COTURN_TLS_PORT = parseInt(process.env.COTURN_TLS_PORT || '5349', 10);
 const isMain = process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js');
 if (isMain) {
   if (!rawTurnSecret) {
-    console.error('[SignalingServer] Fatal: TURN_SECRET environment variable is required to start SignalingServer.');
+    console.error(
+      '[SignalingServer] Fatal: TURN_SECRET environment variable is required to start SignalingServer.'
+    );
     process.exit(1);
   }
 

@@ -157,8 +157,7 @@ export async function repairAndSyncStorage(): Promise<{
   }
 
   const hasCredentials = Boolean(
-    localStorage.getItem('aerokin_device_id') &&
-      localStorage.getItem('aerokin_device_credential')
+    localStorage.getItem('aerokin_device_id') && localStorage.getItem('aerokin_device_credential')
   );
 
   return { repairedFromIdb, repairedFromLocalStorage, hasCredentials };

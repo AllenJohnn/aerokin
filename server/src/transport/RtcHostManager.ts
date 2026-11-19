@@ -167,11 +167,14 @@ export class RtcHostSession implements Connection {
               );
 
               if (result.ok) {
-                const { deviceId: newDevId, rawCredential, record } = this.deviceStore.addDevice(
-                  name || 'Remote Device',
-                  platform || 'WebRTC',
-                  { pairedVia: 'remote', remote: true }
-                );
+                const {
+                  deviceId: newDevId,
+                  rawCredential,
+                  record,
+                } = this.deviceStore.addDevice(name || 'Remote Device', platform || 'WebRTC', {
+                  pairedVia: 'remote',
+                  remote: true,
+                });
 
                 this.authenticated = true;
                 this.deviceId = newDevId;

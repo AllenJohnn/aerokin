@@ -248,7 +248,9 @@ export function getOrCreateLocalCaAndCert(
           needNewLeaf = true;
         }
       } else {
-        console.log('[Security] Network or hostname configuration changed. Regenerating leaf certificate...');
+        console.log(
+          '[Security] Network or hostname configuration changed. Regenerating leaf certificate...'
+        );
         needNewLeaf = true;
       }
     } catch {

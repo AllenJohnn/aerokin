@@ -63,10 +63,14 @@ export class WindowsKeepAwakeAdapter implements KeepAwakeAdapter {
         while ($true) { [System.Threading.Thread]::Sleep(3600000) }
       `;
 
-      this.child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCommand], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
+      this.child = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', psCommand],
+        {
+          windowsHide: true,
+          stdio: 'ignore',
+        }
+      );
 
       this.child.on('error', () => {
         this.active = false;

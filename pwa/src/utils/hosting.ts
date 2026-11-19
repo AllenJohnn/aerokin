@@ -2,11 +2,7 @@
  * AEROKIN Hosted Mode & Host Address Validation Utilities
  */
 
-import {
-  setPersistentItem,
-  removePersistentItem,
-  repairAndSyncStorage,
-} from './persistentStorage';
+import { setPersistentItem, removePersistentItem, repairAndSyncStorage } from './persistentStorage';
 
 export const STORAGE_HOST_KEY = 'aerokin_server_host';
 export const STORAGE_TOKEN_KEY = 'aerokin_auth_token';

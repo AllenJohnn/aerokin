@@ -256,7 +256,13 @@ export interface UseAerokinSocketReturn {
   lastCloseReason: string | null;
   agentLogs: any[];
   requestAgentLogs: (limit?: number) => void;
-  runLatencyTest: () => Promise<{ min: number; avg: number; max: number; p50: number; p95: number }>;
+  runLatencyTest: () => Promise<{
+    min: number;
+    avg: number;
+    max: number;
+    p50: number;
+    p95: number;
+  }>;
 
   // Screenshot
   requestScreenshot: (options?: {

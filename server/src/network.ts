@@ -193,10 +193,7 @@ export function getNetworkFingerprint(): string {
 /**
  * Polls network interfaces at a regular interval and invokes callback when changes occur.
  */
-export function watchNetworkChanges(
-  onChange: () => void,
-  intervalMs = 4000
-): { stop: () => void } {
+export function watchNetworkChanges(onChange: () => void, intervalMs = 4000): { stop: () => void } {
   let lastFingerprint = getNetworkFingerprint();
   const timer = setInterval(() => {
     try {

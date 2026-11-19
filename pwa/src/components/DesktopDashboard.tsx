@@ -786,7 +786,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   : 'Trusted-Network Mode is DISABLED. Devices must enter an 8-digit code. Click to turn ON.'
               }
             >
-              <ShieldCheck size={14} className={trustedMode ? 'text-emerald-400' : 'text-zinc-400'} />
+              <ShieldCheck
+                size={14}
+                className={trustedMode ? 'text-emerald-400' : 'text-zinc-400'}
+              />
               <span>{trustedMode ? 'Trusted Mode: ON' : 'Trusted Mode: OFF'}</span>
             </button>
 
@@ -1032,8 +1035,12 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 <div className="p-3 bg-white rounded-2xl border border-border shadow-md flex-shrink-0 flex flex-col items-center">
                   {pairMode === 'remote' && !webrtcStatus?.remotePairPayload ? (
                     <div className="w-44 h-44 flex flex-col items-center justify-center p-3 text-center bg-zinc-900 text-muted-foreground text-xs rounded-xl border border-border">
-                      <span className="font-semibold text-foreground mb-1">Remote Link Disabled</span>
-                      <span className="text-[11px] text-muted-foreground">Set AEROKIN_HOSTED_URL to enable the remote link</span>
+                      <span className="font-semibold text-foreground mb-1">
+                        Remote Link Disabled
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Set AEROKIN_HOSTED_URL to enable the remote link
+                      </span>
                     </div>
                   ) : (pairMode === 'lan' ? pairQrUrl : remoteQrUrl) ? (
                     <img
@@ -1058,7 +1065,9 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                        {trustedMode ? 'Pairing Code (Optional — Trusted Mode is ON)' : 'Pairing Code'}
+                        {trustedMode
+                          ? 'Pairing Code (Optional — Trusted Mode is ON)'
+                          : 'Pairing Code'}
                       </span>
                       <button
                         onClick={handleRegenerateCode}
@@ -1107,7 +1116,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                     {trustedMode && (
                       <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
                         <CheckCircle size={14} className="flex-shrink-0" />
-                        <span>Trusted-Network Mode is active: phone auto-connects instantly without code.</span>
+                        <span>
+                          Trusted-Network Mode is active: phone auto-connects instantly without
+                          code.
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1129,7 +1141,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                       {/* Primary .local URL */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <span className="font-mono text-foreground truncate max-w-[260px]">
-                          https://{netAddresses?.localHostname || 'aerokin.local'}:{pcStats.port}/{trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
+                          https://{netAddresses?.localHostname || 'aerokin.local'}:{pcStats.port}/
+                          {trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
                         </span>
                         <button
                           onClick={() =>
@@ -1152,7 +1165,8 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                       {/* IP Fallback URL */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <span className="font-mono text-muted-foreground truncate max-w-[260px]">
-                          https://{pcStats.lanIp}:{pcStats.port}/{trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
+                          https://{pcStats.lanIp}:{pcStats.port}/
+                          {trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
                         </span>
                         <button
                           onClick={() =>

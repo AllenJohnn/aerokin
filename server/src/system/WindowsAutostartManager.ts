@@ -26,11 +26,7 @@ export class WindowsAutostartManager {
     } else {
       const appData =
         process.env.APPDATA ||
-        path.join(
-          process.env.USERPROFILE || 'C:\\Users\\Default',
-          'AppData',
-          'Roaming'
-        );
+        path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'AppData', 'Roaming');
       this.startupDir = path.join(
         appData,
         'Microsoft',
@@ -57,8 +53,7 @@ export class WindowsAutostartManager {
     if (!fs.existsSync(this.startupDir)) {
       fs.mkdirSync(this.startupDir, { recursive: true });
     }
-    const defaultCmd =
-      targetLaunchCommand || 'pnpm --filter aerokin-server start';
+    const defaultCmd = targetLaunchCommand || 'pnpm --filter aerokin-server start';
     const cmdContent = `@echo off\r\nREM AeroKin Windows Autostart Entry\r\ncd /d "${process.cwd()}"\r\nstart "" /b ${defaultCmd}\r\n`;
     fs.writeFileSync(this.scriptPath, cmdContent, 'utf-8');
     return {

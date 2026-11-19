@@ -257,10 +257,7 @@ export class DeviceStore {
     // Check for existing device with the SAME name or same deviceId
     let replacedDeviceId: string | undefined;
     for (const [existingId, dev] of this.devices.entries()) {
-      if (
-        dev.name.toLowerCase() === cleanName.toLowerCase() ||
-        existingId === cleanDeviceId
-      ) {
+      if (dev.name.toLowerCase() === cleanName.toLowerCase() || existingId === cleanDeviceId) {
         replacedDeviceId = existingId;
         this.devices.delete(existingId);
         break;
