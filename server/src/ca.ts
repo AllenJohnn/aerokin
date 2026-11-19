@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import forge from 'node-forge';
+import { getAllPrivateIPv4s, isPrivateIp, normalizeIp } from './network.js';
 
 const { pki, md, asn1 } = forge;
 
@@ -11,6 +13,7 @@ export interface CertPaths {
   serverCertPem: string;
   serverKeyPem: string;
   ipTxt: string;
+  sanFingerprint: string;
 }
 
 export interface GeneratedCerts {
@@ -19,6 +22,7 @@ export interface GeneratedCerts {
   serverCertPem: string;
   serverKeyPem: string;
   mobileconfig: string;
+  sanList?: { dns: string[]; ips: string[] };
 }
 
 /**
@@ -32,6 +36,7 @@ export function getCertPaths(certsDir: string): CertPaths {
     serverCertPem: path.join(certsDir, 'server-cert.pem'),
     serverKeyPem: path.join(certsDir, 'server-key.pem'),
     ipTxt: path.join(certsDir, 'ip.txt'),
+    sanFingerprint: path.join(certsDir, 'san-fingerprint.json'),
   };
 }
 
@@ -86,9 +91,62 @@ ${caCertDerBase64}
 }
 
 /**
- * Loads or creates the AEROKIN 10-year Local CA, and signs a 365-day leaf cert for the LAN IP.
+ * Builds the comprehensive set of Subject Alternative Names (SANs) for the leaf certificate.
+ * Includes os.hostname(), <hostname>.local, aerokin.local, localhost, 127.0.0.1,
+ * and every current non-internal private IPv4 of every interface (including 172.20.10.x hotspot).
  */
-export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): GeneratedCerts {
+export function buildSanSet(
+  lanIpOrIps?: string | string[],
+  hostnameOverride?: string
+): { dns: string[]; ips: string[] } {
+  const dnsSet = new Set<string>();
+  dnsSet.add('localhost');
+  dnsSet.add('aerokin.local');
+
+  const hostname = hostnameOverride || os.hostname() || 'localhost';
+  const hostTrimmed = hostname.trim();
+  if (hostTrimmed) {
+    dnsSet.add(hostTrimmed);
+    const hostLower = hostTrimmed.toLowerCase();
+    dnsSet.add(hostLower);
+    const localHost = hostLower.endsWith('.local') ? hostLower : `${hostLower}.local`;
+    dnsSet.add(localHost);
+  }
+
+  const ipSet = new Set<string>();
+  ipSet.add('127.0.0.1');
+
+  if (Array.isArray(lanIpOrIps)) {
+    for (const ip of lanIpOrIps) {
+      if (ip && isPrivateIp(ip)) {
+        ipSet.add(normalizeIp(ip));
+      }
+    }
+  } else if (lanIpOrIps && isPrivateIp(lanIpOrIps)) {
+    ipSet.add(normalizeIp(lanIpOrIps));
+  }
+
+  // Always include all active non-internal private IPv4s
+  for (const ip of getAllPrivateIPv4s()) {
+    ipSet.add(ip);
+  }
+
+  return {
+    dns: Array.from(dnsSet).sort(),
+    ips: Array.from(ipSet).sort(),
+  };
+}
+
+/**
+ * Loads or creates the AEROKIN 10-year Local CA, and signs a 365-day leaf cert
+ * with comprehensive SANs covering hostnames and all private IPv4 addresses.
+ */
+export function getOrCreateLocalCaAndCert(
+  certsDir: string,
+  lanIpOrIps?: string | string[],
+  hostnameOverride?: string,
+  forceRegenerateLeaf = false
+): GeneratedCerts {
   if (!fs.existsSync(certsDir)) {
     fs.mkdirSync(certsDir, { recursive: true });
   }
@@ -161,31 +219,43 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     console.log('[Security] AEROKIN Local CA created. Cached in server/.certs');
   }
 
-  // 2. Check leaf certificate validity (< 30 days remaining or IP changed)
-  let needNewLeaf = true;
-  let lastIp = '';
+  // 2. Build SAN set and check if new leaf is required
+  const sanList = buildSanSet(lanIpOrIps, hostnameOverride);
+  const currentFingerprint = JSON.stringify(sanList);
 
-  if (fs.existsSync(paths.ipTxt)) {
-    lastIp = fs.readFileSync(paths.ipTxt, 'utf8').trim();
-  }
+  let needNewLeaf = forceRegenerateLeaf;
 
-  if (fs.existsSync(paths.serverCertPem) && fs.existsSync(paths.serverKeyPem) && lastIp === lanIp) {
+  if (
+    !needNewLeaf &&
+    fs.existsSync(paths.serverCertPem) &&
+    fs.existsSync(paths.serverKeyPem) &&
+    fs.existsSync(paths.sanFingerprint)
+  ) {
     try {
-      const existingCertPem = fs.readFileSync(paths.serverCertPem, 'utf8');
-      const existingCert = pki.certificateFromPem(existingCertPem);
-      const remainingMs = existingCert.validity.notAfter.getTime() - Date.now();
-      const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
+      const cachedFingerprint = fs.readFileSync(paths.sanFingerprint, 'utf8').trim();
+      if (cachedFingerprint === currentFingerprint) {
+        const existingCertPem = fs.readFileSync(paths.serverCertPem, 'utf8');
+        const existingCert = pki.certificateFromPem(existingCertPem);
+        const remainingMs = existingCert.validity.notAfter.getTime() - Date.now();
+        const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
 
-      if (remainingDays > 30) {
-        needNewLeaf = false;
+        if (remainingDays > 30) {
+          needNewLeaf = false;
+        } else {
+          console.log(
+            `[Security] Leaf certificate expiring in ${Math.round(remainingDays)} days. Regenerating...`
+          );
+          needNewLeaf = true;
+        }
       } else {
-        console.log(
-          `[Security] Leaf certificate expiring in ${Math.round(remainingDays)} days. Regenerating...`
-        );
+        console.log('[Security] Network or hostname configuration changed. Regenerating leaf certificate...');
+        needNewLeaf = true;
       }
     } catch {
       needNewLeaf = true;
     }
+  } else {
+    needNewLeaf = true;
   }
 
   let serverCertPem: string;
@@ -196,7 +266,7 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     serverKeyPem = fs.readFileSync(paths.serverKeyPem, 'utf8');
   } else {
     console.log(
-      `[Security] Generating new leaf certificate signed by AEROKIN Local CA for IP: ${lanIp}...`
+      `[Security] Generating new leaf certificate signed by AEROKIN Local CA (SANs: ${sanList.dns.length} DNS, ${sanList.ips.length} IPs)...`
     );
 
     const leafKeys = pki.rsa.generateKeyPair({ bits: 2048 });
@@ -215,6 +285,11 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     ]);
     leafCert.setIssuer(caCert.subject.attributes);
 
+    const altNames = [
+      ...sanList.dns.map((value) => ({ type: 2, value })),
+      ...sanList.ips.map((ip) => ({ type: 7, ip })),
+    ];
+
     leafCert.setExtensions([
       { name: 'basicConstraints', cA: false, critical: true },
       {
@@ -229,12 +304,7 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
       },
       {
         name: 'subjectAltName',
-        altNames: [
-          { type: 7, ip: lanIp },
-          { type: 7, ip: '127.0.0.1' },
-          { type: 2, value: 'localhost' },
-          { type: 2, value: 'aerokin.local' },
-        ],
+        altNames,
       },
       { name: 'subjectKeyIdentifier' },
     ]);
@@ -245,7 +315,10 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
 
     fs.writeFileSync(paths.serverCertPem, serverCertPem, { mode: 0o600 });
     fs.writeFileSync(paths.serverKeyPem, serverKeyPem, { mode: 0o600 });
-    fs.writeFileSync(paths.ipTxt, lanIp, 'utf8');
+    fs.writeFileSync(paths.sanFingerprint, currentFingerprint, 'utf8');
+
+    const primaryIp = sanList.ips.find((ip) => ip !== '127.0.0.1') || '127.0.0.1';
+    fs.writeFileSync(paths.ipTxt, primaryIp, 'utf8');
 
     console.log('[Security] Leaf certificate generated and signed by AEROKIN Local CA.');
   }
@@ -259,5 +332,6 @@ export function getOrCreateLocalCaAndCert(certsDir: string, lanIp: string): Gene
     serverCertPem,
     serverKeyPem,
     mobileconfig,
+    sanList,
   };
 }

@@ -3,8 +3,9 @@
     AEROKIN Windows System Tray Indicator & Quick Controls Sidecar.
 .DESCRIPTION
     Runs a NotifyIcon in the Windows system notification area.
-    Provides 1-click access to open dashboard, show pairing code, open logs folder,
-    toggle remote input pause switch, restart AeroKin, and quit.
+    Provides 1-click access to open dashboard, show pairing code, generate new code,
+    toggle trusted network mode, toggle remote input pause switch, open logs folder,
+    restart AeroKin, and quit.
 #>
 
 param(
@@ -57,14 +58,18 @@ if (-not $IconFound) {
 }
 $NotifyIcon.Visible = $true
 
-# Helper for loopback requests
+# Helper for hardened loopback requests with custom header
 function Invoke-AeroKinApi([string]$Path, [string]$Method = "GET", [object]$Body = $null) {
     try {
+        $Headers = @{
+            "X-AeroKin-Local" = "1"
+        }
         $Params = @{
             Uri = "$BaseUrl$Path"
             Method = $Method
             UseBasicParsing = $true
             TimeoutSec = 3
+            Headers = $Headers
         }
         if ($Body) {
             $Params["Body"] = ($Body | ConvertTo-Json -Compress)
@@ -82,6 +87,8 @@ $ContextMenu = New-Object System.Windows.Forms.ContextMenuStrip
 
 $MenuDash = New-Object System.Windows.Forms.ToolStripMenuItem("Open Dashboard")
 $MenuPair = New-Object System.Windows.Forms.ToolStripMenuItem("Show Pairing Code")
+$MenuNewCode = New-Object System.Windows.Forms.ToolStripMenuItem("New Pairing Code")
+$MenuTrusted = New-Object System.Windows.Forms.ToolStripMenuItem("Trusted Network Mode")
 $MenuPause = New-Object System.Windows.Forms.ToolStripMenuItem("Pause Remote Input")
 $MenuLogs = New-Object System.Windows.Forms.ToolStripMenuItem("Open Logs Folder")
 $MenuRestart = New-Object System.Windows.Forms.ToolStripMenuItem("Restart AeroKin")
@@ -90,6 +97,8 @@ $MenuExit = New-Object System.Windows.Forms.ToolStripMenuItem("Quit")
 
 $ContextMenu.Items.Add($MenuDash) | Out-Null
 $ContextMenu.Items.Add($MenuPair) | Out-Null
+$ContextMenu.Items.Add($MenuNewCode) | Out-Null
+$ContextMenu.Items.Add($MenuTrusted) | Out-Null
 $ContextMenu.Items.Add($MenuPause) | Out-Null
 $ContextMenu.Items.Add($MenuLogs) | Out-Null
 $ContextMenu.Items.Add($MenuRestart) | Out-Null
@@ -110,17 +119,39 @@ $NotifyIcon.add_DoubleClick({
 # Show Pairing Code
 $MenuPair.add_Click({
     $Status = Invoke-AeroKinApi -Path "/api/dashboard/status"
-    $ActiveCode = if ($Status -and $Status.activeCode) { $Status.activeCode.code } else { $null }
+    $ActiveCode = if ($Status -and $Status.pairing) { $Status.pairing.code } else { $null }
+    $SecRemaining = if ($Status -and $Status.pairing) { $Status.pairing.expiresInSeconds } else { 0 }
     if (-not $ActiveCode) {
         $Regen = Invoke-AeroKinApi -Path "/api/pair/regenerate" -Method "POST"
         if ($Regen -and $Regen.code) {
             $ActiveCode = $Regen.code
+            $SecRemaining = $Regen.expiresInSeconds
         }
     }
     if ($ActiveCode) {
-        $NotifyIcon.ShowBalloonTip(6000, "AeroKin Pairing Code", "Active 8-digit Code: $ActiveCode`nEnter this code on your phone to connect.", [System.Windows.Forms.ToolTipIcon]::Info)
+        $NotifyIcon.ShowBalloonTip(6000, "AeroKin Pairing Code", "8-digit Code: $ActiveCode (${SecRemaining}s remaining)`nEnter this code on your phone when trusted mode is OFF.", [System.Windows.Forms.ToolTipIcon]::Info)
     } else {
-        $NotifyIcon.ShowBalloonTip(4000, "AeroKin Pairing", "Server starting or offline. Open dashboard to view QR.", [System.Windows.Forms.ToolTipIcon]::Warning)
+        $NotifyIcon.ShowBalloonTip(4000, "AeroKin Pairing", "Server starting or offline. Open dashboard to view status.", [System.Windows.Forms.ToolTipIcon]::Warning)
+    }
+})
+
+# Generate New Pairing Code
+$MenuNewCode.add_Click({
+    $Regen = Invoke-AeroKinApi -Path "/api/pair/regenerate" -Method "POST"
+    if ($Regen -and $Regen.code) {
+        $NotifyIcon.ShowBalloonTip(6000, "New Pairing Code Generated", "New 8-digit Code: $($Regen.code) (valid for $($Regen.expiresInSeconds)s)`nEnter this code on your phone to connect.", [System.Windows.Forms.ToolTipIcon]::Info)
+    }
+})
+
+# Toggle Trusted Network Mode
+$MenuTrusted.add_Click({
+    $Current = Invoke-AeroKinApi -Path "/api/dashboard/trusted-mode"
+    $NewState = -not ($Current.trustedMode -eq $true)
+    $Res = Invoke-AeroKinApi -Path "/api/dashboard/trusted-mode" -Method "POST" -Body @{ trustedMode = $NewState }
+    if ($Res) {
+        $MenuTrusted.Checked = $NewState
+        $StatusText = if ($NewState) { "ENABLED (Instant auto-connect on local network)" } else { "DISABLED (8-digit code required)" }
+        $NotifyIcon.ShowBalloonTip(4000, "AeroKin Trusted Mode", "Trusted-Network Mode is now $StatusText.", [System.Windows.Forms.ToolTipIcon]::Info)
     }
 })
 
@@ -168,24 +199,32 @@ $MenuExit.add_Click({
     [System.Windows.Forms.Application]::Exit()
 })
 
-# Timer to sync pause state every 5 seconds
+# Timer to sync pause and trusted mode state every 5 seconds
 $SyncTimer = New-Object System.Windows.Forms.Timer
 $SyncTimer.Interval = 5000
 $SyncTimer.add_Tick({
-    $Status = Invoke-AeroKinApi -Path "/api/dashboard/pause"
-    if ($Status) {
-        $MenuPause.Checked = ($Status.paused -eq $true)
+    $PauseStatus = Invoke-AeroKinApi -Path "/api/dashboard/pause"
+    if ($PauseStatus) {
+        $MenuPause.Checked = ($PauseStatus.paused -eq $true)
+    }
+    $TrustStatus = Invoke-AeroKinApi -Path "/api/dashboard/trusted-mode"
+    if ($TrustStatus) {
+        $MenuTrusted.Checked = ($TrustStatus.trustedMode -eq $true)
     }
 })
 $SyncTimer.Start()
 
 # Initial sync
-$InitialStatus = Invoke-AeroKinApi -Path "/api/dashboard/pause"
-if ($InitialStatus) {
-    $MenuPause.Checked = ($InitialStatus.paused -eq $true)
+$InitialPause = Invoke-AeroKinApi -Path "/api/dashboard/pause"
+if ($InitialPause) {
+    $MenuPause.Checked = ($InitialPause.paused -eq $true)
+}
+$InitialTrust = Invoke-AeroKinApi -Path "/api/dashboard/trusted-mode"
+if ($InitialTrust) {
+    $MenuTrusted.Checked = ($InitialTrust.trustedMode -eq $true)
 }
 
-# Startup balloon showing phone URL and LAN IP fallback
+# Startup balloon showing primary phone URL and LAN IP fallback
 if (-not $Hostname) {
     try {
         $Hostname = [System.Net.Dns]::GetHostName()
@@ -193,7 +232,8 @@ if (-not $Hostname) {
         $Hostname = "aerokin"
     }
 }
-$PhoneUrl = "https://$($Hostname).local:$Port"
+$HostClean = $Hostname.ToLower()
+$PhoneUrl = "https://$($HostClean).local:$Port"
 $FallbackUrl = "https://${LanIp}:$Port"
 $NotifyIcon.ShowBalloonTip(7000, "AeroKin Running", "Phone: $PhoneUrl`nFallback: $FallbackUrl", [System.Windows.Forms.ToolTipIcon]::Info)
 

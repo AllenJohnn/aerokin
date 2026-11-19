@@ -146,25 +146,35 @@ if (-not $createdNew) {
     exit 0
 }
 
-# Check if port 8443 is already responding
-$PortInUse = $false
-try {
-    $tcp = New-Object System.Net.Sockets.TcpClient
-    $iar = $tcp.BeginConnect("127.0.0.1", $Port, $null, $null)
-    $connected = $iar.AsyncWaitHandle.WaitOne(400, $false)
-    if ($connected -and $tcp.Connected) {
-        $PortInUse = $true
-        $tcp.EndConnect($iar)
-        $tcp.Close()
-    }
-} catch {}
-
-if ($PortInUse) {
-    Write-AeroKinLog "Port $Port is already in use by an active AeroKin server. Opening dashboard."
+# Check if port 8443 or 8080 is in use
+$PortsToCheck = @($Port, 8080)
+foreach ($p in $PortsToCheck) {
+    $conn = $null
     try {
-        Start-Process "https://localhost:$Port/dashboard"
+        $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     } catch {}
-    exit 0
+
+    if ($conn) {
+        $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+        $procName = if ($proc) { $proc.ProcessName } else { "Unknown Process (PID $($conn.OwningProcess))" }
+
+        # If it's node on port 8443, it's an existing AeroKin instance
+        if ($procName -match "node" -and $p -eq $Port) {
+            Write-AeroKinLog "Port $p is already in use by active AeroKin node instance. Opening dashboard."
+            try {
+                Start-Process "https://localhost:$Port/dashboard"
+            } catch {}
+            exit 0
+        } else {
+            Write-AeroKinLog "[ERROR] Port $p is already in use by process '$procName' (PID $($conn.OwningProcess))."
+            Show-LauncherDialog `
+                -Text "Cannot start AeroKin: Port $p is already in use by '$procName' (PID $($conn.OwningProcess)).`n`nPlease close '$procName' or resolve the port conflict to continue." `
+                -Title "AeroKin Port Conflict" `
+                -Buttons ([System.Windows.Forms.MessageBoxButtons]::OK) `
+                -Icon ([System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+            exit 1
+        }
+    }
 }
 
 if ($DryRun) {
@@ -172,10 +182,27 @@ if ($DryRun) {
     exit 0
 }
 
-# 5. First-Run check: dependencies and builds
+# 5. Build check: first-run OR stale build detection
 $ServerDist = Join-Path $ServerDir "dist\index.js"
 $PublicIndex = Join-Path $ServerDir "public\index.html"
 $NeedsBuild = (-not (Test-Path $ServerDist)) -or (-not (Test-Path $PublicIndex))
+
+if (-not $NeedsBuild) {
+    try {
+        $distTime = (Get-Item $ServerDist).LastWriteTimeUtc
+        $publicTime = (Get-Item $PublicIndex).LastWriteTimeUtc
+        $stamp = if ($distTime -lt $publicTime) { $distTime } else { $publicTime }
+
+        $srcFiles = Get-ChildItem -Path (Join-Path $ServerDir "src"), (Join-Path $RepoDir "pwa\src") -Recurse -File -Include "*.ts","*.tsx","*.js","*.json","*.html" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+        if ($srcFiles -and $srcFiles.LastWriteTimeUtc -gt $stamp) {
+            Write-AeroKinLog "Stale build detected ($($srcFiles.Name) modified after build stamp). Rebuilding..."
+            $NeedsBuild = $true
+        }
+    } catch {}
+}
 
 if ($NeedsBuild) {
     Write-AeroKinLog "First-run or unbuilt state detected. Displaying setup notice..."

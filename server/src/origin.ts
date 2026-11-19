@@ -12,6 +12,9 @@
  * websites in a user's browser from connecting (browsers cannot omit or spoof the Origin header).
  */
 
+import os from 'node:os';
+import { getAllPrivateIPv4s } from './network.js';
+
 export function parseAllowedOrigins(envValue?: string): Set<string> {
   const allowed = new Set<string>();
   if (!envValue) return allowed;
@@ -53,10 +56,13 @@ export function isOriginAllowed(
     return false;
   }
 
-  // 1. Built-in agent origins (HTTPS LAN IP, mDNS, loopback)
+  // 1. Built-in agent origins (HTTPS LAN IP, mDNS, loopback, hostname.local, all private interfaces)
+  const host = (os.hostname() || 'localhost').toLowerCase();
   const builtInOrigins = new Set<string>([
     `https://${lanIp}:${port}`.toLowerCase(),
     `https://aerokin.local:${port}`.toLowerCase(),
+    `https://${host}.local:${port}`.toLowerCase(),
+    `https://${host}:${port}`.toLowerCase(),
     `https://localhost:${port}`.toLowerCase(),
     `https://127.0.0.1:${port}`.toLowerCase(),
     `http://localhost:${port}`.toLowerCase(),
@@ -69,6 +75,11 @@ export function isOriginAllowed(
     'http://127.0.0.1:5174',
     'http://127.0.0.1:4173',
   ]);
+
+  // Dynamically include every private interface IPv4 on this machine
+  for (const ip of getAllPrivateIPv4s()) {
+    builtInOrigins.add(`https://${ip}:${port}`.toLowerCase());
+  }
 
   if (builtInOrigins.has(normOrigin)) {
     return true;

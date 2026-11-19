@@ -47,7 +47,8 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
     method: string,
     url: string,
     remoteAddress: string,
-    body?: any
+    body?: any,
+    customHeaders?: Record<string, string>
   ): Promise<{ status: number; headers: Record<string, any>; body: any; text: string }> {
     return new Promise((resolve) => {
       const { Readable } = require('node:stream');
@@ -55,6 +56,8 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
 
       const headers: Record<string, string> = {
         host: '127.0.0.1',
+        'x-aerokin-local': '1',
+        ...customHeaders,
       };
       if (body) {
         headers['content-type'] = 'application/json';
@@ -320,6 +323,43 @@ describe('PC Dashboard & Management Endpoints (Loopback Security)', () => {
     expect(loopRestart.body.ok).toBe(true);
     expect(loopRestart.body.restarting).toBe(true);
 
+    // Wait for the exit setTimeouts to complete while exitSpy is active
+    await new Promise((r) => setTimeout(r, 260));
     exitSpy.mockRestore();
+  });
+
+  it('rejects state-changing local control requests without X-AeroKin-Local header or with foreign Origin', async () => {
+    // 1. Missing X-AeroKin-Local header
+    const noHeaderRes = await mockRequest(
+      'POST',
+      '/api/dashboard/pause',
+      '127.0.0.1',
+      { paused: true },
+      { 'x-aerokin-local': '' }
+    );
+    expect(noHeaderRes.status).toBe(403);
+    expect(noHeaderRes.body.error).toContain('Forbidden');
+
+    // 2. Foreign Origin (CSRF attempt)
+    const foreignOriginRes = await mockRequest(
+      'POST',
+      '/api/dashboard/pause',
+      '127.0.0.1',
+      { paused: true },
+      { 'x-aerokin-local': '1', origin: 'https://evil-attacker.example.com' }
+    );
+    expect(foreignOriginRes.status).toBe(403);
+    expect(foreignOriginRes.body.error).toContain('Forbidden');
+
+    // 3. Foreign Host header
+    const foreignHostRes = await mockRequest(
+      'POST',
+      '/api/dashboard/pause',
+      '127.0.0.1',
+      { paused: true },
+      { 'x-aerokin-local': '1', host: 'evil-attacker.example.com' }
+    );
+    expect(foreignHostRes.status).toBe(403);
+    expect(foreignHostRes.body.error).toContain('Forbidden');
   });
 });

@@ -5,12 +5,15 @@
  * can ONLY be accessed by processes running on the local PC itself, never by other
  * devices on the local area network (LAN) or external internet.
  *
- * Normalizes IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1, ::ffff:192.168.1.10)
- * and verifies against all network interfaces physically or logically bound to this PC.
+ * Enforces cross-site browser request protection (CSRF / CSWSH):
+ * - Strict loopback socket IP validation (127.0.0.1, ::1)
+ * - Restrictive Host header validation (localhost / 127.0.0.1 / [::1])
+ * - Rejection of foreign Origin headers
+ * - Mandatory custom header X-AeroKin-Local: 1
  */
 
 import os from 'node:os';
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Returns a cached Set of all IP addresses belonging to the host machine,
@@ -98,9 +101,84 @@ export function isLoopbackIp(remoteIp: string | undefined | null): boolean {
 }
 
 /**
+ * Returns true if the IP is strictly a loopback address (127.0.0.1, ::1, localhost).
+ */
+export function isStrictLoopbackIp(remoteIp: string | undefined | null): boolean {
+  if (!remoteIp) return false;
+  const raw = remoteIp.trim().toLowerCase();
+  const normalized = normalizeIp(raw);
+  return (
+    raw === '127.0.0.1' ||
+    raw === '::1' ||
+    raw === '::ffff:127.0.0.1' ||
+    raw === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === 'localhost'
+  );
+}
+
+/**
  * Verifies if an Express HTTP request originated from the local machine.
  */
 export function isLoopbackRequest(req: Request): boolean {
   const socketIp = req.socket?.remoteAddress;
   return isLoopbackIp(socketIp);
+}
+
+export interface LocalControlVerification {
+  ok: boolean;
+  status: number;
+  error: string;
+}
+
+/**
+ * Verifies that a state-changing local control request is valid:
+ * 1. Must originate from loopback IP (127.0.0.1, ::1, ::ffff:127.0.0.1).
+ * 2. Host header must be localhost / 127.0.0.1 / [::1] / ::1 (with optional port).
+ * 3. Any present Origin header must be from loopback (no cross-site browser requests).
+ * 4. Must include custom header X-AeroKin-Local: 1.
+ */
+export function verifyLocalControl(req: Request): LocalControlVerification {
+  const socketIp = req.socket?.remoteAddress;
+  if (!isStrictLoopbackIp(socketIp)) {
+    return { ok: false, status: 403, error: 'Forbidden: Loopback only' };
+  }
+
+  const host = req.headers.host || '';
+  if (!/^(localhost|127\.0\.0\.1|\[::1\]|::1)(:\d+)?$/i.test(host)) {
+    return { ok: false, status: 403, error: 'Forbidden: Invalid Host header for local control' };
+  }
+
+  const origin = req.headers.origin;
+  if (origin && origin.trim() !== '') {
+    try {
+      const parsed = new URL(origin.trim());
+      const h = parsed.hostname.toLowerCase();
+      if (h !== 'localhost' && h !== '127.0.0.1' && h !== '::1' && h !== '[::1]') {
+        return { ok: false, status: 403, error: 'Forbidden: Cross-site request rejected' };
+      }
+    } catch {
+      return { ok: false, status: 403, error: 'Forbidden: Malformed Origin header' };
+    }
+  }
+
+  const localHeader = req.headers['x-aerokin-local'];
+  if (localHeader !== '1') {
+    return { ok: false, status: 403, error: 'Forbidden: Missing X-AeroKin-Local header' };
+  }
+
+  return { ok: true, status: 200, error: '' };
+}
+
+/**
+ * Express middleware enforcing local control security invariants on state-changing endpoints.
+ */
+export function requireLocalControl(req: Request, res: Response, next: NextFunction): void {
+  const check = verifyLocalControl(req);
+  if (!check.ok) {
+    res.status(check.status).json({ error: check.error });
+    return;
+  }
+  next();
 }

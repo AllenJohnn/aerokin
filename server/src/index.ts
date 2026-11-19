@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
 import { exec } from 'node:child_process';
 import qrcode from 'qrcode-terminal';
-import { getLocalIPv4 } from './network.js';
+import { getLocalIPv4, getAllPrivateIPv4s, getNetworkAddresses } from './network.js';
 import { getOrCreateToken } from './token.js';
 import { getOrCreateLocalCaAndCert } from './ca.js';
 import { startTrustServer } from './trust-server.js';
@@ -26,7 +26,19 @@ async function main() {
   // Hook process console output into the in-memory redacted ring buffer
   serverLogger.hookConsole();
 
+  // Wait briefly for network adapter initialization if booting/logging in without DHCP IP yet
+  let privateIps = getAllPrivateIPv4s();
+  if (privateIps.length === 0) {
+    console.log('[Network] Waiting for network interface initialization at login...');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      privateIps = getAllPrivateIPv4s();
+      if (privateIps.length > 0) break;
+    }
+  }
+
   const lanIp = getLocalIPv4();
+  const netAddrs = getNetworkAddresses(HTTPS_PORT);
   const legacyToken =
     process.env.AEROKIN_LEGACY_TOKEN === '1' ? getOrCreateToken(CERTS_DIR) : undefined;
   const noQr =
@@ -34,7 +46,7 @@ async function main() {
     process.env.AEROKIN_NO_QR === '1' ||
     process.env.AEROKIN_NO_QR === 'true';
 
-  // Initialize or verify AEROKIN Local CA & 365-day Leaf Cert
+  // Initialize or verify AEROKIN Local CA & 365-day Leaf Cert with comprehensive SANs
   const certs = getOrCreateLocalCaAndCert(CERTS_DIR, lanIp);
 
   // Initialize DeviceStore and PairingManager
@@ -61,14 +73,26 @@ async function main() {
     pairingManager,
   });
 
-  // 3. Start best-effort mDNS advertisement of aerokin.local
-  startMdnsAdvertisement(HTTPS_PORT, lanIp);
+  // 3. Start best-effort mDNS advertisement of aerokin.local & <hostname>.local
+  startMdnsAdvertisement(HTTPS_PORT, lanIp, netAddrs.hostname);
 
   const trustUrl = `http://${lanIp}:${HTTP_TRUST_PORT}`;
   const activeCode = pairingManager.getActiveCode();
   const code = activeCode ? activeCode.code : '';
-  const pairUrl = `https://${lanIp}:${HTTPS_PORT}/#code=${code}`;
-  const mdnsPairUrl = `https://aerokin.local:${HTTPS_PORT}/#code=${code}`;
+  const primaryPhoneUrl = netAddrs.primaryPhoneUrl;
+  const ipPairUrl = `https://${lanIp}:${HTTPS_PORT}/${code ? '#code=' + code : ''}`;
+
+  serverLogger.info(
+    'system',
+    `[Lifecycle] AeroKin Server started (PID: ${process.pid}, Host: ${netAddrs.localHostname}, Port: ${HTTPS_PORT})`
+  );
+
+  const handleShutdown = (reason: string) => {
+    serverLogger.info('system', `[Lifecycle] AeroKin Server shutting down (${reason})`);
+    process.exit(0);
+  };
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
   // Print startup banner
   console.log('\n======================================================');
@@ -77,20 +101,26 @@ async function main() {
   console.log('======================================================\n');
   console.log(`[Status]  HTTPS & WebSocket listening on port ${HTTPS_PORT}`);
   console.log(`[Trust]   HTTP CA Profile server on port ${HTTP_TRUST_PORT}`);
-  console.log(`[Network] Wi-Fi IPv4: ${lanIp}`);
-  console.log(`[Pairing] 8-digit Pairing Code: ${code} (valid for 2 minutes)`);
-  console.log(`[mDNS]    Host alias: aerokin.local\n`);
+  console.log(`[Phone]   Primary Phone Address: ${primaryPhoneUrl}`);
+  console.log(`[Network] Reachable via: ${netAddrs.localHostname} / ${netAddrs.ips.join(', ')}`);
+  console.log(
+    `[Trusted] Trusted-Network Mode: ${deviceStore.isTrustedNetworkMode() ? 'ENABLED (Instant auto-connect)' : 'DISABLED (Code required)'}`
+  );
+  if (!deviceStore.isTrustedNetworkMode()) {
+    console.log(`[Pairing] 8-digit Pairing Code: ${code} (valid for 2 minutes)`);
+  }
+  console.log(`[mDNS]    Host alias: aerokin.local & ${netAddrs.localHostname}\n`);
 
   console.log('===================================================================');
   console.log(`>>> OPEN THE AEROKIN PC DASHBOARD:  https://localhost:${HTTPS_PORT}/dashboard  <<<`);
   console.log(
-    `>>> (or via mDNS:                  https://aerokin.local:${HTTPS_PORT}/dashboard) <<<`
+    `>>> (or via mDNS:                  https://${netAddrs.localHostname}:${HTTPS_PORT}/dashboard) <<<`
   );
   console.log('===================================================================\n');
 
   const rawHosted = (process.env.AEROKIN_HOSTED_URL || '').trim().replace(/\/+$/, '');
   const hostedPairUrl = rawHosted
-    ? `${rawHosted}/#host=${lanIp}:${HTTPS_PORT}&code=${code}`
+    ? `${rawHosted}/#host=${netAddrs.localHostname}:${HTTPS_PORT}${code ? '&code=' + code : ''}`
     : undefined;
 
   if (!noQr) {
@@ -104,10 +134,10 @@ async function main() {
     console.log('\n------------------------------------------------------');
     console.log('  QR #2: CONNECT IPHONE REMOTE & TRACKPAD');
     console.log('  Scan to launch AEROKIN directly on your iPhone:');
-    console.log(`  LAN URL:  ${pairUrl}`);
-    console.log(`  mDNS URL: ${mdnsPairUrl}`);
+    console.log(`  Primary URL: ${primaryPhoneUrl}`);
+    console.log(`  IP Fallback: ${ipPairUrl}`);
     console.log('------------------------------------------------------');
-    qrcode.generate(pairUrl, { small: true });
+    qrcode.generate(primaryPhoneUrl, { small: true });
 
     if (hostedPairUrl && rawHosted) {
       console.log('\n------------------------------------------------------');
@@ -120,7 +150,8 @@ async function main() {
   } else {
     console.log('[QR codes suppressed via --no-qr]');
     console.log(`• Certificate Setup URL: ${trustUrl}`);
-    console.log(`• Phone Pair URL:        ${pairUrl}`);
+    console.log(`• Primary Phone URL:     ${primaryPhoneUrl}`);
+    console.log(`• IP Fallback URL:       ${ipPairUrl}`);
     if (hostedPairUrl) console.log(`• Hosted App URL:        ${hostedPairUrl}`);
   }
 

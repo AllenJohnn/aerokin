@@ -68,7 +68,8 @@ describe('Server WebSocket Authentication & Device Security', () => {
     ws.close();
   });
 
-  it('rejects invalid device credentials with close code 4001', async () => {
+  it('rejects invalid device credentials with close code 4001 when trusted mode is OFF', async () => {
+    deviceStore.setTrustedNetworkMode(false);
     const ws = new WebSocket(`wss://127.0.0.1:${port}/`, {
       rejectUnauthorized: false,
     });
@@ -91,6 +92,39 @@ describe('Server WebSocket Authentication & Device Security', () => {
     const { code, reason } = await closePromise;
     expect(code).toBe(4001);
     expect(reason).toContain('Unauthorized');
+  });
+
+  it('auto-registers and authenticates unrecognized device when trusted network mode is ON', async () => {
+    deviceStore.setTrustedNetworkMode(true);
+    const ws = new WebSocket(`wss://127.0.0.1:${port}/`, {
+      rejectUnauthorized: false,
+    });
+
+    await new Promise((resolve) => ws.on('open', resolve));
+
+    const receivedMessages: any[] = [];
+    ws.on('message', (data) => {
+      receivedMessages.push(JSON.parse(data.toString()));
+    });
+
+    ws.send(
+      JSON.stringify({
+        type: 'auth',
+        deviceId: 'trusted-auto-device',
+        credential: 'some-random-client-credential',
+        name: 'Auto iPhone',
+        platform: 'iOS',
+      })
+    );
+
+    // Wait briefly for handshake messages
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    const authOkMsg = receivedMessages.find((m) => m.type === 'auth_ok');
+    expect(authOkMsg).toBeDefined();
+    expect(authOkMsg.deviceId).toBe('trusted-auto-device');
+    ws.close();
   });
 
   it('authenticates valid credentials, returns auth_ok, and receives device list', async () => {

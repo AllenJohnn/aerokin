@@ -1,11 +1,25 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import https from 'node:https';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import { getOrCreateLocalCaAndCert } from './ca.js';
-import { isLoopbackRequest, isLoopbackIp, normalizeIp } from './loopback.js';
+import { GeneratedCerts, getOrCreateLocalCaAndCert } from './ca.js';
+import {
+  isLoopbackRequest,
+  isLoopbackIp,
+  isStrictLoopbackIp,
+  verifyLocalControl,
+  requireLocalControl,
+  normalizeIp,
+} from './loopback.js';
+import {
+  getAllPrivateIPv4s,
+  isPrivateIp,
+  getNetworkAddresses,
+  watchNetworkChanges,
+} from './network.js';
 import { serverLogger, LogEntry } from './logger.js';
 import { getHostPowerStatus } from './power.js';
 import {
@@ -98,6 +112,7 @@ export function startServer(config: ServerConfig): {
   screenshotService: ScreenshotService;
   quickActionService: QuickActionService;
   signalingClient: SignalingClient | null;
+  hotSwapCertificate: (certs: GeneratedCerts) => void;
   isInputPaused: () => boolean;
   setInputPaused: (paused: boolean) => void;
   revokeDevice: (deviceId: string) => void;
@@ -247,13 +262,21 @@ export function startServer(config: ServerConfig): {
         ? `${hostedBase}/#agent=${pcId}${signalHost ? `&signal=${encodeURIComponent(signalHost)}` : ''}&code=${currentCode}`
         : undefined;
 
+    const networkAddrs = getNetworkAddresses(config.port);
+    const primaryPhoneUrl = networkAddrs.primaryPhoneUrl;
+    const ipFallbackUrls = networkAddrs.ipUrls;
+
     return {
       devices: getEnrichedDeviceList(),
+      trustedMode: deviceStore.isTrustedNetworkMode(),
+      addresses: networkAddrs,
       pairing: {
         code: currentCode,
         expiresInSeconds: activeCode ? activeCode.validForSeconds : 0,
         url: pairUrl,
         mdnsUrl,
+        primaryPhoneUrl,
+        ipFallbackUrls,
         remotePairPayload: remotePairPayload || undefined,
         pcId,
         signalingUrl: signalingUrl || undefined,
@@ -489,7 +512,14 @@ export function startServer(config: ServerConfig): {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     }
-    res.json({ status: 'ok', service: 'aerokin-server' });
+    res.json({
+      status: 'ok',
+      service: 'aerokin-server',
+      pcId: deviceStore.getPcId(),
+      pcName: deviceStore.getPcIdentity().name,
+      addresses: getNetworkAddresses(config.port),
+      trustedMode: deviceStore.isTrustedNetworkMode(),
+    });
   });
 
   // REST API: Pairing CORS preflight
@@ -498,14 +528,14 @@ export function startServer(config: ServerConfig): {
     if (isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
       if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-AeroKin-Local');
       res.sendStatus(204);
     } else {
       res.sendStatus(403);
     }
   });
 
-  // REST API: Pairing submission (Phone submits 8-digit code + device info)
+  // REST API: Pairing submission (Phone submits 8-digit code OR auto-registers in trusted mode)
   app.post('/api/pair', async (req, res) => {
     const origin = req.headers.origin;
     if (!isOriginAllowed(origin, config.lanIp, config.port, allowedOrigins)) {
@@ -517,17 +547,76 @@ export function startServer(config: ServerConfig): {
     }
 
     const clientIp = req.socket.remoteAddress || 'unknown';
-    const { code, name, platform } = req.body || {};
+    const clientIpNormalized = normalizeIp(clientIp);
+    const code = req.body?.code;
+    const name = req.body?.name;
+    const platform = req.body?.platform;
+    const clientDeviceId = req.body?.deviceId || req.body?.clientDeviceId;
+    const clientCredential = req.body?.credential || req.body?.clientCredential;
 
-    if (!code || typeof code !== 'string') {
-      res.status(400).json({ error: 'Pairing code is required' });
+    const deviceName =
+      typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : 'iPhone';
+    const devicePlatform =
+      typeof platform === 'string' && platform.trim() ? platform.trim().slice(0, 32) : 'Browser';
+
+    // 1. Trusted-Network Mode Auto-Registration (no code required from private IP)
+    if (req.body?.autoRegister || !code) {
+      if (!isPrivateIp(clientIpNormalized)) {
+        res.status(403).json({
+          error: 'Forbidden: Auto-registration is only permitted from private networks',
+        });
+        return;
+      }
+
+      if (!deviceStore.isTrustedNetworkMode()) {
+        res.status(403).json({
+          error: 'Forbidden: Trusted network mode is disabled. 8-digit code required.',
+        });
+        return;
+      }
+
+      const devId =
+        typeof clientDeviceId === 'string' && clientDeviceId.trim()
+          ? clientDeviceId.trim()
+          : `dev_${crypto.randomBytes(8).toString('hex')}`;
+      const cred =
+        typeof clientCredential === 'string' && clientCredential.trim()
+          ? clientCredential.trim()
+          : crypto.randomBytes(32).toString('base64url');
+
+      const isRemote = req.body?.remote === true || req.body?.pairedVia === 'remote';
+      const { record } = deviceStore.registerOrReplaceDevice(
+        devId,
+        cred,
+        deviceName,
+        devicePlatform,
+        {
+          pairedVia: isRemote ? 'remote' : 'lan',
+          remote: isRemote,
+        }
+      );
+
+      if (record.signalingTokenHash && signalingClient) {
+        signalingClient.addClientToken(record.signalingTokenHash);
+      }
+      broadcastDevices();
+
+      res.json({
+        ok: true,
+        deviceId: record.deviceId,
+        credential: cred,
+        name: record.name,
+        pcId: deviceStore.getPcId(),
+        pcName: deviceStore.getPcIdentity().name,
+      });
       return;
     }
 
-    const deviceName =
-      typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : 'Mobile Device';
-    const devicePlatform =
-      typeof platform === 'string' && platform.trim() ? platform.trim().slice(0, 32) : 'Browser';
+    // 2. Code-based pairing flow (when trusted mode is off, or user explicitly pairs with code)
+    if (typeof code !== 'string' || !code.trim()) {
+      res.status(400).json({ error: 'Pairing code is required' });
+      return;
+    }
 
     const result = await pairingManager.submitPairing(code, deviceName, devicePlatform, clientIp);
     if (!result.ok) {
@@ -539,22 +628,37 @@ export function startServer(config: ServerConfig): {
       return;
     }
 
-    // On PC operator approval: issue 32-byte cryptographic credential, store SHA-256 hash on disk
+    const devId =
+      typeof clientDeviceId === 'string' && clientDeviceId.trim()
+        ? clientDeviceId.trim()
+        : `dev_${crypto.randomBytes(8).toString('hex')}`;
+    const cred =
+      typeof clientCredential === 'string' && clientCredential.trim()
+        ? clientCredential.trim()
+        : crypto.randomBytes(32).toString('base64url');
+
     const isRemote = req.body?.remote === true || req.body?.pairedVia === 'remote';
-    const { deviceId, rawCredential, record } = deviceStore.addDevice(deviceName, devicePlatform, {
-      pairedVia: isRemote ? 'remote' : 'lan',
-      remote: isRemote,
-    });
+    const { record } = deviceStore.registerOrReplaceDevice(
+      devId,
+      cred,
+      deviceName,
+      devicePlatform,
+      {
+        pairedVia: isRemote ? 'remote' : 'lan',
+        remote: isRemote,
+      }
+    );
 
     if (record.signalingTokenHash && signalingClient) {
       signalingClient.addClientToken(record.signalingTokenHash);
     }
+    broadcastDevices();
 
     res.json({
       ok: true,
-      deviceId,
-      credential: rawCredential,
-      name: deviceName,
+      deviceId: record.deviceId,
+      credential: cred,
+      name: record.name,
       pcId: deviceStore.getPcId(),
       pcName: deviceStore.getPcIdentity().name,
     });
@@ -676,13 +780,8 @@ export function startServer(config: ServerConfig): {
     });
   });
 
-  // REST API: Dashboard Pairing Approval - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/pair/approve', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Dashboard Pairing Approval - LOOPBACK ONLY & HARDENED
+  app.post('/api/pair/approve', requireLocalControl, (req, res) => {
     const { requestId, approved } = req.body || {};
     if (typeof requestId !== 'string') {
       res.status(400).json({ error: 'requestId is required' });
@@ -693,13 +792,8 @@ export function startServer(config: ServerConfig): {
     res.json({ ok });
   });
 
-  // REST API: Regenerate 8-digit Pairing Code - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/pair/regenerate', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Regenerate 8-digit Pairing Code - LOOPBACK ONLY & HARDENED
+  app.post('/api/pair/regenerate', requireLocalControl, (req, res) => {
     const newCode = pairingManager.generateCode();
     broadcastDashboardEvent('pairing_update', {
       code: newCode.code,
@@ -713,13 +807,8 @@ export function startServer(config: ServerConfig): {
     });
   });
 
-  // REST API: Rename Device - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/devices/rename', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Rename Device - LOOPBACK ONLY & HARDENED
+  app.post('/api/devices/rename', requireLocalControl, (req, res) => {
     const { deviceId, name } = req.body || {};
     if (typeof deviceId !== 'string' || typeof name !== 'string') {
       res.status(400).json({ error: 'deviceId and name are required' });
@@ -731,13 +820,8 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true });
   });
 
-  // REST API: Disconnect Live Device Sockets - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/devices/disconnect', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Disconnect Live Device Sockets - LOOPBACK ONLY & HARDENED
+  app.post('/api/devices/disconnect', requireLocalControl, (req, res) => {
     const { deviceId } = req.body || {};
     if (typeof deviceId !== 'string') {
       res.status(400).json({ error: 'deviceId is required' });
@@ -749,13 +833,8 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true });
   });
 
-  // REST API: Revoke Device - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/devices/revoke', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Revoke Device - LOOPBACK ONLY & HARDENED
+  app.post('/api/devices/revoke', requireLocalControl, (req, res) => {
     const { deviceId } = req.body || {};
     if (typeof deviceId !== 'string') {
       res.status(400).json({ error: 'deviceId is required' });
@@ -766,19 +845,14 @@ export function startServer(config: ServerConfig): {
     res.json({ ok: true });
   });
 
-  // REST API: Revoke All Devices - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/devices/revoke-all', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Revoke All Devices - LOOPBACK ONLY & HARDENED
+  app.post('/api/devices/revoke-all', requireLocalControl, (req, res) => {
     revokeAll();
     res.json({ ok: true });
   });
 
-  // REST API: Get Remote Input Pause Status - LOOPBACK ONLY (403 for LAN)
-  app.get('/api/dashboard/pause', (req, res) => {
+  // REST API: Get Remote Input Pause Status - LOOPBACK ONLY
+  app.get(['/api/dashboard/pause', '/pause'], (req, res) => {
     if (!isLoopback(req)) {
       res.status(403).json({ error: 'Forbidden: Loopback only' });
       return;
@@ -787,42 +861,46 @@ export function startServer(config: ServerConfig): {
     res.json({ paused: isInputPaused });
   });
 
-  // REST API: Toggle Remote Input Pause Status - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/dashboard/pause', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Toggle Remote Input Pause Status - LOOPBACK ONLY & HARDENED
+  app.post(['/api/dashboard/pause', '/pause'], requireLocalControl, (req, res) => {
     const { paused } = req.body || {};
     setInputPaused(Boolean(paused));
     res.json({ ok: true, paused: isInputPaused });
   });
 
-  // REST API: Graceful Server Exit - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/dashboard/quit', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Graceful Server Exit - LOOPBACK ONLY & HARDENED
+  app.post(['/api/dashboard/quit', '/quit'], requireLocalControl, (req, res) => {
     res.json({ ok: true, shuttingDown: true });
     setTimeout(() => {
       process.exit(0);
     }, 200);
   });
 
-  // REST API: Server Restart Signal - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/dashboard/restart', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Server Restart Signal - LOOPBACK ONLY & HARDENED
+  app.post(['/api/dashboard/restart', '/restart'], requireLocalControl, (req, res) => {
     res.json({ ok: true, restarting: true });
     setTimeout(() => {
       process.exit(42);
     }, 200);
+  });
+
+  // REST API: Get Trusted-Network Mode - LOOPBACK ONLY
+  app.get('/api/dashboard/trusted-mode', (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ error: 'Forbidden: Loopback only' });
+      return;
+    }
+    res.json({ trustedMode: deviceStore.isTrustedNetworkMode() });
+  });
+
+  // REST API: Toggle Trusted-Network Mode - LOOPBACK ONLY & HARDENED
+  app.post('/api/dashboard/trusted-mode', requireLocalControl, (req, res) => {
+    const { trustedMode } = req.body || {};
+    deviceStore.setTrustedNetworkMode(Boolean(trustedMode));
+    broadcastDashboardEvent('trusted_mode_update', {
+      trustedMode: deviceStore.isTrustedNetworkMode(),
+    });
+    res.json({ ok: true, trustedMode: deviceStore.isTrustedNetworkMode() });
   });
 
   // REST API: Secure File Transfer / Drop to PC (Downloads/AeroKin/)
@@ -912,23 +990,14 @@ export function startServer(config: ServerConfig): {
     }
   );
 
-  // REST API: Stop Desktop Remote Stream - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/desktop/stop', async (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
-
+  // REST API: Stop Desktop Remote Stream - LOOPBACK ONLY & HARDENED
+  app.post('/api/desktop/stop', requireLocalControl, async (req, res) => {
     await streamService.stopSession('Terminated from PC Dashboard');
     res.json({ ok: true });
   });
 
-  // REST API: Cancel Action Countdown - LOOPBACK ONLY (403 for LAN)
-  app.post('/api/dashboard/actions/cancel', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
+  // REST API: Cancel Action Countdown - LOOPBACK ONLY & HARDENED
+  app.post('/api/dashboard/actions/cancel', requireLocalControl, (req, res) => {
     const result = quickActionService.cancelCountdown();
     res.json(result);
   });
@@ -942,11 +1011,7 @@ export function startServer(config: ServerConfig): {
     res.json(featureManager.getFlags());
   });
 
-  app.post('/api/dashboard/features', (req, res) => {
-    if (!isLoopback(req)) {
-      res.status(403).json({ error: 'Forbidden: Loopback only' });
-      return;
-    }
+  app.post('/api/dashboard/features', requireLocalControl, (req, res) => {
     const updated = featureManager.updateFlags(req.body || {});
     res.json({ ok: true, flags: updated });
   });
@@ -1004,8 +1069,8 @@ export function startServer(config: ServerConfig): {
     res.send(text);
   });
 
-  // Get or create Local Root CA & 365-day Leaf Cert with SANs
-  const certs = getOrCreateLocalCaAndCert(config.certsDir, config.lanIp);
+  // Get or create Local Root CA & 365-day Leaf Cert with comprehensive SANs
+  let certs = getOrCreateLocalCaAndCert(config.certsDir, config.lanIp);
 
   const httpsServer = https.createServer(
     {
@@ -1014,6 +1079,32 @@ export function startServer(config: ServerConfig): {
     },
     app
   );
+
+  function hotSwapCertificate(newCerts: GeneratedCerts): void {
+    certs = newCerts;
+    if (typeof httpsServer.setSecureContext === 'function') {
+      httpsServer.setSecureContext({
+        key: newCerts.serverKeyPem,
+        cert: newCerts.serverCertPem,
+      });
+      console.log('[Security] TLS secure context hot-swapped into running server without restart.');
+    }
+  }
+
+  // Watch network interface changes and hot-swap certificate with updated SANs
+  const networkWatcher = watchNetworkChanges(() => {
+    try {
+      console.log('[Network] Network change detected. Regenerating leaf certificate and hot-swapping TLS context...');
+      const updatedCerts = getOrCreateLocalCaAndCert(config.certsDir, undefined, undefined, true);
+      hotSwapCertificate(updatedCerts);
+    } catch (err: any) {
+      console.warn('[Network] Failed to hot-swap certificate on network change:', err?.message || err);
+    }
+  });
+
+  httpsServer.on('close', () => {
+    networkWatcher.stop();
+  });
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -1243,7 +1334,16 @@ export function startServer(config: ServerConfig): {
           pcName: deviceStore.getPcIdentity().name,
         })
       );
-      ws.send(JSON.stringify({ type: 'hello', ok: true }));
+      ws.send(
+        JSON.stringify({
+          type: 'hello',
+          ok: true,
+          pcId: deviceStore.getPcId(),
+          pcName: deviceStore.getPcIdentity().name,
+          addresses: getNetworkAddresses(config.port),
+          trustedMode: deviceStore.isTrustedNetworkMode(),
+        })
+      );
       ws.send(JSON.stringify({ type: 'input_pause_status', paused: isInputPaused }));
 
       // Send initial media status and sessions list
@@ -1317,14 +1417,37 @@ export function startServer(config: ServerConfig): {
           }
 
           const valid = deviceStore.verifyCredential(msg.deviceId, msg.credential);
-          if (!valid) {
-            cleanup();
-            ws.close(4001, 'Unauthorized: Invalid or revoked device credential');
+          if (valid) {
+            const dev = deviceStore.getDevice(msg.deviceId);
+            completeAuthentication(msg.deviceId, dev?.name || 'Device');
             return;
           }
 
-          const dev = deviceStore.getDevice(msg.deviceId);
-          completeAuthentication(msg.deviceId, dev?.name || 'Device');
+          // In Trusted-Network mode: auto-register device if connecting from private IP
+          const clientIpNorm = normalizeIp(clientIp);
+          if (deviceStore.isTrustedNetworkMode() && isPrivateIp(clientIpNorm)) {
+            const deviceName = (msg.name || 'iPhone').trim().slice(0, 64) || 'iPhone';
+            const platform = (msg.platform || 'Browser').trim().slice(0, 32) || 'Browser';
+            const { record } = deviceStore.registerOrReplaceDevice(
+              msg.deviceId,
+              msg.credential,
+              deviceName,
+              platform,
+              { pairedVia: 'lan' }
+            );
+            if (record.signalingTokenHash && signalingClient) {
+              signalingClient.addClientToken(record.signalingTokenHash);
+            }
+            console.log(
+              `[TrustedNetwork] Auto-registered trusted device "${record.name}" (${record.deviceId}) from private IP ${clientIp}`
+            );
+            broadcastDevices();
+            completeAuthentication(record.deviceId, record.name);
+            return;
+          }
+
+          cleanup();
+          ws.close(4001, 'Unauthorized: Invalid or revoked device credential');
           return;
         }
 
@@ -1889,6 +2012,7 @@ export function startServer(config: ServerConfig): {
     screenshotService,
     quickActionService,
     signalingClient,
+    hotSwapCertificate,
     isInputPaused: () => isInputPaused,
     setInputPaused,
     revokeDevice,

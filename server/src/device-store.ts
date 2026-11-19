@@ -29,8 +29,10 @@ export type DevicePublicInfo = Omit<DeviceRecord, 'credentialHash' | 'signalingT
 export class DeviceStore {
   private filePath: string;
   private identityFilePath: string;
+  private settingsFilePath: string;
   private devices: Map<string, DeviceRecord> = new Map();
   private pcIdentity: PcIdentity;
+  private trustedNetworkMode = true;
 
   constructor(certsDir: string) {
     if (!fs.existsSync(certsDir)) {
@@ -38,8 +40,40 @@ export class DeviceStore {
     }
     this.filePath = path.join(certsDir, 'devices.json');
     this.identityFilePath = path.join(certsDir, 'pc-identity.json');
+    this.settingsFilePath = path.join(certsDir, 'settings.json');
     this.pcIdentity = this.loadOrCreatePcIdentity();
+    this.trustedNetworkMode = this.loadTrustedNetworkMode();
     this.load();
+  }
+
+  private loadTrustedNetworkMode(): boolean {
+    if (fs.existsSync(this.settingsFilePath)) {
+      try {
+        const raw = fs.readFileSync(this.settingsFilePath, 'utf8').trim();
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed.trustedNetworkMode === 'boolean') {
+            return parsed.trustedNetworkMode;
+          }
+        }
+      } catch {}
+    }
+    return true; // Default ON
+  }
+
+  public isTrustedNetworkMode(): boolean {
+    return this.trustedNetworkMode;
+  }
+
+  public setTrustedNetworkMode(enabled: boolean): void {
+    this.trustedNetworkMode = Boolean(enabled);
+    try {
+      fs.writeFileSync(
+        this.settingsFilePath,
+        JSON.stringify({ trustedNetworkMode: this.trustedNetworkMode }, null, 2),
+        { encoding: 'utf8', mode: 0o600 }
+      );
+    } catch {}
   }
 
   private loadOrCreatePcIdentity(): PcIdentity {
@@ -202,6 +236,61 @@ export class DeviceStore {
     this.save();
 
     return { deviceId, rawCredential, record };
+  }
+
+  /**
+   * Registers a client-provided deviceId + credential, or re-registers an existing device.
+   * If a device with the SAME name or same deviceId already exists, it is replaced instead of
+   * creating duplicate records.
+   */
+  public registerOrReplaceDevice(
+    deviceId: string,
+    rawCredential: string,
+    name: string,
+    platform: string,
+    options?: { pairedVia?: 'lan' | 'remote'; remote?: boolean }
+  ): { record: DeviceRecord; replacedDeviceId?: string } {
+    const cleanName = (name || 'iPhone').trim().slice(0, 64) || 'iPhone';
+    const cleanPlatform = (platform || 'Browser').trim().slice(0, 32) || 'Browser';
+    const cleanDeviceId = (deviceId || `dev_${crypto.randomBytes(8).toString('hex')}`).trim();
+
+    // Check for existing device with the SAME name or same deviceId
+    let replacedDeviceId: string | undefined;
+    for (const [existingId, dev] of this.devices.entries()) {
+      if (
+        dev.name.toLowerCase() === cleanName.toLowerCase() ||
+        existingId === cleanDeviceId
+      ) {
+        replacedDeviceId = existingId;
+        this.devices.delete(existingId);
+        break;
+      }
+    }
+
+    const credentialHash = crypto.createHash('sha256').update(rawCredential).digest('hex');
+    const signalingToken = deriveSignalingToken(rawCredential);
+    const signalingTokenHash = hashSignalingToken(signalingToken);
+
+    const pairedVia = options?.pairedVia === 'remote' ? 'remote' : 'lan';
+    const remote = Boolean(options?.remote ?? pairedVia === 'remote');
+
+    const record: DeviceRecord = {
+      deviceId: cleanDeviceId,
+      name: cleanName,
+      platform: cleanPlatform,
+      credentialHash,
+      signalingTokenHash,
+      createdAt: Date.now(),
+      lastSeen: Date.now(),
+      revoked: false,
+      pairedVia,
+      remote,
+    };
+
+    this.devices.set(cleanDeviceId, record);
+    this.save();
+
+    return { record, replacedDeviceId };
   }
 
   /**

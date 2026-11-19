@@ -7,9 +7,15 @@
 
 ## Current Status & Next Action
 - **Current Milestone**: Stable-R5 Milestone: Instant Automatic Multi-Network Connectivity, Trusted Network Auto-Registration, Hot-Swapped SAN TLS, Instant Open PWA, and Hardened Local Endpoints.
-  - **In Progress**: Implementing cross-platform CI fixes and network-independent addressing.
+  - **In Progress**: Staging and committing feature components, authoring latency guides, and running full project verification.
   - **Completed so far**:
     - CI Cross-Platform Fix: Updated `server/test/launcher-lifecycle.test.ts` to use `describe.skipIf(process.platform !== 'win32')` so Ubuntu CI runs green without PowerShell, and extended timeout for Node detection on Windows.
+    - Server Network-Independent Addressing: Leaf certificate dynamically generated with SANs containing `os.hostname()`, `<hostname>.local`, `aerokin.local`, `localhost`, `127.0.0.1`, and all non-internal private IPv4s (Wi-Fi, Ethernet, iPhone Personal Hotspot 172.20.10.x). Hot-swaps leaf certificate via `httpsServer.setSecureContext()` on network changes with zero server downtime, signed by the same 10-year root CA.
+    - mDNS Advertising: Best-effort local domain advertising with custom hostname and error containment that never crashes the server.
+    - Trusted-Network Mode: Auto-registers connecting clients on private subnets (RFC 1918, 172.20.10.0/28 hotspot, loopback, link-local, ULA) with no pairing codes or PC approval needed; public IPs strictly rejected. Replaces same-name device records cleanly without duplicates. Persisted toggle in `settings.json` (default: ON).
+    - Hardened Local Control Endpoints: Enforced loopback-only binding, Host validation, foreign Origin rejection, and mandatory `X-AeroKin-Local: 1` header on `/api/dashboard/*`, `/pause`, `/quit`, `/restart`, `/api/devices/*`, and `/api/pair/*` to prevent cross-site browser requests and DNS rebinding attacks.
+    - Tray Sidecar & Launcher Hardening: Added `X-AeroKin-Local: 1` header to tray sidecar, added Trusted-Network Mode toggle and New Pairing Code menu items; added port conflict detection with process name display and stale build detection to `scripts/aerokin-launcher.ps1`.
+    - Server Test Coverage: 34 test files passing (287/287 tests), including new suites `test/trusted-network.test.ts` and `test/san-hotswap.test.ts`.
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.

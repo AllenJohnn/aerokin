@@ -102,7 +102,7 @@ export type ValidClientMessage =
   | { type: 'server_pong'; t: number }
   | { type: 'battery'; percent: number | null; charging?: boolean }
   | { type: 'tail_logs'; limit?: number }
-  | { type: 'auth'; deviceId: string; credential: string }
+  | { type: 'auth'; deviceId: string; credential: string; name?: string; platform?: string }
   | { type: 'device_list' }
   | { type: 'device_rename'; deviceId: string; name: string }
   | { type: 'device_revoke'; deviceId: string }
@@ -236,6 +236,14 @@ export function validateClientMessage(raw: unknown): ValidClientMessage | null {
         type: 'auth',
         deviceId: msg.deviceId.trim(),
         credential: msg.credential.trim(),
+        name:
+          typeof msg.name === 'string' && msg.name.trim().length > 0
+            ? msg.name.trim().slice(0, 64)
+            : undefined,
+        platform:
+          typeof msg.platform === 'string' && msg.platform.trim().length > 0
+            ? msg.platform.trim().slice(0, 32)
+            : undefined,
       };
     }
 
