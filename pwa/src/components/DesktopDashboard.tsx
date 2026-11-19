@@ -122,6 +122,13 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   const [devices, setDevices] = useState<EnrichedDevice[]>([]);
   const [activeCode, setActiveCode] = useState<string>('');
   const [codeExpiresIn, setCodeExpiresIn] = useState<number>(0);
+  const [trustedMode, setTrustedMode] = useState<boolean>(true);
+  const [netAddresses, setNetAddresses] = useState<{
+    hostname?: string;
+    localHostname?: string;
+    ips?: string[];
+    primaryPhoneUrl?: string;
+  } | null>(null);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const [approvalCountdown, setApprovalCountdown] = useState<number>(30);
   const [pcStats, setPcStats] = useState<PcStats | null>(null);
@@ -229,6 +236,22 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
             });
           }
           if (data.systemStats) setSystemTelemetry(data.systemStats);
+          if (typeof data.trustedMode === 'boolean') setTrustedMode(data.trustedMode);
+          if (data.addresses) setNetAddresses(data.addresses);
+        } catch {}
+      });
+
+      sse.addEventListener('trusted_mode_update', (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (typeof d.trustedMode === 'boolean') setTrustedMode(d.trustedMode);
+        } catch {}
+      });
+
+      sse.addEventListener('network_update', (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.addresses) setNetAddresses(d.addresses);
         } catch {}
       });
 
@@ -416,10 +439,18 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     return () => clearInterval(timer);
   }, [countdownState.active, countdownState.secondsRemaining]);
 
+  const localHeaders = (extra?: Record<string, string>) => ({
+    'X-AeroKin-Local': '1',
+    ...extra,
+  });
+
   // Cancel shutdown action
   const handleCancelCountdown = async () => {
     try {
-      const res = await fetch('/api/dashboard/actions/cancel', { method: 'POST' });
+      const res = await fetch('/api/dashboard/actions/cancel', {
+        method: 'POST',
+        headers: localHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         setCountdownState({ active: false, action: null, secondsRemaining: 0 });
@@ -435,7 +466,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     try {
       const res = await fetch('/api/dashboard/features', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(updated),
       });
       const data = await res.json();
@@ -451,9 +482,14 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   useEffect(() => {
     if (!pcStats) return;
 
-    const currentPairUrl = activeCode
-      ? `https://${pcStats.lanIp}:${pcStats.port}/#code=${activeCode}`
-      : `https://${pcStats.lanIp}:${pcStats.port}/`;
+    const phonePrimary =
+      netAddresses?.primaryPhoneUrl ||
+      `https://${netAddresses?.localHostname || pcStats.lanIp}:${pcStats.port}/`;
+    const currentPairUrl = trustedMode
+      ? phonePrimary
+      : activeCode
+        ? `${phonePrimary}#code=${activeCode}`
+        : phonePrimary;
 
     QRCode.toDataURL(currentPairUrl, {
       margin: 1,
@@ -484,7 +520,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     } else {
       setRemoteQrUrl(null);
     }
-  }, [activeCode, pcStats, webrtcStatus]);
+  }, [activeCode, pcStats, webrtcStatus, trustedMode, netAddresses]);
 
   // 4. Auto-scroll logs
   useEffect(() => {
@@ -503,7 +539,10 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   // Actions
   const handleRegenerateCode = async () => {
     try {
-      const res = await fetch('/api/pair/regenerate', { method: 'POST' });
+      const res = await fetch('/api/pair/regenerate', {
+        method: 'POST',
+        headers: localHeaders(),
+      });
       const data = await res.json();
       if (data.ok) {
         setActiveCode(data.code);
@@ -512,11 +551,29 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     } catch {}
   };
 
+  const handleToggleTrustedMode = async () => {
+    const nextVal = !trustedMode;
+    setTrustedMode(nextVal);
+    try {
+      const res = await fetch('/api/dashboard/trusted-mode', {
+        method: 'POST',
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ trustedMode: nextVal }),
+      });
+      const data = await res.json();
+      if (typeof data.trustedMode === 'boolean') {
+        setTrustedMode(data.trustedMode);
+      }
+    } catch {
+      setTrustedMode(trustedMode);
+    }
+  };
+
   const handleTogglePause = async () => {
     try {
       const res = await fetch('/api/dashboard/pause', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ paused: !isInputPaused }),
       });
       const data = await res.json();
@@ -531,7 +588,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     try {
       await fetch('/api/pair/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ requestId: pendingApproval.requestId, approved }),
       });
       setPendingApproval(null);
@@ -546,7 +603,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     try {
       await fetch('/api/devices/rename', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ deviceId, name: renameInputValue.trim() }),
       });
       setEditingDeviceId(null);
@@ -558,7 +615,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     try {
       await fetch('/api/devices/disconnect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ deviceId }),
       });
     } catch {}
@@ -568,7 +625,7 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
     try {
       await fetch('/api/devices/revoke', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: localHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ deviceId }),
       });
     } catch {}
@@ -577,13 +634,19 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
   const handleRevokeAllDevices = async () => {
     if (!window.confirm('Revoke and disconnect all paired devices?')) return;
     try {
-      await fetch('/api/devices/revoke-all', { method: 'POST' });
+      await fetch('/api/devices/revoke-all', {
+        method: 'POST',
+        headers: localHeaders(),
+      });
     } catch {}
   };
 
   const handleStopDesktop = async () => {
     try {
-      await fetch('/api/desktop/stop', { method: 'POST' });
+      await fetch('/api/desktop/stop', {
+        method: 'POST',
+        headers: localHeaders(),
+      });
     } catch {}
   };
 
@@ -709,6 +772,24 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Trusted Network Mode Toggle */}
+            <button
+              onClick={handleToggleTrustedMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+                trustedMode
+                  ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'
+                  : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground'
+              }`}
+              title={
+                trustedMode
+                  ? 'Trusted-Network Mode is ENABLED. Devices on Wi-Fi, Ethernet, or iPhone Hotspot auto-register with no pairing code. Click to turn OFF.'
+                  : 'Trusted-Network Mode is DISABLED. Devices must enter an 8-digit code. Click to turn ON.'
+              }
+            >
+              <ShieldCheck size={14} className={trustedMode ? 'text-emerald-400' : 'text-zinc-400'} />
+              <span>{trustedMode ? 'Trusted Mode: ON' : 'Trusted Mode: OFF'}</span>
+            </button>
+
             {/* Remote Input Pause Toggle */}
             <button
               onClick={handleTogglePause}
@@ -975,10 +1056,21 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                 {/* 8-Digit Code Display with Animated Ring */}
                 <div className="flex-1 flex flex-col gap-4 w-full">
                   <div>
-                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                      Pairing Code
-                    </span>
-                    <div className="flex items-center gap-3 mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                        {trustedMode ? 'Pairing Code (Optional — Trusted Mode is ON)' : 'Pairing Code'}
+                      </span>
+                      <button
+                        onClick={handleRegenerateCode}
+                        className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-raised border border-border/60 hover:border-border transition-colors"
+                        title="Regenerate a new 8-digit pairing code"
+                      >
+                        <ArrowClockwise size={12} />
+                        <span>New pairing code</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-1.5">
                       <div className="font-mono text-3xl font-bold tracking-[0.2em] text-[#FF5A1F] bg-raised px-4 py-2 rounded-xl border border-border tabular-nums select-all">
                         {activeCode || '--------'}
                       </div>
@@ -1011,26 +1103,45 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                         </span>
                       </div>
                     </div>
+
+                    {trustedMode && (
+                      <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
+                        <CheckCircle size={14} className="flex-shrink-0" />
+                        <span>Trusted-Network Mode is active: phone auto-connects instantly without code.</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* LAN and Remote Copy Rows */}
                   {pairMode === 'lan' && pcStats && (
                     <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                      <div className="text-[11px] font-mono text-muted-foreground">
+                        Phone address reachable via:{' '}
+                        <span className="text-foreground font-semibold">
+                          {netAddresses?.localHostname || 'hostname.local'}
+                        </span>{' '}
+                        /{' '}
+                        {Array.isArray(netAddresses?.ips) && netAddresses.ips.length > 0
+                          ? netAddresses.ips.join(', ')
+                          : pcStats.lanIp}
+                      </div>
+
+                      {/* Primary .local URL */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
-                        <span className="font-mono text-muted-foreground truncate max-w-[260px]">
-                          https://{pcStats.lanIp}:{pcStats.port}/#code={activeCode}
+                        <span className="font-mono text-foreground truncate max-w-[260px]">
+                          https://{netAddresses?.localHostname || 'aerokin.local'}:{pcStats.port}/{trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
                         </span>
                         <button
                           onClick={() =>
                             handleCopy(
-                              `https://${pcStats.lanIp}:${pcStats.port}/#code=${activeCode}`,
-                              'lan_url'
+                              `https://${netAddresses?.localHostname || 'aerokin.local'}:${pcStats.port}/${trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}`,
+                              'mdns_url'
                             )
                           }
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
-                          title="Copy LAN URL"
+                          title="Copy primary hostname.local URL"
                         >
-                          {copiedKey === 'lan_url' ? (
+                          {copiedKey === 'mdns_url' ? (
                             <Check size={14} className="text-emerald-400" />
                           ) : (
                             <Copy size={14} />
@@ -1038,21 +1149,22 @@ export const DesktopDashboard: React.FC<DesktopDashboardProps> = ({ onSwitchToPh
                         </button>
                       </div>
 
+                      {/* IP Fallback URL */}
                       <div className="flex items-center justify-between text-xs bg-raised px-3 py-1.5 rounded-lg border border-border/50">
                         <span className="font-mono text-muted-foreground truncate max-w-[260px]">
-                          https://aerokin.local:{pcStats.port}/#code={activeCode}
+                          https://{pcStats.lanIp}:{pcStats.port}/{trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}
                         </span>
                         <button
                           onClick={() =>
                             handleCopy(
-                              `https://aerokin.local:${pcStats.port}/#code=${activeCode}`,
-                              'mdns_url'
+                              `https://${pcStats.lanIp}:${pcStats.port}/${trustedMode ? '' : activeCode ? '#code=' + activeCode : ''}`,
+                              'lan_url'
                             )
                           }
                           className="p-1 hover:text-[#FF5A1F] transition-colors"
-                          title="Copy mDNS URL"
+                          title="Copy LAN IP fallback URL"
                         >
-                          {copiedKey === 'mdns_url' ? (
+                          {copiedKey === 'lan_url' ? (
                             <Check size={14} className="text-emerald-400" />
                           ) : (
                             <Copy size={14} />

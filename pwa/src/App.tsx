@@ -181,6 +181,10 @@ export const App: React.FC = () => {
   const {
     status,
     latency,
+    latencyP50,
+    latencyP95,
+    timeToConnected,
+    knownHosts,
     token,
     host,
     isHosted,
@@ -284,11 +288,38 @@ export const App: React.FC = () => {
     );
   }
 
+  const [initialConnectionTimedOut, setInitialConnectionTimedOut] = useState(false);
+
+  useEffect(() => {
+    // 2.5s fast timeout before falling back to offline screen
+    const timer = setTimeout(() => {
+      setInitialConnectionTimedOut(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const [showSafariTabHint, setShowSafariTabHint] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    const dismissed = localStorage.getItem('aerokin_safari_hint_dismissed');
+    return isIos && !isStandalone && !dismissed;
+  });
+
+  const dismissSafariTabHint = () => {
+    setShowSafariTabHint(false);
+    try {
+      localStorage.setItem('aerokin_safari_hint_dismissed', '1');
+    } catch {}
+  };
+
   const hasCredential =
     hasStoredCredentialForActivePc() || Boolean(credential || activePc?.credential);
 
-  // Render "PC Offline or Asleep" screen when disconnected but already paired
-  if (status !== 'connected' && hasCredential && !isDesktopMode && !isDashboardRoute) {
+  // Render "PC offline / asleep / not on this network" screen ONLY after initial connection has timed out
+  if (status !== 'connected' && initialConnectionTimedOut && !isDesktopMode && !isDashboardRoute) {
     return (
       <div className="relative flex flex-col h-[100dvh] w-full bg-bg text-foreground overflow-y-auto pt-safe pb-safe select-none p-6 justify-between max-w-md mx-auto">
         <header className="flex items-center justify-between h-13 min-h-[52px]">
@@ -314,9 +345,11 @@ export const App: React.FC = () => {
             <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-500/80 border-2 border-bg animate-pulse" />
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight mb-1 text-foreground">PC Offline or Asleep</h1>
+          <h1 className="text-xl font-bold tracking-tight mb-1 text-foreground">
+            PC offline / asleep / not on this network
+          </h1>
           <p className="text-xs text-muted-foreground max-w-xs mb-6">
-            <span className="font-semibold text-foreground">{activePc?.name || 'Your PC'}</span> is not reachable right now. AeroKin stays paired and will reconnect automatically.
+            <span className="font-semibold text-foreground">{activePc?.name || 'Your PC'}</span> is not answering on this network. AeroKin stays paired and reconnects automatically.
           </p>
 
           <div className="w-full bg-surface border border-border rounded-2xl p-4 text-left mb-6 shadow-sm space-y-2.5">
@@ -324,37 +357,53 @@ export const App: React.FC = () => {
               <span className="text-muted-foreground">Host Agent ID</span>
               <span className="font-mono text-foreground font-medium">{activePc?.pcId || 'agent'}</span>
             </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
-              <span className="text-muted-foreground">Last Known LAN</span>
-              <span className="font-mono text-foreground">{activePc?.lanHost || host || 'Scanning local network...'}</span>
+            <div className="flex flex-col gap-1 text-xs pt-2 border-t border-border/50">
+              <span className="text-muted-foreground">Reachable Hosts Tried:</span>
+              <div className="font-mono text-[11px] text-foreground bg-raised/60 p-2 rounded-lg space-y-1">
+                {(knownHosts.length > 0
+                  ? knownHosts
+                  : [activePc?.lanHost || host || 'aerokin.local:8443']
+                ).map((h) => (
+                  <div key={h} className="truncate">• {h}</div>
+                ))}
+              </div>
             </div>
             <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
-              <span className="text-muted-foreground">Remote WebRTC</span>
-              <span className="font-mono text-zinc-400">{activePc?.signalingUrl ? 'Configured' : 'Local Only'}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
-              <span className="text-muted-foreground">Pairing Status</span>
-              <span className="text-emerald-400 font-medium">Paired (Token Stored)</span>
+              <span className="text-muted-foreground">Pairing Mode</span>
+              <span className="text-emerald-400 font-medium">Trusted Auto-Connect</span>
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              triggerHaptic('light');
-              connectManually();
-            }}
-            disabled={status === 'reconnecting'}
-            className="w-full h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-sm font-semibold transition-transform active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm disabled:opacity-70"
-          >
-            {status === 'reconnecting' ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-black animate-ping" />
-                <span>Searching for PC...</span>
-              </>
-            ) : (
-              <span>Retry Connection</span>
-            )}
-          </button>
+          <div className="w-full flex flex-col gap-2">
+            <button
+              onClick={() => {
+                triggerHaptic('light');
+                setInitialConnectionTimedOut(false);
+                connectManually();
+              }}
+              disabled={status === 'reconnecting'}
+              className="w-full h-12 min-h-[48px] rounded-xl bg-accent hover:bg-accent-hover active:bg-accent-pressed text-black text-sm font-semibold transition-transform active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm disabled:opacity-70"
+            >
+              {status === 'reconnecting' ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-black animate-ping" />
+                  <span>Searching for PC...</span>
+                </>
+              ) : (
+                <span>Retry Connection</span>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic('light');
+                setShowAuthModal(true);
+              }}
+              className="w-full h-10 min-h-[40px] rounded-xl bg-surface hover:bg-raised text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+            >
+              Pair with a code instead
+            </button>
+          </div>
         </div>
 
         <footer className="text-center text-[11px] text-muted-foreground/60 py-2">
@@ -600,6 +649,23 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative flex flex-col h-[100dvh] w-full bg-bg text-foreground overflow-hidden pt-safe pb-safe select-none touch-none">
+      {/* iOS Safari Tab Eviction Hint */}
+      {showSafariTabHint && (
+        <div className="flex items-center justify-between px-3 py-2 bg-raised border-b border-border text-xs text-muted-foreground z-40">
+          <div className="flex items-center gap-2 truncate">
+            <span className="text-[#FF5A1F] font-semibold">Tip:</span>
+            <span className="truncate">Add to Home Screen for instant connection that iOS won't evict.</span>
+          </div>
+          <button
+            onClick={dismissSafariTabHint}
+            className="ml-2 text-muted-foreground hover:text-foreground p-1 text-sm leading-none"
+            aria-label="Dismiss hint"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Bar: logo mark left, small connection status center-left, settings icon right */}
       <header className="flex items-center justify-between px-gutter h-13 min-h-[52px] border-b border-border bg-bg z-30">
         <div className="flex items-center gap-3">

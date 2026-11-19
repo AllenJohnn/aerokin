@@ -10,6 +10,10 @@ import {
   getStoredDeviceCredentials,
   saveStoredDeviceCredentials,
   clearStoredDeviceCredentials,
+  getOrCreateClientDeviceIdentity,
+  probeHostsInParallel,
+  getKnownHostsForPc,
+  updateKnownHostsForPc,
   savePc,
   removeSavedPc,
   getActivePcId,
@@ -17,6 +21,7 @@ import {
   setActivePcId,
   SavedPc,
 } from '../utils/hosting';
+import { repairAndSyncStorage } from '../utils/persistentStorage';
 import { MonitorInfo, DesktopStats, DesktopStreamState, QualityPresetName } from '../types/desktop';
 import { diagnosticsLogger } from '../utils/diagnosticsLogger';
 
@@ -167,7 +172,11 @@ export interface ActionResultData {
 export interface UseAerokinSocketReturn {
   status: ConnectionStatus;
   latency: number | null;
+  latencyP50: number | null;
+  latencyP95: number | null;
+  timeToConnected: number | null;
   host: string | null;
+  knownHosts: string[];
   isHosted: boolean;
   connectionError: string | null;
   deviceId: string | null;
@@ -247,7 +256,7 @@ export interface UseAerokinSocketReturn {
   lastCloseReason: string | null;
   agentLogs: any[];
   requestAgentLogs: (limit?: number) => void;
-  runLatencyTest: () => Promise<{ min: number; avg: number; max: number; p95: number }>;
+  runLatencyTest: () => Promise<{ min: number; avg: number; max: number; p50: number; p95: number }>;
 
   // Screenshot
   requestScreenshot: (options?: {
@@ -299,24 +308,50 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   });
 
   const storedCreds = getStoredDeviceCredentials();
-  const [deviceId, setDeviceId] = useState<string | null>(storedCreds.deviceId);
-  const [credential, setCredential] = useState<string | null>(storedCreds.credential);
-  const [deviceName, setDeviceName] = useState<string | null>(storedCreds.name);
+  const initialIdentity = (() => {
+    if (storedCreds.deviceId && storedCreds.credential) {
+      return storedCreds;
+    }
+    if (!isHosted) {
+      return getOrCreateClientDeviceIdentity();
+    }
+    return storedCreds;
+  })();
+
+  const [deviceId, setDeviceId] = useState<string | null>(initialIdentity.deviceId);
+  const [credential, setCredential] = useState<string | null>(initialIdentity.credential);
+  const [deviceName, setDeviceName] = useState<string | null>(initialIdentity.name);
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
 
   const [status, setStatus] = useState<ConnectionStatus>(() =>
-    storedCreds.credential && storedCreds.deviceId ? 'disconnected' : 'unauthorized'
+    initialIdentity.credential && initialIdentity.deviceId ? 'disconnected' : 'unauthorized'
   );
   const [activePc, setActivePcState] = useState<SavedPc | null>(() => getActivePc());
   const [latency, setLatency] = useState<number | null>(null);
+  const [latencyP50, setLatencyP50] = useState<number | null>(null);
+  const [latencyP95, setLatencyP95] = useState<number | null>(null);
+  const [timeToConnected, setTimeToConnected] = useState<number | null>(null);
+  const [knownHosts, setKnownHosts] = useState<string[]>(() => getKnownHostsForPc());
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [pairingAwaitingApproval, setPairingAwaitingApproval] = useState<boolean>(false);
+  const latencyHistoryRef = useRef<number[]>([]);
 
   // In hosted mode, require a user gesture (Connect button) to initiate the connection
-  // in agent-served mode, connect automatically if we have credentials
+  // in agent-served mode, connect automatically
   const [connectTrigger, setConnectTrigger] = useState<number>(() =>
-    isHosted ? 0 : storedCreds.credential ? 1 : 0
+    isHosted ? (initialIdentity.credential ? 1 : 0) : 1
   );
+
+  useEffect(() => {
+    repairAndSyncStorage().then(({ hasCredentials }) => {
+      if (hasCredentials && (!deviceId || !credential)) {
+        const synced = getStoredDeviceCredentials();
+        if (synced.deviceId) setDeviceId(synced.deviceId);
+        if (synced.credential) setCredential(synced.credential);
+        if (synced.name) setDeviceName(synced.name);
+      }
+    });
+  }, []);
 
   const switchPc = useCallback((pc: SavedPc) => {
     setActivePcId(pc.pcId);
@@ -569,9 +604,30 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     [sendRaw, logout]
   );
 
+  const pendingMoveRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const moveRafRef = useRef<number | null>(null);
+
   const sendMove = useCallback(
     (dx: number, dy: number) => {
-      sendRaw({ type: 'move', dx, dy });
+      pendingMoveRef.current.dx += dx;
+      pendingMoveRef.current.dy += dy;
+
+      if (moveRafRef.current === null) {
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          moveRafRef.current = window.requestAnimationFrame(() => {
+            moveRafRef.current = null;
+            const { dx: totalDx, dy: totalDy } = pendingMoveRef.current;
+            pendingMoveRef.current = { dx: 0, dy: 0 };
+            if (totalDx !== 0 || totalDy !== 0) {
+              sendRaw({ type: 'move', dx: Math.round(totalDx), dy: Math.round(totalDy) });
+            }
+          });
+        } else {
+          const { dx: totalDx, dy: totalDy } = pendingMoveRef.current;
+          pendingMoveRef.current = { dx: 0, dy: 0 };
+          sendRaw({ type: 'move', dx: Math.round(totalDx), dy: Math.round(totalDy) });
+        }
+      }
     },
     [sendRaw]
   );
@@ -804,8 +860,20 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
 
     let isMounted = true;
 
-    function connect() {
-      if (!credential || !deviceId) {
+    async function connect() {
+      const activeDevId = deviceId || getStoredDeviceCredentials().deviceId;
+      const activeCred = credential || getStoredDeviceCredentials().credential;
+      const activeDevName = deviceName || getStoredDeviceCredentials().name || 'iPhone';
+
+      if (!activeDevId || !activeCred) {
+        if (!isHosted) {
+          const fresh = getOrCreateClientDeviceIdentity();
+          setDeviceId(fresh.deviceId);
+          setCredential(fresh.credential);
+          setDeviceName(fresh.name);
+          setConnectTrigger((p) => p + 1);
+          return;
+        }
         setStatus('unauthorized');
         return;
       }
@@ -814,31 +882,51 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
         socketRef.current.close();
       }
 
-      let wsUrl: string;
+      setStatus((prev) => (prev === 'connected' ? 'connected' : 'reconnecting'));
+      isAuthenticatedRef.current = false;
+      const connectStartTime = performance.now();
 
-      if (isHosted) {
-        if (!host) {
-          setStatus('disconnected');
-          setConnectionError('PC host address not configured');
-          return;
+      let targetHost = host;
+      const candidateHosts = getKnownHostsForPc(activePc?.pcId);
+      if (targetHost && !candidateHosts.includes(targetHost)) {
+        candidateHosts.unshift(targetHost);
+      }
+
+      // Parallel probe across known candidate hosts (hostname.local, recent IPs)
+      if (candidateHosts.length > 1) {
+        try {
+          const probeRes = await probeHostsInParallel(candidateHosts, 1500);
+          if (probeRes && isMounted) {
+            targetHost = probeRes.winningHost;
+            setHostState(probeRes.winningHost);
+            updateKnownHostsForPc(
+              activePc?.pcId || probeRes.healthData?.pcId,
+              probeRes.healthData?.addresses,
+              probeRes.winningHost
+            );
+            setKnownHosts(getKnownHostsForPc(activePc?.pcId || probeRes.healthData?.pcId));
+          }
+        } catch {
+          // Probe error fallback to targetHost
         }
-        // Hosted static PWA connects directly to the local PC agent via TLS WebSocket
-        // No secrets in the URL query!
-        wsUrl = `wss://${host}/`;
-      } else {
-        // Agent-served flow (same-origin local server)
+      }
+
+      let wsUrl: string;
+      if (targetHost) {
+        wsUrl = `wss://${targetHost}/`;
+      } else if (!isHosted) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const isDevPort = window.location.port === '5174' || window.location.port === '5173';
         const devServerPort = import.meta.env.VITE_DEV_SERVER_PORT || '8443';
-        const targetHost = isDevPort
+        const fallbackHost = isDevPort
           ? `${window.location.hostname}:${devServerPort}`
           : window.location.host;
-
-        wsUrl = `${protocol}//${targetHost}/`;
+        wsUrl = `${protocol}//${fallbackHost}/`;
+      } else {
+        setStatus('disconnected');
+        setConnectionError('PC host address not configured');
+        return;
       }
-
-      setStatus((prev) => (prev === 'connected' ? 'connected' : 'reconnecting'));
-      isAuthenticatedRef.current = false;
 
       try {
         const ws = new WebSocket(wsUrl);
@@ -847,12 +935,15 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
         ws.onopen = () => {
           if (!isMounted) return;
           diagnosticsLogger.log('info', 'socket', `WebSocket connection opened to ${wsUrl}`);
-          // Authenticate with the per-device credential in the first WS message
+          const isApple =
+            typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
           ws.send(
             JSON.stringify({
               type: 'auth',
-              deviceId,
-              credential,
+              deviceId: activeDevId,
+              credential: activeCred,
+              name: activeDevName,
+              platform: isApple ? 'iOS' : 'Web',
             })
           );
         };
@@ -867,23 +958,30 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
               setConnectionError(null);
               backoffDelayRef.current = 1000;
               requestWakeLock();
+              const elapsed = Math.round(performance.now() - connectStartTime);
+              setTimeToConnected(elapsed);
               diagnosticsLogger.log(
                 'info',
                 'socket',
-                `Authenticated successfully as device ${deviceId}`
+                `Authenticated successfully as device ${activeDevId} in ${elapsed}ms`
               );
 
-              if (data.pcId && deviceId && credential) {
+              if (data.pcId && activeDevId && activeCred) {
                 savePc({
                   pcId: data.pcId,
-                  name: data.pcName || deviceName || 'AeroKin PC',
-                  deviceId,
-                  credential,
-                  lanHost: host || undefined,
+                  name: data.pcName || activeDevName || 'AeroKin PC',
+                  deviceId: activeDevId,
+                  credential: activeCred,
+                  lanHost: targetHost || host || undefined,
                   lastSeen: Date.now(),
                   pairedVia: 'lan',
                 });
                 setActivePcState(getActivePc());
+              }
+
+              if (data.addresses && data.pcId) {
+                updateKnownHostsForPc(data.pcId, data.addresses, targetHost || undefined);
+                setKnownHosts(getKnownHostsForPc(data.pcId));
               }
 
               if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -910,8 +1008,17 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
             if (data.type === 'devices' && Array.isArray(data.list)) {
               setDevices(data.list);
             } else if (data.type === 'pong' && typeof data.t === 'number') {
-              const rtt = Date.now() - data.t;
+              const rtt = Math.max(1, Date.now() - data.t);
               setLatency(rtt);
+              latencyHistoryRef.current.push(rtt);
+              if (latencyHistoryRef.current.length > 30) {
+                latencyHistoryRef.current.shift();
+              }
+              const sorted = [...latencyHistoryRef.current].sort((a, b) => a - b);
+              const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? rtt;
+              const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? rtt;
+              setLatencyP50(p50);
+              setLatencyP95(p95);
             } else if (data.type === 'nowplaying') {
               setNowPlaying({
                 id: data.id,
@@ -997,8 +1104,20 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
             pingIntervalRef.current = null;
           }
 
-          // 4001: Invalid or revoked credential -> clear stored credentials and return to pairing
+          // 4001: Invalid or revoked credential -> in trusted mode, silently re-register
           if (event.code === 4001) {
+            if (!isHosted) {
+              diagnosticsLogger.log(
+                'warn',
+                'socket',
+                'Device credential rejected. Silently re-registering fresh credential in trusted mode...'
+              );
+              const fresh = getOrCreateClientDeviceIdentity();
+              setDeviceId(fresh.deviceId);
+              setCredential(fresh.credential);
+              setConnectTrigger((prev) => prev + 1);
+              return;
+            }
             clearStoredDeviceCredentials();
             setDeviceId(null);
             setCredential(null);
@@ -1068,6 +1187,7 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     min: number;
     avg: number;
     max: number;
+    p50: number;
     p95: number;
   }> => {
     const ws = socketRef.current;
@@ -1116,13 +1236,14 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
     const min = sorted[0] ?? 1;
     const max = sorted[sorted.length - 1] ?? 1;
     const avg = Math.round(rtts.reduce((a, b) => a + b, 0) / rtts.length);
+    const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? avg;
     const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? max;
 
-    const result = { min, avg, max, p95 };
+    const result = { min, avg, max, p50, p95 };
     diagnosticsLogger.log(
       'info',
       'socket',
-      `Latency Test Results (10 samples): min=${min}ms, avg=${avg}ms, max=${max}ms, p95=${p95}ms`
+      `Latency Test Results (10 samples): min=${min}ms, avg=${avg}ms, max=${max}ms, p50=${p50}ms, p95=${p95}ms`
     );
 
     return result;
@@ -1131,7 +1252,11 @@ export function useAerokinSocket(): UseAerokinSocketReturn {
   return {
     status,
     latency,
+    latencyP50,
+    latencyP95,
+    timeToConnected,
     host,
+    knownHosts,
     isHosted,
     connectionError,
     deviceId,
