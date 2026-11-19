@@ -123,7 +123,7 @@ switch ($Command.ToLower()) {
         # Also attempt loopback HTTP quit
         try {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-            Invoke-RestMethod -Uri "https://127.0.0.1:8443/api/dashboard/quit" -Method Post -TimeoutSec 2 -ErrorAction SilentlyContinue | Out-Null
+            Invoke-RestMethod -Uri "https://127.0.0.1:8443/api/dashboard/quit" -Method Post -Headers @{ "X-AeroKin-Local" = "1" } -TimeoutSec 2 -ErrorAction SilentlyContinue | Out-Null
         } catch {}
         Write-Host "Stop signal sent to AeroKin server." -ForegroundColor Yellow
     }
@@ -132,7 +132,7 @@ switch ($Command.ToLower()) {
         Set-Content -Path $RestartSignalFile -Value "restart" -Force
         try {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-            Invoke-RestMethod -Uri "https://127.0.0.1:8443/api/dashboard/restart" -Method Post -TimeoutSec 2 -ErrorAction SilentlyContinue | Out-Null
+            Invoke-RestMethod -Uri "https://127.0.0.1:8443/api/dashboard/restart" -Method Post -Headers @{ "X-AeroKin-Local" = "1" } -TimeoutSec 2 -ErrorAction SilentlyContinue | Out-Null
         } catch {}
         Write-Host "Restart signal sent to AeroKin server." -ForegroundColor Green
     }

@@ -247,6 +247,16 @@ export function startTrustServer(config: TrustServerConfig): http.Server {
     res.end();
   });
 
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(
+        `[Trust Server] Port ${config.port} is already in use. One-time CA install HTTP server is unavailable on port ${config.port}.`
+      );
+    } else {
+      console.warn(`[Trust Server] Error: ${err.message}`);
+    }
+  });
+
   server.listen(config.port, '0.0.0.0', () => {
     console.log(
       `[Trust Server] HTTP listening on port ${config.port} (Serving one-time CA trust profile)`
