@@ -10,7 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-describe('AeroKin One-Click Launcher & Setup Lifecycle', () => {
+describe.skipIf(process.platform !== 'win32')(
+  'AeroKin One-Click Launcher & Setup Lifecycle (Windows-only PowerShell tests)',
+  () => {
   let tempDir: string;
 
   beforeEach(() => {
@@ -341,7 +343,7 @@ describe('AeroKin One-Click Launcher & Setup Lifecycle', () => {
       });
       expect(res.status).toBe(1);
       expect(res.stderr).toContain('Node.js was not found');
-    });
+    }, 15000);
 
     it('rejects invalid repository folder with non-zero exit code', () => {
       const launcherScript = path.join(REPO_ROOT, 'scripts', 'aerokin-launcher.ps1');

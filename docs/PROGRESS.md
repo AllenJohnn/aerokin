@@ -6,9 +6,10 @@
 ---
 
 ## Current Status & Next Action
-- **Current Milestone**: Stable-R3 Milestone: One-Click Launcher, Hidden Autostart, Windows Tray Sidecar, Auto-Restart Supervision, and Frictionless Setup.
-  - **In Progress**: Completed implementation and automated verification. Ready to tag `stable-r3`.
+- **Current Milestone**: Stable-R5 Milestone: Instant Automatic Multi-Network Connectivity, Trusted Network Auto-Registration, Hot-Swapped SAN TLS, Instant Open PWA, and Hardened Local Endpoints.
+  - **In Progress**: Implementing cross-platform CI fixes and network-independent addressing.
   - **Completed so far**:
+    - CI Cross-Platform Fix: Updated `server/test/launcher-lifecycle.test.ts` to use `describe.skipIf(process.platform !== 'win32')` so Ubuntu CI runs green without PowerShell, and extended timeout for Node detection on Windows.
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.
