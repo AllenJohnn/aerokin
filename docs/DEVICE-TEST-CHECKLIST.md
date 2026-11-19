@@ -102,3 +102,18 @@ This checklist provides a structured protocol for manual verification on physica
 | 7.2 | Tap **Shutdown** or **Restart**. | PC dashboard displays: "10-second countdown initiated". Cancel button is active. | [ ] |
 | 7.3 | Tap **Cancel** on phone or PC within 10s. | Shutdown countdown cancels cleanly; PC remains powered on. | [ ] |
 | 7.4 | In remote cellular mode: verify dangerous power actions. | Remote power actions disabled by default per remote safety policy. | [ ] |
+
+---
+
+## 8. Multi-Network Instant Auto-Connect & Storage Resilience (Stable-R5)
+
+> **Status**: UNVERIFIED until Allen conducts physical field testing on iPhone and Windows laptop.
+
+| # | Step / Action | Expected Result | Pass / Fail |
+|---|---|---|---|
+| 8.1 | **Instant Open on Home Wi-Fi**: Open the Home Screen icon on home Wi-Fi. | UI shell renders instantly; subtle "Connecting..." badge resolves to connected in < 1s. No pairing code, no QR, and no approval prompt. | [ ] |
+| 8.2 | **Personal Hotspot Switch**: Enable Personal Hotspot on iPhone; connect Windows laptop to phone's Wi-Fi. Open Home Screen icon on phone. | Parallel probe tries `<hostname>.local` and hotspot IP `172.20.10.x`. Reconnects automatically with zero pairing screens. | [ ] |
+| 8.3 | **Device Restart / Storage Resilience**: Restart iPhone completely. Relaunch Home Screen app. | Dual-layer persistence (`localStorage` + `IndexedDB`) retains identity. Client auto-reconnects seamlessly. | [ ] |
+| 8.4 | **Device Renaming**: Open Settings drawer on phone, edit Device Name (e.g., "Allen iPhone Pro"), and trigger reconnect. | PC Dashboard updates device label in-place without generating a duplicate entry. | [ ] |
+| 8.5 | **Trusted Mode Toggle Off**: In PC Dashboard, toggle **Trusted-Network Mode** OFF. Connect a new or cleared browser. | Server enforces traditional 8-digit OTP code prompt and PC operator approval dialog. | [ ] |
+| 8.6 | **Trusted Mode Toggle On**: Toggle **Trusted-Network Mode** back ON. | Any connecting private device auto-registers silently again. | [ ] |

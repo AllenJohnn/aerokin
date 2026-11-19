@@ -105,20 +105,28 @@ To allow secure WebSockets and camera permissions without untrusted HTTPS warnin
 2. Tap **Install Profile** and allow the download.
 3. Open iOS **Settings** -> **Profile Downloaded** -> Tap **Install**.
 4. Go to **Settings** -> **General** -> **About** -> **Certificate Trust Settings** (bottom) -> Enable full trust for **AEROKIN Local Root CA**.
+*(Note: The root CA is valid for 10 years. Whenever your PC's IP or network changes, the server automatically regenerates the leaf certificate signed by this same CA—you never need to reinstall the profile).*
 
-### 4. Pair Your Phone (Frictionless Personal Setup)
+### 4. Add to Home Screen (Crucial for iOS Storage Persistence)
+To prevent iOS from evicting credentials or session state:
+1. In Safari, navigate to your primary PC address:
+   ```
+   https://<pc-hostname>.local:8443
+   ```
+   *(or `https://<pc-ip>:8443` if `.local` mDNS resolution is disabled on your network).*
+2. Tap the **Share** button in Safari (square with up arrow).
+3. Scroll down and tap **Add to Home Screen**.
+4. **Always launch AeroKin by tapping the Home Screen icon**.
+   > [!IMPORTANT]
+   > iOS Safari tabs and standalone Home Screen web apps maintain **separate storage containers**. Furthermore, iOS Safari clears tab storage after approximately 7 days of inactivity. Adding AeroKin to your Home Screen grants it persistent standalone storage via `navigator.storage.persist()`, paired with dual-layer `localStorage` and `IndexedDB` auto-repair.
 
-AeroKin is designed for seamless personal use—**pair once, and work on every network**:
-
-1. **Remote Pairing (Everywhere)**:
-   - In the PC Dashboard, view the Remote WebRTC pairing link or QR code:
-     `https://<AEROKIN_HOSTED_URL>/#agent=<id>&signal=<host>&code=<8-digit>`
-   - Scan or open this link on your iPhone.
-   - AeroKin automatically strips the fragment from your browser history, joins the signaling room, and completes mutual authentication over the WebRTC RTC control channel.
-   - **PC Approval is OFF by default** in personal mode—no need to switch to your laptop or click approve!
-2. **Local LAN Pairing**:
-   - Alternatively, open the local QR code or URL: `https://<pc-ip>:8443/#code=XXXXXXXX`.
-   - Enter your device name. The device is instantly authenticated.
+### 5. Trusted-Network Mode (Instant Zero-Friction Auto-Connect)
+AeroKin operates in **Trusted-Network Mode** by default:
+- **No Pairing Codes, No QR Codes, No PC Approval**: Any phone connecting from a private IP subnet (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `169.254.x.x`, or `127.0.0.1`) is automatically registered upon first contact.
+- **Silent Background Registration**: The PWA immediately renders the UI shell and registers a random cryptographic device identity in the background. Subsequent launches connect instantly in under a second.
+- **Same-Device Replacement**: If you rename your phone or reinstall, re-registration silently updates the existing device record on the PC rather than creating duplicate entries.
+- **iPhone Personal Hotspot Ready**: When tethering your Windows laptop to your iPhone's Personal Hotspot, iOS assigns your laptop an IP in the `172.20.10.0/28` range. AeroKin detects this hotspot subnet, binds SAN certificates, and auto-connects via parallel host probing.
+- **Optional Code Pairing Mode**: If you prefer requiring an explicit 8-digit OTP code and PC confirmation, toggle **Trusted-Network Mode** OFF in the PC Dashboard or system tray. When OFF, the traditional pairing flow applies.
 
 ---
 

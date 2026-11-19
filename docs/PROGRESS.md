@@ -7,7 +7,7 @@
 
 ## Current Status & Next Action
 - **Current Milestone**: Stable-R5 Milestone: Instant Automatic Multi-Network Connectivity, Trusted Network Auto-Registration, Hot-Swapped SAN TLS, Instant Open PWA, and Hardened Local Endpoints.
-  - **In Progress**: Staging and committing feature components, authoring latency guides, and running full project verification.
+  - **In Progress**: Final full verification (`safety:check`, `tsc`, `test`, `build`), tagging `stable-r5`, and pushing to origin.
   - **Completed so far**:
     - CI Cross-Platform Fix: Updated `server/test/launcher-lifecycle.test.ts` to use `describe.skipIf(process.platform !== 'win32')` so Ubuntu CI runs green without PowerShell, and extended timeout for Node detection on Windows.
     - Server Network-Independent Addressing: Leaf certificate dynamically generated with SANs containing `os.hostname()`, `<hostname>.local`, `aerokin.local`, `localhost`, `127.0.0.1`, and all non-internal private IPv4s (Wi-Fi, Ethernet, iPhone Personal Hotspot 172.20.10.x). Hot-swaps leaf certificate via `httpsServer.setSecureContext()` on network changes with zero server downtime, signed by the same 10-year root CA.
@@ -21,6 +21,16 @@
     - Parallel Host Probing: Probes candidate host endpoints (`<hostname>.local`, LAN IPs, hotspot IPs up to 6 known hosts) concurrently with <= 1.5s timeout; first responding endpoint connects and refreshes known host list from server.
     - Input Coalescing & Latency Tracking: Pointer events coalesced to 1 per animation frame (`requestAnimationFrame`); continuous rolling ring buffer tracking p50/p95 round-trip latency in Settings > Diagnostics and Desktop HUD.
     - PWA Test Coverage: 12 test files passing (98/98 tests), including new suite `test/parallelProbeAndStorage.test.ts`.
+    - Production Build & Prune: Full compilation across all packages verified; added `scripts/prune-build-assets.mjs` and `pnpm run prune`.
+    - Documentation & Verification Protocols: Authored `docs/LATENCY.md` (architecture, frame coalescing, H.264 auto path, real iPhone testing steps), updated `docs/QUICKSTART.md` (Home Screen storage persistence, trusted mode, hotspot), updated `docs/DEVICE-TEST-CHECKLIST.md` (Section 8 for multi-network testing), and updated `docs/CHANGELOG.md` with `[Stable-R5]`.
+- **Exact Next Step**: Run full verification suite (`safety:check`, `tsc -r`, `test -r`, `build`), tag `stable-r5`, rebase on `origin/main`, and push.
+- **NEEDS ALLEN**:
+  1. Open Home Screen icon on home Wi-Fi and verify instant auto-connect with no pairing code per `docs/DEVICE-TEST-CHECKLIST.md` Section 8.1.
+  2. Switch laptop to iPhone Personal Hotspot (`172.20.10.x`) and verify instant auto-connect per Section 8.2.
+  3. Restart iPhone and verify storage resilience and auto-reconnect per Section 8.3.
+  4. Rename device in Settings and verify single replaced record in PC Dashboard per Section 8.4.
+  5. Measure and record real latency numbers (p50/p95 RTT, time-to-connected) per `docs/LATENCY.md`.
+  6. Run `install-aerokin.cmd` once on PC, reboot or re-login, and verify tray icon and mobile connectivity without opening a terminal (per `docs/DEVICE-TEST-CHECKLIST.md` section 0).
     - Fixed failing PWA desktop settings persistence test (`viewOnly` support and legacy migration test). Verified all 85 PWA tests pass and clean tsc across all 4 packages.
     - Fixed TURN secret configuration bug in `signaling`: unified canonical variable `TURN_SECRET`, made `COTURN_SECRET` a deprecated alias, eliminated hardcoded defaults, deleted stale `signaling/.env.example` leaving `signaling/deploy/.env.example` as single source of truth, updated `deploy.sh` and `DEPLOYMENT.md`, added automated tests verifying entry point exit and coturn template parity.
     - Implemented Pair Once & Work on Every Network, Remote Pairing from Scratch, Friction Removal (PC approval default OFF, no IP bans, generous rate limits), Windows Autostart Manager (S7 temp-dir isolated), Keep-Awake SetThreadExecutionState adapter (thread-only, power plan untouched), and PC Offline/Asleep indicators.

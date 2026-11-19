@@ -1,5 +1,18 @@
 # AeroKin Changelog
 
+## [Stable-R5] - 2026-11-19 - Instant Multi-Network Connectivity, Trusted-Network Mode, Hot-Swapped SAN TLS, Instant Open PWA & Hardened Local Control
+
+### Added
+- **Multi-Network Leaf TLS Hot-Swapping**: Leaf TLS certificates are generated with Subject Alternative Names (SANs) containing `os.hostname()`, `<hostname>.local`, `aerokin.local`, `localhost`, `127.0.0.1`, and all active non-internal private IPv4s across all network interfaces (Ethernet, Wi-Fi, and iPhone Personal Hotspot `172.20.10.x`). Hot-swaps the leaf certificate into running HTTPS/WSS server via `server.setSecureContext()` on interface change without restarting the server or invalidating the root CA trust.
+- **Trusted-Network Mode**: Automatic, frictionless device onboarding for all connections originating from private subnets (RFC 1918, `172.20.10.0/28` iPhone hotspot, loopback, link-local, ULA). Clients auto-register with a random cryptographic credential on first connect with zero pairing codes and zero PC confirmation prompts. Replaces same-name device records cleanly without duplicates. Persisted toggle in `settings.json` (default: ON).
+- **Hardened Local Control Endpoints**: Hardened state-changing PC control endpoints (`/api/dashboard/*`, `/pause`, `/quit`, `/restart`, `/api/devices/*`, `/api/pair/*`) to strictly require loopback sockets (`127.0.0.1`/`::1`), loopback `Host` headers, rejection of foreign cross-site `Origin` headers, and validation of custom `X-AeroKin-Local: 1` header to prevent DNS rebinding and CSRF attacks.
+- **Parallel Host Probing in PWA**: Probes candidate endpoints (`<hostname>.local`, last-seen LAN IPs, hotspot IPs up to 6 known hosts) concurrently with a `<= 1.5s` timeout; the fastest responding endpoint wins and refreshes the known host list from the server hello payload.
+- **Resilient Dual Storage for iOS**: Stores client device identity and cryptographic credentials across both `localStorage` and `IndexedDB` with `navigator.storage.persist()`. Auto-repairs whichever store is cleared to survive iOS Safari 7-day cache evictions.
+- **Instant PWA Startup**: Renders the complete application shell immediately upon launch without blocking splash screens or pairing screens when trusted mode is active and the host is reachable; displays subtle background connection indicator and seamless fallback.
+- **Input Coalescing & Latency Measurement**: Pointer touch events coalesced to 1 per animation frame (`requestAnimationFrame`) to prevent WebSocket buffer bloat. Built-in round-trip ping/pong meter tracking real-time p50 and p95 latency in Settings > Diagnostics and Desktop HUD.
+- **Tray Sidecar & Launcher Enhancements**: Added `X-AeroKin-Local: 1` security header, Trusted-Network Mode toggle, and New Pairing Code menu items to Windows tray sidecar. Added port conflict detection displaying owning process name and stale build detection to `scripts/aerokin-launcher.ps1`.
+- **Latency Protocol Documentation**: Added `docs/LATENCY.md` detailing architecture, frame coalescing, H.264 auto path, and step-by-step instructions for physical testing on iPhone.
+
 ## [Stable-R3] - 2026-11-18 - One-Click Launcher, Hidden Autostart, Windows Tray Sidecar & Supervision
 
 ### Added
