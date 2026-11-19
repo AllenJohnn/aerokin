@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Keyboard, X } from '@phosphor-icons/react';
+import { Keyboard } from '@phosphor-icons/react';
 import { triggerHaptic } from '../utils/haptics';
 import {
   TrackpadGestureEngine,
@@ -38,52 +37,16 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   const engineRef = useRef<TrackpadGestureEngine | null>(null);
 
   const [showKeyboard, setShowKeyboard] = useState(false);
-  const [latchedModifiers, setLatchedModifiers] = useState<Record<string, boolean>>({
-    ctrl: false,
-    alt: false,
-    shift: false,
-    win: false,
-  });
-
-  const toggleModifier = (mod: 'ctrl' | 'alt' | 'shift' | 'win') => {
-    triggerHaptic('light');
-    setLatchedModifiers((prev) => ({ ...prev, [mod]: !prev[mod] }));
-  };
-
-  const getActiveModifiers = useCallback((): string[] => {
-    return Object.entries(latchedModifiers)
-      .filter(([_, active]) => active)
-      .map(([mod]) => mod);
-  }, [latchedModifiers]);
-
-  const clearLatchedModifiers = useCallback(() => {
-    setLatchedModifiers({
-      ctrl: false,
-      alt: false,
-      shift: false,
-      win: false,
-    });
-  }, []);
-
-  const handleKeyTap = (key: string) => {
-    triggerHaptic('light');
-    if (isConnected && sendKey) {
-      sendKey(key, 'tap', getActiveModifiers());
-    }
-    clearLatchedModifiers();
-  };
 
   const handleToggleKeyboard = () => {
     triggerHaptic('light');
-    setShowKeyboard((prev) => {
-      const next = !prev;
-      if (next) {
-        setTimeout(() => hiddenInputRef.current?.focus(), 60);
-      } else {
-        hiddenInputRef.current?.blur();
-      }
-      return next;
-    });
+    if (showKeyboard) {
+      hiddenInputRef.current?.blur();
+      setShowKeyboard(false);
+    } else {
+      hiddenInputRef.current?.focus();
+      setShowKeyboard(true);
+    }
     dismissHint();
   };
 
@@ -314,15 +277,19 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
   };
 
   return (
-    <div className="relative flex-1 flex flex-col justify-between px-gutter py-3 w-full h-full select-none max-w-lg mx-auto">
-      {/* Hidden iOS Virtual Keyboard Input */}
+    <div className="flex-1 flex flex-col justify-between px-gutter py-3 w-full h-full select-none max-w-lg mx-auto">
+      {/* Hidden Native iOS Keyboard Input Trigger */}
       <input
         ref={hiddenInputRef}
         type="text"
-        className="absolute opacity-0 pointer-events-none -top-10 left-0 w-1 h-1"
+        className="fixed -top-96 left-0 opacity-0 pointer-events-none w-1 h-1"
         autoCapitalize="none"
         autoCorrect="off"
+        autoComplete="off"
         spellCheck="false"
+        tabIndex={-1}
+        onFocus={() => setShowKeyboard(true)}
+        onBlur={() => setShowKeyboard(false)}
         onChange={(e) => {
           const val = e.target.value;
           if (val) {
@@ -334,164 +301,36 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
         }}
         onKeyDown={(e) => {
           const key = e.key;
-          const lowerKey = key.toLowerCase();
-
-          const keyMap: Record<string, string> = {
-            Backspace: 'backspace',
-            Enter: 'enter',
-            Tab: 'tab',
-            Escape: 'escape',
-            Esc: 'escape',
-            ArrowUp: 'arrowup',
-            ArrowDown: 'arrowdown',
-            ArrowLeft: 'arrowleft',
-            ArrowRight: 'arrowright',
-            Delete: 'delete',
-            Home: 'home',
-            End: 'end',
-            PageUp: 'pageup',
-            PageDown: 'pagedown',
-            Insert: 'insert',
-          };
-
-          const hasPhysicalMod = e.ctrlKey || e.altKey || e.metaKey;
-          const mods: string[] = [];
-          if (e.ctrlKey) mods.push('ctrl');
-          if (e.altKey) mods.push('alt');
-          if (e.shiftKey) mods.push('shift');
-          if (e.metaKey) mods.push('win');
-
-          for (const m of getActiveModifiers()) {
-            if (!mods.includes(m)) mods.push(m);
-          }
-
-          if (keyMap[key]) {
+          if (key === 'Backspace') {
             e.preventDefault();
             if (isConnected && sendKey) {
-              sendKey(keyMap[key], 'tap', mods);
+              sendKey('backspace', 'tap');
             }
-            clearLatchedModifiers();
             return;
           }
-
-          if (hasPhysicalMod && key.length === 1) {
+          if (key === 'Enter') {
             e.preventDefault();
             if (isConnected && sendKey) {
-              sendKey(lowerKey, 'tap', mods);
+              sendKey('enter', 'tap');
             }
-            clearLatchedModifiers();
+            return;
+          }
+          if (key === 'Tab') {
+            e.preventDefault();
+            if (isConnected && sendKey) {
+              sendKey('tab', 'tap');
+            }
+            return;
+          }
+          if (key === 'Escape' || key === 'Esc') {
+            e.preventDefault();
+            if (isConnected && sendKey) {
+              sendKey('escape', 'tap');
+            }
             return;
           }
         }}
       />
-
-      {/* Floating Virtual Keyboard & Shortcut Bar */}
-      <AnimatePresence>
-        {showKeyboard && (
-          <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute top-3 left-1/2 -translate-x-1/2 w-[95%] max-w-lg bg-[#0A0A0E]/95 border border-border/80 rounded-2xl p-2.5 shadow-2xl backdrop-blur-xl z-30 flex flex-col gap-2"
-          >
-            {/* Row 1: Sticky Modifiers, Keyboard Focus, Close */}
-            <div className="flex items-center justify-between gap-1.5">
-              <div className="flex items-center gap-1.5 flex-1 overflow-x-auto py-0.5 no-scrollbar">
-                {(['ctrl', 'alt', 'shift', 'win'] as const).map((mod) => {
-                  const isLatched = latchedModifiers[mod];
-                  return (
-                    <button
-                      key={mod}
-                      onClick={() => toggleModifier(mod)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all shrink-0 ${
-                        isLatched
-                          ? 'bg-accent text-black shadow-sm'
-                          : 'bg-surface border border-border text-foreground hover:border-accent'
-                      }`}
-                    >
-                      {mod.toUpperCase()}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Native iOS text input trigger */}
-              <button
-                onClick={() => {
-                  triggerHaptic('light');
-                  hiddenInputRef.current?.focus();
-                }}
-                className="px-2.5 py-1 rounded-lg bg-surface border border-border text-foreground text-[11px] font-medium hover:border-accent shrink-0 flex items-center gap-1"
-              >
-                <Keyboard size={13} />
-                <span>Type</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  triggerHaptic('light');
-                  setShowKeyboard(false);
-                  hiddenInputRef.current?.blur();
-                }}
-                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-raised transition-colors shrink-0"
-                aria-label="Close keyboard bar"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {/* Row 2: PC Navigation & Action Keys */}
-            <div className="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar">
-              {[
-                { label: 'Esc', key: 'escape' },
-                { label: 'Tab', key: 'tab' },
-                { label: 'Enter', key: 'enter' },
-                { label: '⌫', key: 'backspace' },
-                { label: 'Del', key: 'delete' },
-                { label: 'Space', key: 'space' },
-                { label: '←', key: 'arrowleft' },
-                { label: '↑', key: 'arrowup' },
-                { label: '↓', key: 'arrowdown' },
-                { label: '→', key: 'arrowright' },
-              ].map((k) => (
-                <button
-                  key={k.key}
-                  onClick={() => handleKeyTap(k.key)}
-                  className="px-2 py-1 rounded-md bg-surface/80 border border-border/70 text-foreground text-[11px] font-mono hover:bg-raised active:scale-95 transition-transform shrink-0"
-                >
-                  {k.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Row 3: Shortcut Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-              {[
-                { label: 'Ctrl+C', key: 'c', mods: ['ctrl'] },
-                { label: 'Ctrl+V', key: 'v', mods: ['ctrl'] },
-                { label: 'Ctrl+Z', key: 'z', mods: ['ctrl'] },
-                { label: 'Ctrl+A', key: 'a', mods: ['ctrl'] },
-                { label: 'Alt+Tab', key: 'tab', mods: ['alt'] },
-                { label: 'Win+D', key: 'd', mods: ['win'] },
-              ].map((sc) => (
-                <button
-                  key={sc.label}
-                  onClick={() => {
-                    triggerHaptic('light');
-                    if (isConnected && sendKey) {
-                      sendKey(sc.key, 'tap', sc.mods);
-                    }
-                  }}
-                  className="px-2 py-1 rounded-md bg-raised border border-border/60 text-muted-foreground hover:text-foreground text-[10px] font-mono hover:border-border active:scale-95 transition-transform shrink-0"
-                >
-                  {sc.label}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Precision Trackpad Surface with pointer capture and state machine gesture handling */}
       <div
@@ -538,8 +377,8 @@ export const TrackpadTab: React.FC<TrackpadTabProps> = ({
 
         <button
           onClick={handleToggleKeyboard}
-          aria-label="Toggle floating keyboard"
-          title="Virtual Keyboard & Shortcuts"
+          aria-label="Toggle native iOS keyboard"
+          title="Open iOS Keyboard"
           className={`h-12 w-12 rounded-xl border flex items-center justify-center transition-all active:scale-[0.95] min-h-[48px] shrink-0 ${
             showKeyboard
               ? 'bg-accent/15 border-accent text-accent shadow-sm'
